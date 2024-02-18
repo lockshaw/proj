@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+
+import lockshaw_config as lockshaw
+from pathlib import Path
+from typing import Any
+import sys
+import subprocess
+import os
+import shutil
+
+def main_root(args: Any) -> None:
+    config_root = lockshaw.find_config_root(args.path)
+    if config_root is not None:
+        print(config_root)
+    else:
+        print('ERROR: Could not find config root', file=sys.stderr)
+        print('Exiting unsuccessfully...', file=sys.stderr)
+        exit(1)
+
+def main_cmake(args: Any) -> None:
+    config = lockshaw.get_config(args.path)
+    assert config is not None
+    if args.force:
+        shutil.rmtree(config.build_dir)
+    config.build_dir.mkdir(exist_ok=True, parents=True)
+    subprocess.check_call([
+        'cmake',
+        '-DCMAKE_CXX_FLAGS=-ftemplate-backtrace-limit=0',
+        '-DCMAKE_BUILD_TYPE=Debug',
+        '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+        '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
+        '-DCMAKE_CXX_COMPILER=clang++',
+        '-DCMAKE_C_COMPILER=clang',
+        '..',
+    ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+
+    with (config.base / 'compile_commands.json').open('w') as f:
+        subprocess.check_call([
+            'compdb',
+            '-p',
+            '.',
+            'list',
+        ], stdout=f, cwd=config.build_dir, env=os.environ)
+
+def main_build(args: Any) -> None:
+    config = lockshaw.get_config(args.path)
+    assert config is not None
+    subprocess.check_call([
+        'make', config.build_target,
+    ], env={
+        **os.environ, 'CCACHE_BASEDIR': '/home/lockshaw/hax/dev/ovum',
+    }, stderr=sys.stdout, cwd=config.build_dir)
+
+def main_test(args: Any) -> None:
+    config = lockshaw.get_config(args.path)
+    assert config is not None
+    subprocess.check_call([
+        'make', lockshaw.get_config(args.path).test_target,
+    ], env={
+        **os.environ, 
+        'CCACHE_BASEDIR': '/home/lockshaw/hax/dev/ovum', 
+        'VERBOSE': '1' if args.verbose else '0',
+    }, stderr=sys.stdout, cwd=config.build_dir)
+    subprocess.run([
+        'ctest', 
+        '--progress',
+        '--output-on-failure',
+        '-L',
+        config.test_target,
+    ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+
+if __name__ == '__main__':
+    import argparse 
+
+    p = argparse.ArgumentParser()
+    subparsers = p.add_subparsers()
+
+    root_p = subparsers.add_parser('root')
+    root_p.set_defaults(func=main_root)
+    root_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+
+    test_p = subparsers.add_parser('test')
+    test_p.set_defaults(func=main_test)
+    test_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    test_p.add_argument('--verbose', '-v', action='store_true')
+
+    build_p = subparsers.add_parser('build')
+    build_p.set_defaults(func=main_build)
+    build_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+
+    cmake_p = subparsers.add_parser('cmake')
+    cmake_p.set_defaults(func=main_cmake)
+    cmake_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    cmake_p.add_argument('--force', '-f', action='store_true')
+
+    args = p.parse_args()
+    if hasattr(args, 'func') and args.func is not None:
+        args.func(args)
+    else:
+        p.print_help()
+        exit(1)
