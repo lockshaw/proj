@@ -8,6 +8,7 @@ from typing import (
     Optional,
     Mapping,
     Dict,
+    Tuple,
 )
 import string
 
@@ -16,13 +17,14 @@ class ProjectConfig:
     project_name: str
     base: Path
     _build_target: Optional[str] = None
-    _test_target: Optional[str] = None
+    _test_targets: Optional[Tuple[str,...]] = None
     _ifndef_name: Optional[str] = None
     _namespace_name: Optional[str] = None
     _testsuite_macro: Optional[str] = None
     _cmake_flags_extra: Optional[Mapping[str, str]] = None
     _cmake_require_shell: Optional[bool] = None
     _inherit_up: Optional[bool] = None
+    _header_extension: Optional[str] = None
 
     @property
     def build_dir(self) -> Path:
@@ -36,11 +38,11 @@ class ProjectConfig:
             return self._build_target
 
     @property
-    def test_target(self) -> str:
-        if self._test_target is None:
-            return f'{self.project_name}-tests'
+    def test_targets(self) -> Tuple[str, ...]:
+        if self._test_targets is None:
+            return tuple([f'{self.project_name}-tests'])
         else:
-            return self._test_target
+            return self._test_targets
 
     @property
     def ifndef_name(self) -> str:
@@ -99,6 +101,14 @@ class ProjectConfig:
         else:
             return self._inherit_up
 
+    @property
+    def header_extension(self) -> str:
+        if self._header_extension is None:
+            return '.hh'
+        else:
+            assert self._header_extension.startswith('.')
+            return self._header_extension
+
 def find_config_root(d: Path) -> Optional[Path]:
     d = Path(d).resolve()
     assert d.is_absolute()
@@ -125,7 +135,8 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         project_name=raw['project_name'],
         base=config_root,
         _build_target=raw.get('build_target'),
-        _test_target=raw.get('test_target'),
+        _test_targets=raw.get('test_targets'),
+        _testsuite_macro=raw.get('testsuite_macro'),
         _ifndef_name=raw.get('ifndef_name'),
         _namespace_name=raw.get('namespace_name'),
         _cmake_flags_extra=raw.get('cmake_flags_extra'),
@@ -133,7 +144,8 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
 
 def gen_ifndef_uid(p):
     p = Path(p).absolute()
-    relpath = p.relative_to(get_lib_root(p))
+    config_root = find_config_root(p)
+    relpath = p.relative_to(config_root)
     config = _load_config(p)
     return f'_{config.ifndef_name}_' + str(relpath).upper().replace('/', '_').replace('.', '_')
 
@@ -154,18 +166,35 @@ def with_suffixes(p, suffs):
         name = name[:name.rfind('.')]
     return p.with_name(name + suffs)
 
+def get_sublib_root(p: Path):
+    p = Path(p).resolve()
+    assert p.is_absolute()
+
+    while True:
+        src_dir = p / 'src'
+        include_dir = p / 'include'
+
+        if src_dir.is_dir() and include_dir.is_dir():
+            return p
+
+        if p == p.parent:
+            return None
+        else:
+            p = p.parent
+
 def get_include_path(p: Path):
     p = Path(p).absolute()
-    lib_root = get_lib_root(p)
-    relpath = p.relative_to(lib_root / 'src')
-    include_dir = lib_root / 'include'
+    sublib_root = get_sublib_root(p)
+    config = _load_config(p)
+    subrelpath = p.relative_to(sublib_root / 'src')
+    include_dir = sublib_root / 'include'
     assert include_dir.is_dir()
-    src_dir = lib_root / 'src'
+    src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
-    public_include = include_dir / with_suffixes(relpath, '.hh')
-    private_include = src_dir / with_suffixes(relpath, '.hh')
+    public_include = include_dir / with_suffixes(subrelpath, config.header_extension)
+    private_include = src_dir / with_suffixes(subrelpath, config.header_extension)
     if public_include.exists():
         return str(public_include.relative_to(include_dir))
     if private_include.exists():
         return str(private_include.relative_to(src_dir))
-    raise ValueError
+    raise ValueError([public_include, private_include])

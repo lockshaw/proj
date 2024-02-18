@@ -53,18 +53,19 @@ def main_test(args: Any) -> None:
     config = lockshaw.get_config(args.path)
     assert config is not None
     subprocess.check_call([
-        'make', lockshaw.get_config(args.path).test_target,
+        'make', *lockshaw.get_config(args.path).test_targets,
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
         'VERBOSE': '1' if args.verbose else '0',
     }, stderr=sys.stdout, cwd=config.build_dir)
+    target_regex = '^' + '|'.join(config.test_targets) + '$'
     subprocess.run([
         'ctest', 
         '--progress',
         '--output-on-failure',
         '-L',
-        config.test_target,
+        target_regex,
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
 if __name__ == '__main__':
