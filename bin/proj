@@ -8,6 +8,8 @@ import subprocess
 import os
 import shutil
 
+DIR = Path(__file__).resolve().parent
+
 def main_root(args: Any) -> None:
     config_root = lockshaw.find_config_root(args.path)
     if config_root is not None:
@@ -23,16 +25,12 @@ def main_cmake(args: Any) -> None:
     if args.force:
         shutil.rmtree(config.build_dir)
     config.build_dir.mkdir(exist_ok=True, parents=True)
+    cmake_args = [f'-D{k}={v}' for k, v in config.cmake_flags.items()]
     subprocess.check_call([
         'cmake',
-        '-DCMAKE_CXX_FLAGS=-ftemplate-backtrace-limit=0',
-        '-DCMAKE_BUILD_TYPE=Debug',
-        '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
-        '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
-        '-DCMAKE_CXX_COMPILER=clang++',
-        '-DCMAKE_C_COMPILER=clang',
+        *cmake_args,
         '..',
-    ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+    ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ, shell=config.cmake_require_shell)
 
     with (config.base / 'compile_commands.json').open('w') as f:
         subprocess.check_call([
@@ -48,7 +46,7 @@ def main_build(args: Any) -> None:
     subprocess.check_call([
         'make', config.build_target,
     ], env={
-        **os.environ, 'CCACHE_BASEDIR': '/home/lockshaw/hax/dev/ovum',
+        **os.environ, 'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
     }, stderr=sys.stdout, cwd=config.build_dir)
 
 def main_test(args: Any) -> None:
@@ -58,7 +56,7 @@ def main_test(args: Any) -> None:
         'make', lockshaw.get_config(args.path).test_target,
     ], env={
         **os.environ, 
-        'CCACHE_BASEDIR': '/home/lockshaw/hax/dev/ovum', 
+        'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
         'VERBOSE': '1' if args.verbose else '0',
     }, stderr=sys.stdout, cwd=config.build_dir)
     subprocess.run([

@@ -4,7 +4,11 @@ try:
     import tomllib as toml
 except ImportError:
     import toml
-from typing import Optional
+from typing import (
+    Optional,
+    Mapping,
+    Dict,
+)
 import string
 
 @dataclass(frozen=True)
@@ -16,6 +20,9 @@ class ProjectConfig:
     _ifndef_name: Optional[str] = None
     _namespace_name: Optional[str] = None
     _testsuite_macro: Optional[str] = None
+    _cmake_flags_extra: Optional[Mapping[str, str]] = None
+    _cmake_require_shell: Optional[bool] = None
+    _inherit_up: Optional[bool] = None
 
     @property
     def build_dir(self) -> Path:
@@ -62,6 +69,36 @@ class ProjectConfig:
         else:
             return self._testsuite_macro
 
+    @property
+    def cmake_flags(self) -> Mapping[str, str]:
+        if self._cmake_flags_extra is None:
+            extra: Dict[str, str] = {}
+        else:
+            extra = self._cmake_flags_extra
+        return {
+            **extra,
+            'CMAKE_CXX_FLAGS': '-ftemplate-backtrace-limit=0',
+            'CMAKE_BUILD_TYPE': 'Debug',
+            'CMAKE_EXPORT_COMPILE_COMMANDS': 'ON',
+            'CMAKE_CXX_COMPILER_LAUNCHER': 'ccache',
+            'CMAKE_CXX_COMPILER': 'clang++',
+            'CMAKE_C_COMPILER': 'clang',
+        }
+
+    @property
+    def cmake_require_shell(self) -> bool:
+        if self._cmake_require_shell is None:
+            return False
+        else:
+            return self._cmake_require_shell
+
+    @property
+    def inherit_up(self) -> bool:
+        if self._inherit_up is None:
+            return False
+        else:
+            return self._inherit_up
+
 def find_config_root(d: Path) -> Optional[Path]:
     d = Path(d).resolve()
     assert d.is_absolute()
@@ -91,6 +128,7 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         _test_target=raw.get('test_target'),
         _ifndef_name=raw.get('ifndef_name'),
         _namespace_name=raw.get('namespace_name'),
+        _cmake_flags_extra=raw.get('cmake_flags_extra'),
     )
 
 def gen_ifndef_uid(p):
