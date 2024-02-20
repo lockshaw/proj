@@ -140,6 +140,7 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         _ifndef_name=raw.get('ifndef_name'),
         _namespace_name=raw.get('namespace_name'),
         _cmake_flags_extra=raw.get('cmake_flags_extra'),
+        _header_extension=raw.get('header_extension'),
     )
 
 def gen_ifndef_uid(p):
@@ -186,6 +187,7 @@ def get_include_path(p: Path):
     p = Path(p).absolute()
     sublib_root = get_sublib_root(p)
     config = _load_config(p)
+    assert config is not None
     subrelpath = p.relative_to(sublib_root / 'src')
     include_dir = sublib_root / 'include'
     assert include_dir.is_dir()
