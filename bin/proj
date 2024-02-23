@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 
-import lockshaw_config as lockshaw
 from pathlib import Path
 from typing import Any
 import sys
 import subprocess
 import os
 import shutil
+import importlib
+import multiprocessing
 
 DIR = Path(__file__).resolve().parent
+
+import sys
+sys.path.append(str(DIR.parent / 'lib'))
+import lockshaw_config as lockshaw
+importlib.reload(lockshaw)
 
 def main_root(args: Any) -> None:
     config_root = lockshaw.find_config_root(args.path)
@@ -44,20 +50,22 @@ def main_build(args: Any) -> None:
     config = lockshaw.get_config(args.path)
     assert config is not None
     subprocess.check_call([
-        'make', config.build_target,
+        'make', '-j', str(args.jobs), *config.build_targets,
     ], env={
-        **os.environ, 'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
+        **os.environ, 
+        'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
+        **({'VERBOSE': '1'} if args.verbose else {})
     }, stderr=sys.stdout, cwd=config.build_dir)
 
 def main_test(args: Any) -> None:
     config = lockshaw.get_config(args.path)
     assert config is not None
     subprocess.check_call([
-        'make', *lockshaw.get_config(args.path).test_targets,
+        'make', '-j', str(args.jobs), *lockshaw.get_config(args.path).test_targets,
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
-        'VERBOSE': '1' if args.verbose else '0',
+        **({'VERBOSE': '1'} if args.verbose else {})
     }, stderr=sys.stdout, cwd=config.build_dir)
     target_regex = '^' + '|'.join(config.test_targets) + '$'
     subprocess.run([
@@ -82,10 +90,13 @@ if __name__ == '__main__':
     test_p.set_defaults(func=main_test)
     test_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     test_p.add_argument('--verbose', '-v', action='store_true')
+    test_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
 
     build_p = subparsers.add_parser('build')
     build_p.set_defaults(func=main_build)
     build_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    build_p.add_argument('--verbose', '-v', action='store_true')
+    build_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
 
     cmake_p = subparsers.add_parser('cmake')
     cmake_p.set_defaults(func=main_cmake)

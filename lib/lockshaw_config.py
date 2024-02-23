@@ -16,7 +16,7 @@ import string
 class ProjectConfig:
     project_name: str
     base: Path
-    _build_target: Optional[str] = None
+    _build_targets: Optional[Tuple[str,...]] = None
     _test_targets: Optional[Tuple[str,...]] = None
     _ifndef_name: Optional[str] = None
     _namespace_name: Optional[str] = None
@@ -31,11 +31,11 @@ class ProjectConfig:
         return self.base / 'build'
 
     @property
-    def build_target(self) -> str:
-        if self._build_target is None:
-            return self.project_name
+    def build_targets(self) -> Tuple[str, ...]:
+        if self._build_targets is None:
+            return tuple([self.project_name])
         else:
-            return self._build_target
+            return self._build_targets
 
     @property
     def test_targets(self) -> Tuple[str, ...]:
@@ -134,7 +134,7 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
     return ProjectConfig(
         project_name=raw['project_name'],
         base=config_root,
-        _build_target=raw.get('build_target'),
+        _build_targets=raw.get('build_targets'),
         _test_targets=raw.get('test_targets'),
         _testsuite_macro=raw.get('testsuite_macro'),
         _ifndef_name=raw.get('ifndef_name'),
