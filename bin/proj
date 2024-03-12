@@ -26,6 +26,8 @@ def main_cmake(args: Any) -> None:
         shutil.rmtree(config.build_dir)
     config.build_dir.mkdir(exist_ok=True, parents=True)
     cmake_args = [f'-D{k}={v}' for k, v in config.cmake_flags.items()]
+    if args.trace:
+        cmake_args += ['--trace', '--trace-expand', '--trace-redirect=trace.log']
     subprocess.check_call([
         'cmake',
         *cmake_args,
@@ -91,6 +93,7 @@ if __name__ == '__main__':
     cmake_p.set_defaults(func=main_cmake)
     cmake_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     cmake_p.add_argument('--force', '-f', action='store_true')
+    cmake_p.add_argument('--trace', action='store_true')
 
     args = p.parse_args()
     if hasattr(args, 'func') and args.func is not None:
