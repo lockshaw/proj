@@ -140,6 +140,7 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         _ifndef_name=raw.get('ifndef_name'),
         _namespace_name=raw.get('namespace_name'),
         _cmake_flags_extra=raw.get('cmake_flags_extra'),
+        _cmake_require_shell=raw.get('cmake_require_shell'),
         _header_extension=raw.get('header_extension'),
     )
 
