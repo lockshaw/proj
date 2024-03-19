@@ -27,7 +27,7 @@ def apply_template(template, entry, base_dir: Path):
 def find_template(entries, base_dir: Path):
     for entry in entries:
         command = shlex.split(entry['command'])
-        if Path(command[0]).stem == 'clang++' and Path(entry['directory']).stem == 'kernels':
+        if Path(command[0]).stem in ['clang++', 'g++'] and Path(entry['directory']).stem == 'kernels':
             return lambda e, base_dir=base_dir, template=entry: apply_template(template, e, base_dir)
     assert False
 

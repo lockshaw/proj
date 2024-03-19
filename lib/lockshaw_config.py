@@ -83,8 +83,6 @@ class ProjectConfig:
             'CMAKE_BUILD_TYPE': 'Debug',
             'CMAKE_EXPORT_COMPILE_COMMANDS': 'ON',
             'CMAKE_CXX_COMPILER_LAUNCHER': 'ccache',
-            'CMAKE_CXX_COMPILER': 'clang++',
-            'CMAKE_C_COMPILER': 'clang',
         }
 
     @property
