@@ -53,6 +53,7 @@ def main_cmake(args: Any) -> None:
         shutil.rmtree(config.build_dir)
     config.build_dir.mkdir(exist_ok=True, parents=True)
     cmake_args = [f'-D{k}={v}' for k, v in config.cmake_flags.items()]
+    cmake_args += shlex.split(os.environ['CMAKE_FLAGS'])
     if args.trace:
         cmake_args += ['--trace', '--trace-expand', '--trace-redirect=trace.log']
     subprocess_check_call([
