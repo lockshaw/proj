@@ -1,21 +1,15 @@
-#!/usr/bin/env python3
-
 from pathlib import Path
 from typing import Any
 import subprocess
 import os
 import shutil
-import importlib
 import multiprocessing
 import shlex
+import sys
+import proj.lockshaw_config as lockshaw
+import proj.fix_compile_commands as fix_compile_commands
 
 DIR = Path(__file__).resolve().parent
-
-import sys
-sys.path.append(str(DIR.parent / 'lib'))
-import lockshaw_config as lockshaw
-import fix_compile_commands
-importlib.reload(lockshaw)
 
 def main_root(args: Any) -> None:
     config_root = lockshaw.find_config_root(args.path)
@@ -105,7 +99,7 @@ def main_test(args: Any) -> None:
         target_regex,
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
-if __name__ == '__main__':
+def main() -> None:
     import argparse 
 
     p = argparse.ArgumentParser()
@@ -139,3 +133,6 @@ if __name__ == '__main__':
     else:
         p.print_help()
         exit(1)
+
+if __name__ == '__main__':
+    main()

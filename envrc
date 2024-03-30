@@ -1,5 +1,0 @@
-PATH_add "$PWD/bin/"
-path_add PYTHONPATH "$PWD/lib"
-use vim "$PWD/vimrc"
-
-# vim: set filetype=direnv:
