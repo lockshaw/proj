@@ -15,6 +15,15 @@
     {
       packages = rec {
         proj = pkgs.python3Packages.callPackage ./proj.nix { };
+        proj-nvim = pkgs.vimUtils.buildVimPlugin {
+          name = "proj-nvim";
+          src = ./vim;
+          buildInputs = [ self.packages.${system}.proj ];
+
+          postPatch = ''
+            substituteInPlace UltiSnips/cpp.snippets --replace "%PROJPATH%" "${proj}/${pkgs.python3.sitePackages}"
+          '';
+        };
 
         default = proj;
       };

@@ -56,10 +56,11 @@ def main_cmake(args: Any) -> None:
         '..',
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ, shell=config.cmake_require_shell)
     COMPILE_COMMANDS_FNAME = 'compile_commands.json'
-    fix_compile_commands.fix_file(
-        compile_commands=config.build_dir / COMPILE_COMMANDS_FNAME, 
-        base_dir=config.base,
-    )
+    if config.fix_compile_commands:
+        fix_compile_commands.fix_file(
+            compile_commands=config.build_dir / COMPILE_COMMANDS_FNAME, 
+            base_dir=config.base,
+        )
 
     with (config.base / COMPILE_COMMANDS_FNAME).open('w') as f:
         subprocess_check_call([

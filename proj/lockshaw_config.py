@@ -25,6 +25,8 @@ class ProjectConfig:
     _cmake_require_shell: Optional[bool] = None
     _inherit_up: Optional[bool] = None
     _header_extension: Optional[str] = None
+    _fix_compile_commands: Optional[bool] = None
+    _test_header_path: Optional[Path] = None
 
     @property
     def build_dir(self) -> Path:
@@ -107,6 +109,20 @@ class ProjectConfig:
             assert self._header_extension.startswith('.')
             return self._header_extension
 
+    @property
+    def fix_compile_commands(self) -> bool:
+        if self._fix_compile_commands is None:
+            return True
+        else:
+            return self._fix_compile_commands
+
+    @property
+    def test_header_path(self) -> Path:
+        if self._test_header_path is None:
+            return Path(f'utils/testing{self.header_extension}')
+        else:
+            return self._test_header_path
+
 def find_config_root(d: Path) -> Optional[Path]:
     d = Path(d).resolve()
     assert d.is_absolute()
@@ -140,6 +156,8 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         _cmake_flags_extra=raw.get('cmake_flags_extra'),
         _cmake_require_shell=raw.get('cmake_require_shell'),
         _header_extension=raw.get('header_extension'),
+        _fix_compile_commands=raw.get('fix_compile_commands'),
+        _test_header_path=raw.get('test_header_path'),
     )
 
 def gen_ifndef_uid(p):
@@ -159,6 +177,10 @@ def get_lib_root(p: Path) -> Path:
     assert config_root is not None
     return config_root / 'lib'
 
+def get_test_header_path(p: Path) -> Path:
+    config = _load_config(p)
+    assert config is not None
+    return config.test_header_path
 
 def with_suffixes(p, suffs):
     name = p.name
