@@ -165,7 +165,8 @@ def gen_ifndef_uid(p):
     config_root = find_config_root(p)
     relpath = p.relative_to(config_root)
     config = _load_config(p)
-    return f'_{config.ifndef_name}_' + str(relpath).upper().replace('/', '_').replace('.', '_')
+    unfixed = f'_{config.ifndef_name}_' + str(relpath)
+    return re.sub(r'[^a-zA-Z0-9_]', '_', unfixed).upper()
 
 def get_config(p) -> Optional[ProjectConfig]:
     p = Path(p).absolute()
