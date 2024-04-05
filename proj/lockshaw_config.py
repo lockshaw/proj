@@ -128,7 +128,7 @@ def find_config_root(d: Path) -> Optional[Path]:
     assert d.is_absolute()
 
     while True:
-        config_path = d / '.lockshaw.toml'
+        config_path = d / '.proj.toml'
 
         if config_path.is_file():
             return d
@@ -143,7 +143,7 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
     if config_root is None:
         return None
 
-    with (config_root / '.lockshaw.toml').open('r') as f:
+    with (config_root / '.proj.toml').open('r') as f:
         raw = toml.loads(f.read())
     return ProjectConfig(
         project_name=raw['project_name'],
