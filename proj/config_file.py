@@ -206,7 +206,7 @@ def get_sublib_root(p: Path):
         else:
             p = p.parent
 
-def get_include_path(p: Path):
+def get_include_path(p: Path) -> str:
     p = Path(p).absolute()
     sublib_root = get_sublib_root(p)
     config = _load_config(p)
@@ -223,3 +223,20 @@ def get_include_path(p: Path):
     if private_include.exists():
         return str(private_include.relative_to(src_dir))
     raise ValueError([public_include, private_include])
+
+def get_source_path(p: Path) -> Path:
+    p = Path(p).absolute()
+    config = _load_config(p)
+    assert config is not None
+    sublib_root = get_sublib_root(p)
+    include_dir = sublib_root / 'include'
+    assert include_dir.is_dir()
+    src_dir = sublib_root / 'src'
+    assert src_dir.is_dir()
+    if p.is_relative_to(src_dir):
+        subrelpath = p.relative_to(src_dir)
+    elif p.is_relative_to(include_dir):
+        subrelpath = p.relative_to(include_dir)
+    else:
+        raise ValueError(p)
+    return src_dir / with_suffixes(subrelpath, '.cc')

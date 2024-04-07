@@ -6,42 +6,50 @@ import shutil
 import multiprocessing
 import shlex
 import sys
-import proj.lockshaw_config as lockshaw
+from .config_file import (
+    find_config_root,
+    get_config,
+)
+from .dtgen import run_dtgen
+from .format import run_formatter
 import proj.fix_compile_commands as fix_compile_commands
+import logging
+
+_l = logging.getLogger(name='proj')
 
 DIR = Path(__file__).resolve().parent
 
 def main_root(args: Any) -> None:
-    config_root = lockshaw.find_config_root(args.path)
+    config_root = find_config_root(args.path)
     if config_root is not None:
         print(config_root)
     else:
-        print('ERROR: Could not find config root', file=sys.stderr)
-        print('Exiting unsuccessfully...', file=sys.stderr)
+        _l.error('ERROR: Could not find config root')
+        _l.error('Exiting unsuccessfully...')
         exit(1)
 
 def subprocess_check_call(command, **kwargs):
     if kwargs.get('shell', False):
         pretty_cmd = ' '.join(command)
-        print(f'+++ $ {pretty_cmd}', file=sys.stderr)
+        _l.info(f'+++ $ {pretty_cmd}')
         subprocess.check_call(pretty_cmd, **kwargs)
     else:
         pretty_cmd = shlex.join(command)
-        print(f'+++ $ {pretty_cmd}', file=sys.stderr)
+        _l.info(f'+++ $ {pretty_cmd}')
         subprocess.check_call(command, **kwargs)
 
 def subprocess_run(command, **kwargs):
     if kwargs.get('shell', False):
         pretty_cmd = ' '.join(command)
-        print(f'+++ $ {pretty_cmd}', file=sys.stderr)
+        _l.info(f'+++ $ {pretty_cmd}')
         subprocess.check_call(pretty_cmd, **kwargs)
     else:
         pretty_cmd = shlex.join(command)
-        print(f'+++ $ {pretty_cmd}', file=sys.stderr)
+        _l.info(f'+++ $ {pretty_cmd}')
         subprocess.check_call(command, **kwargs)
 
 def main_cmake(args: Any) -> None:
-    config = lockshaw.get_config(args.path)
+    config = get_config(args.path)
     assert config is not None
     if args.force and config.build_dir.exists():
         shutil.rmtree(config.build_dir)
@@ -71,7 +79,7 @@ def main_cmake(args: Any) -> None:
         ], stdout=f, cwd=config.build_dir, env=os.environ)
 
 def main_build(args: Any) -> None:
-    config = lockshaw.get_config(args.path)
+    config = get_config(args.path)
     assert config is not None
     subprocess_check_call([
         'make', '-j', str(args.jobs), *config.build_targets,
@@ -82,10 +90,10 @@ def main_build(args: Any) -> None:
     }, stderr=sys.stdout, cwd=config.build_dir)
 
 def main_test(args: Any) -> None:
-    config = lockshaw.get_config(args.path)
+    config = get_config(args.path)
     assert config is not None
     subprocess_check_call([
-        'make', '-j', str(args.jobs), *lockshaw.get_config(args.path).test_targets,
+        'make', '-j', str(args.jobs), *get_config(args.path).test_targets,
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
@@ -100,8 +108,38 @@ def main_test(args: Any) -> None:
         target_regex,
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
+def main_format(args: Any) -> None:
+    root = find_config_root(args.path)
+    assert root is not None
+    if len(args.files) == 0:
+        files = None
+    else:
+        for file in args.files:
+            assert file.is_file()
+        files = list(args.files)
+    run_formatter(root, files)
+
+def main_dtgen(args: Any) -> None:
+    root = find_config_root(args.path)
+    assert root is not None
+    config = get_config(args.path)
+    assert config is not None
+    if len(args.files) == 0:
+        files = None
+    else:
+        for file in args.files:
+            assert file.is_file()
+        files = list(args.files)
+    run_dtgen(
+        root=root,
+        config=config,
+        files=files,
+    )
+    
 def main() -> None:
     import argparse 
+
+    logging.basicConfig(level=logging.INFO)
 
     p = argparse.ArgumentParser()
     subparsers = p.add_subparsers()
@@ -127,6 +165,16 @@ def main() -> None:
     cmake_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     cmake_p.add_argument('--force', '-f', action='store_true')
     cmake_p.add_argument('--trace', action='store_true')
+
+    dtgen_p = subparsers.add_parser('dtgen')
+    dtgen_p.set_defaults(func=main_dtgen)
+    dtgen_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    dtgen_p.add_argument('files', nargs='*', type=Path)
+
+    format_p = subparsers.add_parser('format')
+    format_p.set_defaults(func=main_format)
+    format_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    format_p.add_argument('files', nargs='*', type=Path)
 
     args = p.parse_args()
     if hasattr(args, 'func') and args.func is not None:

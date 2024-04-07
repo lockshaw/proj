@@ -32,6 +32,25 @@
         type = "app";
         program = "${self.packages.${system}.proj}/bin/proj";
       };
+
+      devShells.default = pkgs.mkShell {
+        inputsFrom = [ self.packages.${system}.proj ];
+
+        buildInputs = builtins.concatLists [
+          (with pkgs; [
+
+          ])
+          (with pkgs.python3Packages; [
+              ipython
+              mypy
+              python-lsp-server
+              pylsp-mypy
+              python-lsp-ruff
+              black
+              toml
+          ])
+        ];
+      };
     }
   );
 }
