@@ -24,6 +24,10 @@
             substituteInPlace UltiSnips/cpp.snippets --replace "%PROJPATH%" "${proj}/${pkgs.python3.sitePackages}"
           '';
         };
+        rapidcheckFull = pkgs.symlinkJoin {
+          name = "rapidcheckFull";
+          paths = (with pkgs; [ rapidcheck.out rapidcheck.dev ]);
+        };
 
         default = proj;
       };
@@ -41,6 +45,7 @@
             doctest
             cmake
             ccache
+            nlohmann_json
           ])
           (with pkgs.python3Packages; [
             ipython
@@ -51,6 +56,9 @@
             black
             toml
             pytest
+          ])
+          (with self.packages.${system}; [
+            rapidcheckFull
           ])
         ];
       };

@@ -20,6 +20,7 @@ class Feature(Enum):
     ORD = auto()
     HASH = auto()
     FMT = auto()
+    RAPIDCHECK = auto()
 
 @dataclass(frozen=True)
 class FieldSpec:
@@ -57,6 +58,8 @@ def parse_feature(raw: str) -> Feature:
         return Feature.ORD
     elif raw == 'hash':
         return Feature.HASH
+    elif raw == 'rapidcheck':
+        return Feature.RAPIDCHECK
     else:
         raise ValueError(f'Unknown feature: {raw}')
 

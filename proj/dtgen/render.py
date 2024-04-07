@@ -24,6 +24,8 @@ def includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return [IncludeSpec(path='tuple', system=True)]
     elif feature == Feature.JSON:
         return [IncludeSpec(path='nlohmann/json.hpp', system=False)]
+    elif feature == Feature.RAPIDCHECK:
+        return [IncludeSpec(path='rapidcheck.h', system=False)]
     elif feature == Feature.FMT:
         raise NotImplementedError()
     else:
@@ -280,6 +282,39 @@ def render_json_impl(spec: StructSpec, f: TextIO) -> None:
             for field in spec.fields:
                 f.write(f'j["{field.json_key}"] = v.{field.name};\n')
 
+def render_rapidcheck_decl(spec: StructSpec, f: TextIO) -> None:
+    with render_namespace_block('rc', f):
+        render_template_abs(spec.template_params, f)
+        with semicolon(f):
+            f.write('struct Arbitrary')
+            with angles(f):
+                render_namespaced_typename(spec, f)
+            with braces(f):
+                f.write('static Gen')
+                with angles(f):
+                    render_namespaced_typename(spec, f)
+                f.write(' arbitrary();\n')
+
+def render_rapidcheck_impl(spec: StructSpec, f: TextIO) -> None:
+    with render_namespace_block('rc', f):
+        if len(spec.template_params) > 0:
+            render_template_abs(spec.template_params, f)
+        f.write('Gen')
+        with angles(f):
+            render_namespaced_typename(spec, f)
+        f.write(' Arbitrary')
+        with angles(f):
+            render_namespaced_typename(spec, f)
+        f.write('::arbitrary() ')
+        with braces(f):
+            with semicolon(f):
+                f.write('return gen::construct')
+                with angles(f):
+                    render_namespaced_typename(spec, f)
+                with parens(f):
+                    for field in commad(spec.fields, f):
+                        f.write(f'gen::arbitrary<{field.type_}>()')
+
 def render_eq_function_decls(spec: StructSpec, f: TextIO) -> None:
     for op in ['==', '!=']:
         render_binop_decl(spec, op, f)
@@ -324,6 +359,9 @@ def render_impls(spec: StructSpec, f: TextIO) -> None:
     if Feature.JSON in spec.features:
         f.write('\n')
         render_json_impl(spec, f)
+    if Feature.RAPIDCHECK in spec.features:
+        f.write('\n')
+        render_rapidcheck_impl(spec, f)
 
 def render_header(spec: StructSpec, f: TextIO) -> None:
     render_includes(infer_includes(spec), f)
@@ -337,6 +375,10 @@ def render_header(spec: StructSpec, f: TextIO) -> None:
     if Feature.JSON in spec.features:
         f.write('\n')
         render_json_decl(spec, f)
+
+    if Feature.RAPIDCHECK in spec.features:
+        f.write('\n')
+        render_rapidcheck_decl(spec, f)
 
     if len(spec.template_params) > 0:
         f.write('\n')

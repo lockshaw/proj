@@ -4,6 +4,8 @@ features = [
   "eq",
   "ord",
   "hash",
+  "json",
+  "rapidcheck",
 ]
 template_params = ["T"]
 

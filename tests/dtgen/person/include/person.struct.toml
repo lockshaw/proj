@@ -4,6 +4,8 @@ features = [
   "eq",
   "ord",
   "hash",
+  "json",
+  "rapidcheck",
 ]
 
 includes = [
@@ -21,3 +23,4 @@ type = "std::string"
 [[fields]]
 name = "age"
 type = "int"
+json_key = "age_in_years"

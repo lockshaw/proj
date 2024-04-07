@@ -1,6 +1,8 @@
 find_package(doctest REQUIRED)
 include(doctest) # import doctest_discover_tests
 
+find_package(rapidcheck REQUIRED)
+
 set(target "person-tests")
 
 project(${target})
@@ -22,7 +24,9 @@ target_include_directories(
 
 target_link_libraries(
   ${target}
-  doctest::doctest)
+  doctest::doctest
+  rapidcheck
+  )
 
 set_target_properties(${target}
   PROPERTIES

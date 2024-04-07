@@ -11,14 +11,6 @@ from pathlib import Path
 
 DIR = Path(__file__).absolute().parent
 
-# def _compile_file(input_files: Sequence[Path], include_dir: Path, output_file: Path):
-    # subprocess.check_call([
-    #     'g++',
-    #     *input_files,
-    #     '-o',
-    #     output_file,
-    # ])
-
 def _test_project(name: str):
     testdir = DIR / name
 
@@ -27,8 +19,6 @@ def _test_project(name: str):
         files=[],
     )
     main_dtgen(args=dtgen_args)
-    # assert (testdir / 'include/person.hh').is_file()
-    # assert (testdir / 'src/person.cc').is_file()
 
     cmake_args = MainCmakeArgs(
         path=testdir,
