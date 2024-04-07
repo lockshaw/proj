@@ -113,7 +113,7 @@ class ProjectConfig:
     @property
     def fix_compile_commands(self) -> bool:
         if self._fix_compile_commands is None:
-            return True
+            return False
         else:
             return self._fix_compile_commands
 

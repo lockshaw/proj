@@ -1,0 +1,23 @@
+namespace = "FlexFlow"
+name = "Person"
+features = [
+  "eq",
+  "ord",
+  "hash",
+]
+
+includes = [
+  "<string>"
+]
+
+[[fields]]
+name = "first_name"
+type = "std::string"
+
+[[fields]]
+name = "last_name"
+type = "std::string"
+
+[[fields]]
+name = "age"
+type = "int"

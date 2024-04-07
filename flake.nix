@@ -38,16 +38,19 @@
 
         buildInputs = builtins.concatLists [
           (with pkgs; [
-
+            doctest
+            cmake
+            ccache
           ])
           (with pkgs.python3Packages; [
-              ipython
-              mypy
-              python-lsp-server
-              pylsp-mypy
-              python-lsp-ruff
-              black
-              toml
+            ipython
+            mypy
+            python-lsp-server
+            pylsp-mypy
+            python-lsp-ruff
+            black
+            toml
+            pytest
           ])
         ];
       };

@@ -36,12 +36,15 @@ def find_files(root: Path):
                 yield found
 
 def _run_clang_format(
-    root: Path, config: ClangToolsConfig, args: Sequence[str], files: Sequence[PathLike[str]]
+    root: Path, config: ClangToolsConfig, args: Sequence[str], files: Sequence[PathLike[str]], use_default_style: bool = False,
 ) -> None:
     config_file = config.config_file_for_tool(Tool.clang_format)
     assert config_file is not None
-    style_file = root / config_file
-    command = [str(config.clang_tool_binary_path(Tool.clang_format)), f"--style=file:{style_file}", *args]
+    command = [str(config.clang_tool_binary_path(Tool.clang_format))]
+    if not use_default_style:
+        style_file = root / config_file
+        command.append(f"--style=file:{style_file}")
+    command += args
     if len(files) == 1:
         _l.debug(f"Running command {command} on 1 file: {files[0]}")
     else:

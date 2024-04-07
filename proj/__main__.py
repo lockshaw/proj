@@ -1,5 +1,8 @@
 from pathlib import Path
-from typing import Any
+from typing import (
+    Any,
+    Sequence,
+)
 import subprocess
 import os
 import shutil
@@ -14,6 +17,7 @@ from .dtgen import run_dtgen
 from .format import run_formatter
 import proj.fix_compile_commands as fix_compile_commands
 import logging
+from dataclasses import dataclass
 
 _l = logging.getLogger(name='proj')
 
@@ -48,7 +52,13 @@ def subprocess_run(command, **kwargs):
         _l.info(f'+++ $ {pretty_cmd}')
         subprocess.check_call(command, **kwargs)
 
-def main_cmake(args: Any) -> None:
+@dataclass(frozen=True)
+class MainCmakeArgs:
+    path: Path
+    force: bool
+    trace: bool
+
+def main_cmake(args: MainCmakeArgs) -> None:
     config = get_config(args.path)
     assert config is not None
     if args.force and config.build_dir.exists():
@@ -78,7 +88,13 @@ def main_cmake(args: Any) -> None:
             'list',
         ], stdout=f, cwd=config.build_dir, env=os.environ)
 
-def main_build(args: Any) -> None:
+@dataclass(frozen=True)
+class MainBuildArgs:
+    path: Path
+    verbose: bool
+    jobs: int
+
+def main_build(args: MainBuildArgs) -> None:
     config = get_config(args.path)
     assert config is not None
     subprocess_check_call([
@@ -89,11 +105,17 @@ def main_build(args: Any) -> None:
         **({'VERBOSE': '1'} if args.verbose else {})
     }, stderr=sys.stdout, cwd=config.build_dir)
 
-def main_test(args: Any) -> None:
+@dataclass(frozen=True)
+class MainTestArgs:
+    path: Path
+    verbose: bool
+    jobs: int
+
+def main_test(args: MainTestArgs) -> None:
     config = get_config(args.path)
     assert config is not None
     subprocess_check_call([
-        'make', '-j', str(args.jobs), *get_config(args.path).test_targets,
+        'make', '-j', str(args.jobs), *config.test_targets,
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
@@ -119,7 +141,12 @@ def main_format(args: Any) -> None:
         files = list(args.files)
     run_formatter(root, files)
 
-def main_dtgen(args: Any) -> None:
+@dataclass(frozen=True)
+class MainDtgenArgs:
+    path: Path
+    files: Sequence[Path]
+
+def main_dtgen(args: MainDtgenArgs) -> None:
     root = find_config_root(args.path)
     assert root is not None
     config = get_config(args.path)

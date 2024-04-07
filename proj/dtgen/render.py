@@ -343,7 +343,8 @@ def render_header(spec: StructSpec, f: TextIO) -> None:
         render_impls(spec, f)
 
 def render_source(spec: StructSpec, f: TextIO) -> None:
-    render_impls(spec, f)
+    if len(spec.template_params) == 0:
+        render_impls(spec, f)
 
 # @contextmanager
 # def configure_output(p: Optional[Path]) -> Iterator[TextIO]:
