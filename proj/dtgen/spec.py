@@ -97,4 +97,4 @@ def load_spec(path: Path) -> StructSpec:
     try:
         return parse_struct_spec(raw)
     except KeyError as e:
-        raise RuntimeError('Failed to parse spec {path}') from e
+        raise RuntimeError(f'Failed to parse spec {path}') from e
