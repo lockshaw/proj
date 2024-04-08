@@ -60,6 +60,8 @@ def parse_feature(raw: str) -> Feature:
         return Feature.HASH
     elif raw == 'rapidcheck':
         return Feature.RAPIDCHECK
+    elif raw == 'fmt':
+        return Feature.FMT
     else:
         raise ValueError(f'Unknown feature: {raw}')
 

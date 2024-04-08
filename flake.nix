@@ -46,6 +46,7 @@
             cmake
             ccache
             nlohmann_json
+            fmt
           ])
           (with pkgs.python3Packages; [
             ipython

@@ -4,6 +4,7 @@
 #include <type_traits>
 #include "person.hh"
 #include "rapidcheck.h"
+#include "fmt/format.h"
 
 using ::FlexFlow::Person;
 using ::nlohmann::json;
@@ -113,5 +114,19 @@ TEST_SUITE(FF_TEST_SUITE) {
     rc::check([&](Person const &p, Person const &p2) {
       CHECK((p == p2) == (get_hash(p) == get_hash(p2)));
     });
+  }
+
+  TEST_CASE("fmt") {
+    Person p = { first_name, last_name, age };
+    std::string correct = "<Person first_name=first last_name=last age=15>";
+    CHECK(fmt::to_string(p) == correct);
+  }
+
+  TEST_CASE("ostream") {
+    Person p = { first_name, last_name, age };
+    std::string correct = "<Person first_name=first last_name=last age=15>";
+    std::ostringstream oss;
+    oss << p;
+    CHECK(oss.str() == correct);
   }
 }

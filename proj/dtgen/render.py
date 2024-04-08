@@ -27,7 +27,11 @@ def includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     elif feature == Feature.RAPIDCHECK:
         return [IncludeSpec(path='rapidcheck.h', system=False)]
     elif feature == Feature.FMT:
-        raise NotImplementedError()
+        return [
+            IncludeSpec(path='sstream', system=True),
+            IncludeSpec(path='ostream', system=True),
+            IncludeSpec(path='fmt/format.h', system=False),
+        ]
     else:
         return []
 
@@ -282,6 +286,51 @@ def render_json_impl(spec: StructSpec, f: TextIO) -> None:
             for field in spec.fields:
                 f.write(f'j["{field.json_key}"] = v.{field.name};\n')
 
+def render_fmt_decl(spec: StructSpec, f: TextIO) -> None:
+    with render_namespace_block(spec.namespace, f):
+        if len(spec.template_params) > 0:
+            render_template_abs(spec.template_params, f)
+        with semicolon(f):
+            f.write('std::string format_as')
+            with parens(f):
+                render_typename(spec, f)
+                f.write(' const &')
+
+        if len(spec.template_params) > 0:
+            render_template_abs(spec.template_params, f)
+        with semicolon(f):
+            f.write('std::ostream &operator<<')
+            with parens(f):
+                f.write('std::ostream &, ')
+                render_typename(spec, f)
+                f.write(' const &')
+
+
+def render_fmt_impl(spec: StructSpec, f: TextIO) -> None:
+    with render_namespace_block(spec.namespace, f):
+        if len(spec.template_params) > 0:
+            render_template_abs(spec.template_params, f)
+        f.write('std::string format_as')
+        with parens(f):
+            render_typename(spec, f)
+            f.write(' const &x')
+        with braces(f):
+            f.write('std::ostringstream oss;\n')
+            f.write(f'oss << "<{spec.name}";\n')
+            for field in spec.fields:
+                f.write(f'oss << " {field.name}=" << x.{field.name};\n')
+            f.write('oss << ">";\n')
+            f.write('return oss.str();')
+        
+        if len(spec.template_params) > 0:
+            render_template_abs(spec.template_params, f)
+        f.write('std::ostream &operator<<(std::ostream &s, ')
+        render_typename(spec, f)
+        f.write(' const &x')
+        f.write(') ')
+        with braces(f):
+            f.write('return s << fmt::to_string(x);')
+
 def render_rapidcheck_decl(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block('rc', f):
         render_template_abs(spec.template_params, f)
@@ -362,6 +411,9 @@ def render_impls(spec: StructSpec, f: TextIO) -> None:
     if Feature.RAPIDCHECK in spec.features:
         f.write('\n')
         render_rapidcheck_impl(spec, f)
+    if Feature.FMT in spec.features:
+        f.write('\n')
+        render_fmt_impl(spec, f)
 
 def render_header(spec: StructSpec, f: TextIO) -> None:
     render_includes(infer_includes(spec), f)
@@ -379,6 +431,10 @@ def render_header(spec: StructSpec, f: TextIO) -> None:
     if Feature.RAPIDCHECK in spec.features:
         f.write('\n')
         render_rapidcheck_decl(spec, f)
+
+    if Feature.FMT in spec.features:
+        f.write('\n')
+        render_fmt_decl(spec, f)
 
     if len(spec.template_params) > 0:
         f.write('\n')

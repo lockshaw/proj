@@ -82,4 +82,18 @@ TEST_SUITE(FF_TEST_SUITE) {
       CHECK((x == x2) == (get_hash(x) == get_hash(x2)));
     });
   }
+
+  TEST_CASE("fmt") {
+    wrapper_t<int> p = { value };
+    std::string correct = "<wrapper_t value=5>";
+    CHECK(fmt::to_string(p) == correct);
+  }
+
+  TEST_CASE("ostream") {
+    wrapper_t<int> p = { value };
+    std::string correct = "<wrapper_t value=5>";
+    std::ostringstream oss;
+    oss << p;
+    CHECK(oss.str() == correct);
+  }
 }

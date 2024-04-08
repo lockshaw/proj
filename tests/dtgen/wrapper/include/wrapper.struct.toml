@@ -6,6 +6,7 @@ features = [
   "hash",
   "json",
   "rapidcheck",
+  "fmt",
 ]
 template_params = ["T"]
 
