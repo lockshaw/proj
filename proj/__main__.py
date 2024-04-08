@@ -59,6 +59,11 @@ class MainCmakeArgs:
     trace: bool
 
 def main_cmake(args: MainCmakeArgs) -> None:
+    main_dtgen(args=MainDtgenArgs(
+        path=args.path,
+        files=[],
+    ))
+
     config = get_config(args.path)
     assert config is not None
     if args.force and config.build_dir.exists():
@@ -95,6 +100,11 @@ class MainBuildArgs:
     jobs: int
 
 def main_build(args: MainBuildArgs) -> None:
+    main_dtgen(args=MainDtgenArgs(
+        path=args.path,
+        files=[],
+    ))
+
     config = get_config(args.path)
     assert config is not None
     subprocess_check_call([
@@ -112,6 +122,11 @@ class MainTestArgs:
     jobs: int
 
 def main_test(args: MainTestArgs) -> None:
+    main_dtgen(args=MainDtgenArgs(
+        path=args.path,
+        files=[],
+    ))
+
     config = get_config(args.path)
     assert config is not None
     subprocess_check_call([

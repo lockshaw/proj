@@ -1,8 +1,6 @@
 from proj.__main__ import (
-    main_dtgen,
     main_cmake,
     main_test,
-    MainDtgenArgs,
     MainCmakeArgs,
     MainTestArgs,
 )
@@ -13,12 +11,6 @@ DIR = Path(__file__).absolute().parent
 
 def _test_project(name: str):
     testdir = DIR / name
-
-    dtgen_args = MainDtgenArgs(
-        path=testdir,
-        files=[],
-    )
-    main_dtgen(args=dtgen_args)
 
     cmake_args = MainCmakeArgs(
         path=testdir,
