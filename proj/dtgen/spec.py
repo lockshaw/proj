@@ -89,6 +89,9 @@ def parse_struct_spec(raw: Mapping[str, Any]) -> StructSpec:
     )
 
 def load_spec(path: Path) -> StructSpec:
-    with path.open('r') as f:
-        raw = toml.loads(f.read())
+    try:
+        with path.open('r') as f:
+            raw = toml.loads(f.read())
+    except toml.TOMLDecodeError as e:
+        raise RuntimeError(f'Failed to load spec {path}') from e
     return parse_struct_spec(raw)
