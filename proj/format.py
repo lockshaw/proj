@@ -22,6 +22,7 @@ def find_files(root: Path):
     blacklist = [
         root / 'triton',
         root / 'deps',
+        root / 'build',
     ]
     
     def is_blacklisted(p: Path) -> bool:
