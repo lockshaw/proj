@@ -94,4 +94,7 @@ def load_spec(path: Path) -> StructSpec:
             raw = toml.loads(f.read())
     except toml.TOMLDecodeError as e:
         raise RuntimeError(f'Failed to load spec {path}') from e
-    return parse_struct_spec(raw)
+    try:
+        return parse_struct_spec(raw)
+    except KeyError as e:
+        raise RuntimeError('Failed to parse spec {path}') from e
