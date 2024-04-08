@@ -1,0 +1,17 @@
+namespace = "FlexFlow"
+name = "Color"
+features = [
+  "hash",
+  "fmt",
+  "rapidcheck",
+  "json",
+]
+
+[[values]]
+name = "RED"
+
+[[values]]
+name = "BLUE"
+
+[[values]]
+name = "YELLOW"

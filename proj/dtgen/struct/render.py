@@ -1,21 +1,25 @@
-from enum import Enum, auto
 from typing import (
     TextIO,
     Optional,
     Sequence,
     Iterator,
-    TypeVar,
 )
 from .spec import (
     StructSpec,
     Feature,
-    IncludeSpec,
 )
 from contextlib import contextmanager
-
-class FileType(Enum):
-    HEADER = auto()
-    SOURCE = auto()
+from proj.dtgen.render_utils import (
+    IncludeSpec,
+    render_includes,
+    render_namespace_block,
+    semicolon,
+    nlblock,
+    braces,
+    parens,
+    angles,
+    commad,
+)
 
 def includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
@@ -45,42 +49,6 @@ def infer_includes(struct_spec: StructSpec) -> Sequence[IncludeSpec]:
 
 def render_delete_default_constructor(spec: StructSpec, f: TextIO) -> None:
     f.write(f'{spec.name}() = delete;\n')
-
-def render_includes(includes: Sequence[IncludeSpec], f: TextIO) -> None:
-    for inc in includes:
-        if inc.system:
-            f.write(f'#include <{inc.path}>\n')
-        else:
-            f.write(f'#include "{inc.path}"\n')
-
-@contextmanager
-def semicolon(f: TextIO) -> Iterator[None]:
-    yield
-    f.write(';')
-
-@contextmanager
-def nlblock(f: TextIO) -> Iterator[None]:
-    f.write('\n')
-    yield
-    f.write('\n')
-
-@contextmanager
-def braces(f: TextIO) -> Iterator[None]:
-    f.write('{')
-    yield
-    f.write('}')
-
-@contextmanager
-def parens(f: TextIO) -> Iterator[None]:
-    f.write('(')
-    yield
-    f.write(')')
-
-@contextmanager
-def angles(f: TextIO) -> Iterator[None]:
-    f.write('<')
-    yield
-    f.write('>')
 
 def render_field_decls(spec: StructSpec, f: TextIO) -> None:
     for field in spec.fields:
@@ -164,16 +132,6 @@ def render_constructor_impl(spec: StructSpec, f: TextIO) -> None:
 def render_binop_decl(spec: StructSpec, op: str, f: TextIO) -> None:
     f.write(f'bool operator{op}({spec.name} const &) const;')
 
-T = TypeVar('T')
-
-def commad(ss: Sequence[T], f: TextIO) -> Iterator[T]:
-    i = 0
-    for s in ss:
-        if i > 0:
-            f.write(', ')
-        yield s
-        i += 1
-
 def render_binop_impl(spec: StructSpec, op: str, f: TextIO) -> None:
     render_struct_impl_scope(spec, f, return_type='bool')
     f.write(f'operator{op}')
@@ -197,16 +155,6 @@ def render_binop_impl(spec: StructSpec, op: str, f: TextIO) -> None:
             f.write(f' {op} ')
             render_tie('other.')
             f.write(';')
-
-@contextmanager
-def render_namespace_block(name: Optional[str], f: TextIO) -> Iterator[None]:
-    if name is not None:
-        f.write(f'namespace {name}')
-        with braces(f):
-            yield
-        f.write('// namespace {name}\n')
-    else:
-        yield
 
 def render_hash_decl(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block('std', f):

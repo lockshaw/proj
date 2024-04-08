@@ -8,6 +8,9 @@ from typing import (
     Mapping,
 )
 from pathlib import Path
+from proj.dtgen.render_utils import (
+    IncludeSpec,
+)
 
 try:
     import tomllib as toml
@@ -35,11 +38,6 @@ class FieldSpec:
         else:
             return self._json_key
 
-@dataclass(frozen=True)
-class IncludeSpec:
-    path: str
-    system: bool
-    
 @dataclass(frozen=True)
 class StructSpec:
     includes: Sequence[IncludeSpec]

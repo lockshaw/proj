@@ -12,25 +12,36 @@ from typing import (
     Sequence,
     Iterator,
     Optional,
+    Union,
 )
 from pathlib import Path
-from .render import (
-    render_header,
-    render_source,
+from .struct.render import (
+    render_header as render_struct_header,
+    render_source as render_struct_source,
 )
-from .spec import (
+from .struct.spec import (
     StructSpec,
-    load_spec,
+    load_spec as load_struct_spec,
 )
+from .enum.render import (
+    render_header as render_enum_header,
+    render_source as render_enum_source,
+)
+from .enum.spec import (
+    EnumSpec,
+    load_spec as load_enum_spec,
+)
+
 import logging
 
 _l = logging.getLogger(__name__)
 
 def find_files(root: Path) -> Iterator[Path]:
-    patterns = ['*.struct.toml']
+    patterns = ['*.struct.toml', '*.enum.toml']
     blacklist = [
         root / 'triton',
         root / 'deps',
+        root / 'build',
     ]
     
     def is_blacklisted(p: Path) -> bool:
@@ -55,7 +66,7 @@ def render_disclaimer(spec_path: Path, root: Path, f: TextIO) -> None:
     f.write('// If you would like to modify this datatype, instead modify\n')
     f.write(f'// {spec_path.relative_to(root)}\n')
 
-def generate_header(spec: StructSpec, spec_path: Path, root: Path, out: Path) -> None:
+def generate_header(spec: Union[StructSpec, EnumSpec], spec_path: Path, root: Path, out: Path) -> None:
     out.parent.mkdir(exist_ok=True, parents=True)
     with out.open('w') as f:
         ifndef = gen_ifndef_uid(out)
@@ -64,25 +75,40 @@ def generate_header(spec: StructSpec, spec_path: Path, root: Path, out: Path) ->
         f.write(f'#ifndef {ifndef}\n')
         f.write(f'#define {ifndef}\n')
         f.write('\n')
-        render_header(spec=spec, f=f)        
+        if isinstance(spec, StructSpec):
+            render_struct_header(spec, f)
+        else:
+            assert isinstance(spec, EnumSpec)
+            render_enum_header(spec, f) 
         f.write('\n')
         f.write(f'#endif // {ifndef}\n')
 
-def generate_source(spec: StructSpec, spec_path: Path, root: Path, out: Path) -> None:
+def generate_source(spec: Union[StructSpec, EnumSpec], spec_path: Path, root: Path, out: Path) -> None:
     out.parent.mkdir(exist_ok=True, parents=True)
     with out.open('w') as f:
         render_disclaimer(spec_path=spec_path, root=root, f=f)
         f.write('\n')
         f.write(f'#include "{get_include_path(out)}"\n')
         f.write('\n')
-        render_source(spec=spec, f=f)
+        if isinstance(spec, StructSpec):
+            render_struct_source(spec, f)
+        else:
+            assert isinstance(spec, EnumSpec)
+            render_enum_source(spec, f) 
 
 def generate_files(root: Path, config: ProjectConfig, spec_path: Path) -> Sequence[Path]:
-    spec = load_spec(spec_path)
     source_path = get_source_path(spec_path)
     header_path = with_suffixes(spec_path, config.header_extension)
+    spec: Union[StructSpec, EnumSpec]
+    if spec_path.suffixes[-2:] == ['.struct', '.toml']:
+        spec = load_struct_spec(spec_path)
+    else:
+        assert spec_path.suffixes[-2:] == ['.enum', '.toml']
+        spec = load_enum_spec(spec_path)
+
     generate_header(spec=spec, spec_path=spec_path, root=root, out=header_path)
     generate_source(spec=spec, spec_path=spec_path, root=root, out=source_path)
+
     return [header_path, source_path]
 
 def run_dtgen(root: Path, config: ProjectConfig, files: Optional[Sequence[PathLike[str]]] = None) -> None:
