@@ -384,8 +384,9 @@ def render_decls(spec: StructSpec, f: TextIO) -> None:
     # render_includes(infer_includes(spec), f)
     with render_namespace_block(spec.namespace, f):
         with render_struct_block(spec, f):
-            render_delete_default_constructor(spec, f)
-            render_constructor_decl(spec, f)
+            if len(spec.fields) > 0:
+                render_delete_default_constructor(spec, f)
+                render_constructor_decl(spec, f)
             if Feature.EQ in spec.features:
                 f.write('\n')
                 render_eq_function_decls(spec, f)
@@ -397,7 +398,8 @@ def render_decls(spec: StructSpec, f: TextIO) -> None:
 
 def render_impls(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
-        render_constructor_impl(spec, f)
+        if len(spec.fields) > 0:
+            render_constructor_impl(spec, f)
         if Feature.EQ in spec.features:
             render_eq_function_impls(spec, f)
         if Feature.ORD in spec.features:
