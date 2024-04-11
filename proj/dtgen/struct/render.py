@@ -20,6 +20,7 @@ from proj.dtgen.render_utils import (
     angles,
     commad,
 )
+import io
 
 def includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
@@ -94,6 +95,11 @@ def render_template_app(spec: StructSpec, f: TextIO, with_namespace: bool = Fals
     if len(spec.template_params) > 0:
         render_template_args(spec.template_params, f)
 
+def template_app(spec: StructSpec, with_namespace: bool = False) -> str:
+    f = io.StringIO()
+    render_template_app(spec, f=f, with_namespace=with_namespace)
+    return f.getvalue()
+
 def render_struct_impl_scope(spec: StructSpec, f: TextIO, return_type: Optional[str] = None) -> None:
     if len(spec.template_params) > 0:
         render_template_abs(spec.template_params, f)
@@ -155,6 +161,60 @@ def render_binop_impl(spec: StructSpec, op: str, f: TextIO) -> None:
             f.write(f' {op} ')
             render_tie('other.')
             f.write(';')
+
+def render_typename_delegate(delegate_to_type: str, name: str, f: TextIO):
+    f.write(f'using {name} = typename {delegate_to_type}::{name};\n')
+
+def render_iter_decl(spec: StructSpec, f: TextIO) -> None:
+    delegate = spec.delegate_iter
+    assert delegate is not None
+    iter_field = spec.fields_by_name[delegate.field]
+    for type_field_name in [
+            'value_type', 
+            'reference', 
+            'const_reference', 
+            'pointer', 
+            'const_pointer', 
+            'iterator', 
+            'const_iterator', 
+            'difference_type', 
+            'size_type'
+    ]:
+        render_typename_delegate(iter_field.type_, type_field_name, f)
+    f.write('iterator begin();\n')
+    f.write('iterator end();\n')
+    f.write('const_iterator begin() const;\n')
+    f.write('const_iterator end() const;\n')
+    f.write('const_iterator cbegin() const;\n')
+    f.write('const_iterator cend() const;\n')
+
+def render_iter_method_impl(spec: StructSpec, name: str, const: bool, f: TextIO) -> None:
+    delegate = spec.delegate_iter
+    assert delegate is not None
+    iter_field = spec.fields_by_name[delegate.field]
+
+    if const:
+        return_type = 'const_iterator'
+    else:
+        return_type = 'iterator'
+
+    render_struct_impl_scope(spec, f, return_type=f'{template_app(spec)}::{return_type}')
+    f.write(f'{name}()')
+    if const:
+        f.write(' const ')
+    with braces(f):
+        f.write(f'return this->{iter_field.name}.{name}();')
+
+def render_iter_impl(spec: StructSpec, f: TextIO) -> None:
+    for (name, const) in [
+            ('begin', False),
+            ('end', False),
+            ('begin', True),
+            ('end', True),
+            ('cbegin', True),
+            ('cend', True),
+    ]:
+        render_iter_method_impl(spec=spec, name=name, const=const, f=f)
 
 def render_hash_decl(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block('std', f):
@@ -341,6 +401,9 @@ def render_decls(spec: StructSpec, f: TextIO) -> None:
             if Feature.ORD in spec.features:
                 f.write('\n')
                 render_ord_function_decls(spec, f)
+            if spec.delegate_iter is not None:
+                f.write('\n')
+                render_iter_decl(spec, f)
             f.write('\n')
             render_field_decls(spec, f)
 
@@ -352,6 +415,9 @@ def render_impls(spec: StructSpec, f: TextIO) -> None:
             render_eq_function_impls(spec, f)
         if Feature.ORD in spec.features:
             render_ord_function_impls(spec, f)
+        if spec.delegate_iter is not None:
+            f.write('\n')
+            render_iter_impl(spec, f)
     if Feature.HASH in spec.features:
         f.write('\n')
         render_hash_impl(spec, f)

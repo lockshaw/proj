@@ -1,0 +1,19 @@
+namespace = "FlexFlow"
+name = "coordinate"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "rapidcheck",
+  "fmt",
+]
+
+includes = [
+  "<vector>"
+]
+
+[[fields]]
+name = "unwrapped"
+type = "std::vector<int>"
+delegate_iter = true

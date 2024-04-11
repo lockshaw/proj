@@ -26,9 +26,14 @@ class Feature(Enum):
     RAPIDCHECK = auto()
 
 @dataclass(frozen=True)
+class IterSpec:
+    field: str
+
+@dataclass(frozen=True)
 class FieldSpec:
     name: str
     type_: str
+    delegate_iter: bool
     _json_key: Optional[str]
 
     @property
@@ -46,6 +51,20 @@ class StructSpec:
     name: str
     fields: Sequence[FieldSpec]
     features: FrozenSet[Feature]
+
+    @property
+    def fields_by_name(self) -> Mapping[str, FieldSpec]:
+        return {field.name : field for field in self.fields}
+
+    @property
+    def delegate_iter(self) -> Optional[IterSpec]:
+        delegates = [field for field in self.fields if field.delegate_iter is True]
+        if len(delegates) == 0:
+            return None
+        elif len(delegates) == 1:
+            return IterSpec(field=delegates[0].name)
+        else:
+            raise ValueError('Found multiple delegate fields')
 
 def parse_feature(raw: str) -> Feature:
     if raw == 'json':
@@ -67,6 +86,7 @@ def parse_field_spec(raw: Mapping[str, Any]) -> FieldSpec:
     return FieldSpec(
         name=raw['name'],
         type_=raw['type'],
+        delegate_iter=raw.get('delegate_iter', False),
         _json_key=raw.get('json_key'),
     )
 
@@ -84,6 +104,7 @@ def parse_struct_spec(raw: Mapping[str, Any]) -> StructSpec:
         name=raw['name'],
         fields=[parse_field_spec(field) for field in raw['fields']],
         features=frozenset([parse_feature(feature) for feature in raw['features']]),
+        delegate_iter=raw.get('delegate_iter', None),
     )
 
 def load_spec(path: Path) -> StructSpec:
