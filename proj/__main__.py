@@ -12,6 +12,7 @@ import proj.fix_compile_commands as fix_compile_commands
 DIR = Path(__file__).resolve().parent
 
 def main_root(args: Any) -> None:
+    print("hello 1")
     config_root = lockshaw.find_config_root(args.path)
     if config_root is not None:
         print(config_root)
@@ -21,6 +22,7 @@ def main_root(args: Any) -> None:
         exit(1)
 
 def subprocess_check_call(command, **kwargs):
+    print("hello 2")
     if kwargs.get('shell', False):
         pretty_cmd = ' '.join(command)
         print(f'+++ $ {pretty_cmd}', file=sys.stderr)
@@ -31,6 +33,7 @@ def subprocess_check_call(command, **kwargs):
         subprocess.check_call(command, **kwargs)
 
 def subprocess_run(command, **kwargs):
+    print("hello 3")
     if kwargs.get('shell', False):
         pretty_cmd = ' '.join(command)
         print(f'+++ $ {pretty_cmd}', file=sys.stderr)
@@ -41,6 +44,7 @@ def subprocess_run(command, **kwargs):
         subprocess.check_call(command, **kwargs)
 
 def main_cmake(args: Any) -> None:
+    print("hello 4")
     config = lockshaw.get_config(args.path)
     assert config is not None
     if args.force and config.build_dir.exists():
@@ -71,6 +75,7 @@ def main_cmake(args: Any) -> None:
         ], stdout=f, cwd=config.build_dir, env=os.environ)
 
 def main_build(args: Any) -> None:
+    print("hello 5")
     config = lockshaw.get_config(args.path)
     assert config is not None
     subprocess_check_call([
@@ -82,6 +87,7 @@ def main_build(args: Any) -> None:
     }, stderr=sys.stdout, cwd=config.build_dir)
 
 def main_test(args: Any) -> None:
+    print("hello 6")
     config = lockshaw.get_config(args.path)
     assert config is not None
     subprocess_check_call([
@@ -101,6 +107,7 @@ def main_test(args: Any) -> None:
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
 def main() -> None:
+    print("hello 7")
     import argparse 
 
     p = argparse.ArgumentParser()
