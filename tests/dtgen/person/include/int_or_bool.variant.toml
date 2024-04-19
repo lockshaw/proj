@@ -1,0 +1,15 @@
+namespace = "FlexFlow"
+name = "IntOrBool"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+]
+includes = []
+
+[[values]]
+type = "int"
+
+[[values]]
+type = "bool"

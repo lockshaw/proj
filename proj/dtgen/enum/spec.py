@@ -8,12 +8,7 @@ from typing import (
 )
 from enum import Enum, auto
 from pathlib import Path
-
-try:
-    import tomllib as toml
-except ImportError:
-    import toml
-
+import proj.toml as toml
 
 class Feature(Enum):
     JSON = auto()

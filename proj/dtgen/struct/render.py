@@ -3,6 +3,7 @@ from typing import (
     Optional,
     Sequence,
     Iterator,
+    Callable,
 )
 from .spec import (
     StructSpec,
@@ -19,9 +20,11 @@ from proj.dtgen.render_utils import (
     parens,
     angles,
     commad,
+    render_template_abs,
 )
+import proj.dtgen.render_utils as render_utils
 
-def includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
+def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
         return [IncludeSpec(path='functional', system=True)]
     elif feature in [Feature.ORD, Feature.EQ]:
@@ -39,13 +42,28 @@ def includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     else:
         return []
 
-def infer_includes(struct_spec: StructSpec) -> Sequence[IncludeSpec]:
-    result = list(struct_spec.includes)
-    for feature in struct_spec.features:
+def impl_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
+    # if feature == Feature.SERIALIZE:
+    #     return [IncludeSpec(path='utils/serialize.h', system=False)]
+    # else:
+    return []
+
+def _infer_includes(
+    spec: StructSpec, 
+    includes_for_feature: Callable[[Feature], Sequence[IncludeSpec]]
+) -> Sequence[IncludeSpec]:
+    result = list(spec.includes)
+    for feature in spec.features:
         for include in includes_for_feature(feature):
             if include not in result:
                 result.append(include)
     return result
+
+def infer_header_includes(spec: StructSpec) -> Sequence[IncludeSpec]:
+    return _infer_includes(spec, header_includes_for_feature)
+
+def infer_impl_includes(spec: StructSpec) -> Sequence[IncludeSpec]:
+    return _infer_includes(spec, impl_includes_for_feature)
 
 def render_delete_default_constructor(spec: StructSpec, f: TextIO) -> None:
     f.write(f'{spec.name}() = delete;\n')
@@ -66,19 +84,8 @@ def render_namespaced_typename(spec: StructSpec, f: TextIO) -> None:
 
 @contextmanager
 def render_struct_block(spec: StructSpec, f: TextIO) -> Iterator[None]:
-    if len(spec.template_params) > 0:
-        render_template_abs(spec.template_params, f)
-    f.write(f'struct {spec.name}')
-    with semicolon(f):
-        with braces(f):
-            yield 
-
-def render_template_abs(params: Sequence[str], f: TextIO) -> None:
-    f.write(''.join([
-        'template <',
-        ', '.join([f'typename {p}' for p in params]),
-        '>\n'
-    ]))
+    with render_utils.render_struct_block(name=spec.name, template_params=spec.template_params, f=f):
+        yield
 
 def render_template_args(params: Sequence[str], f: TextIO) -> None:
     f.write(''.join([
@@ -206,6 +213,23 @@ def render_json_decl(spec: StructSpec, f: TextIO) -> None:
                 render_namespaced_typename(spec, f)
                 f.write(' const &);\n')
 
+def render_json_checks(spec: StructSpec, f: TextIO) -> None:
+    assert len(spec.template_params) == 0
+
+    with render_namespace_block('nlohmann', f):
+        with semicolon(f):
+            for field in spec.fields:
+                f.write('static_assert')
+                with parens(f):
+                    f.write('::FlexFlow::is_json_serializable_v')
+                    with angles(f):
+                        f.write(field.type_)
+                    f.write(f', "Field {field.name} of type {field.type} should be json-serializeable, but is not"')
+    # with render_namespace_block('nlohmann', f):
+    #     with semicolon(f):
+    #         for field in spec.fields:
+    #             f.write('static_assert')
+
 def render_json_impl(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block('nlohmann', f):
         if len(spec.template_params) > 0:
@@ -312,6 +336,43 @@ def render_rapidcheck_impl(spec: StructSpec, f: TextIO) -> None:
                     for field in commad(spec.fields, f):
                         f.write(f'gen::arbitrary<{field.type_}>()')
 
+# def render_serialize_impl(spec: StructSpec, f: TextIO) -> None:
+#     with render_namespace_block('FlexFlow', f):
+#         if len(spec.template_params) > 0:
+#             render_template_abs(spec.template_params, f)
+#         f.write('Gen')
+#         with angles(f):
+#             render_namespaced_typename(spec, f)
+#         f.write(' Arbitrary')
+#         with angles(f):
+#             render_namespaced_typename(spec, f)
+#         f.write('::arbitrary() ')
+#         with braces(f):
+#             with semicolon(f):
+#                 f.write('return gen::construct')
+#                 with angles(f):
+#                     render_namespaced_typename(spec, f)
+#                 with parens(f):
+#                     for field in commad(spec.fields, f):
+#                         f.write(f'gen::arbitrary<{field.type_}>()')
+
+# def render_serialize_fwd_decls(f: TextIO) -> None:
+#     with render_namespace_block('FlexFlow', f):
+#         f.write('struct Serializer;')
+#         f.write('struct Deserializer;')
+
+# def render_serialize_decls(spec: StructSpec, f: TextIO) -> None:
+#     with render_namespace_block(spec.namespace, f):
+#         if len(spec.template_params) > 0:
+#             render_template_abs(spec.template_params, f)
+#         with semicolon(f):
+#             f.write('void serialize')
+#             with parens(f):
+#                 f.write('Serializer &, ')
+#                 render_typename(spec, f)
+#                 f.write(' const &')
+#         with 
+
 def render_eq_function_decls(spec: StructSpec, f: TextIO) -> None:
     for op in ['==', '!=']:
         render_binop_decl(spec, op, f)
@@ -366,9 +427,17 @@ def render_impls(spec: StructSpec, f: TextIO) -> None:
         render_fmt_impl(spec, f)
 
 def render_header(spec: StructSpec, f: TextIO) -> None:
-    render_includes(infer_includes(spec), f)
+    render_includes(infer_header_includes(spec), f)
+    if len(spec.template_params) > 0:
+        render_includes(infer_impl_includes(spec), f)
+
     f.write('\n')
+    
     render_decls(spec, f)
+
+    # if Feature.SERIALIZE in spec.features:
+    #     f.write('\n')
+    #     render_serialize_fwd_decls(f)
 
     if Feature.HASH in spec.features:
         f.write('\n')
@@ -392,6 +461,9 @@ def render_header(spec: StructSpec, f: TextIO) -> None:
 
 def render_source(spec: StructSpec, f: TextIO) -> None:
     if len(spec.template_params) == 0:
+        render_includes(infer_impl_includes(spec), f)
+        f.write('\n')
+
         render_impls(spec, f)
 
 # @contextmanager
