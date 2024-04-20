@@ -22,7 +22,6 @@ def main_root(args: Any) -> None:
         exit(1)
 
 def subprocess_check_call(command, **kwargs):
-    print("hello 2")
     if kwargs.get('shell', False):
         pretty_cmd = ' '.join(command)
         print(f'+++ $ {pretty_cmd}', file=sys.stderr)
@@ -33,7 +32,6 @@ def subprocess_check_call(command, **kwargs):
         subprocess.check_call(command, **kwargs)
 
 def subprocess_run(command, **kwargs):
-    print("hello 3")
     if kwargs.get('shell', False):
         pretty_cmd = ' '.join(command)
         print(f'+++ $ {pretty_cmd}', file=sys.stderr)
@@ -44,7 +42,6 @@ def subprocess_run(command, **kwargs):
         subprocess.check_call(command, **kwargs)
 
 def main_cmake(args: Any) -> None:
-    print("hello 4")
     config = lockshaw.get_config(args.path)
     assert config is not None
     if args.force and config.build_dir.exists():
@@ -107,7 +104,6 @@ def main_test(args: Any) -> None:
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
 def main() -> None:
-    print("hello 7")
     import argparse 
 
     p = argparse.ArgumentParser()
@@ -136,6 +132,7 @@ def main() -> None:
     cmake_p.add_argument('--trace', action='store_true')
 
     args = p.parse_args()
+    print("args: ", args)
     if hasattr(args, 'func') and args.func is not None:
         args.func(args)
     else:
