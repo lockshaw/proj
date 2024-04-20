@@ -104,6 +104,7 @@ def main_test(args: Any) -> None:
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
 def main() -> None:
+    print("remote")
     import argparse 
 
     p = argparse.ArgumentParser()
