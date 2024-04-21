@@ -141,9 +141,6 @@ def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: P
             render_enum_source(spec, f) 
 
 def generate_files(root: Path, config: ProjectConfig, spec_path: Path) -> Sequence[Path]:
-    source_path = get_source_path(spec_path).with_suffix('.dtg.cc')
-    header_path = spec_path.with_suffix('.dtg' + config.header_extension)
-
     suffix = ''.join(spec_path.suffixes[-2:])
 
     spec: Union[StructSpec, EnumSpec, VariantSpec]
@@ -154,6 +151,9 @@ def generate_files(root: Path, config: ProjectConfig, spec_path: Path) -> Sequen
     else:
         assert suffix == '.enum.toml'
         spec = load_enum_spec(spec_path)
+
+    header_path = spec_path.with_suffix('').with_suffix('.dtg' + config.header_extension)
+    source_path = get_source_path(header_path).with_suffix('.cc')
 
     generate_header(spec=spec, spec_path=spec_path, root=root, out=header_path)
     generate_source(spec=spec, spec_path=spec_path, root=root, out=source_path)

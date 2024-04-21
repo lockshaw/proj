@@ -245,4 +245,4 @@ def get_source_path(p: Path) -> Path:
         subrelpath = p.relative_to(include_dir)
     else:
         raise ValueError(p)
-    return src_dir / with_suffixes(subrelpath, '.cc')
+    return src_dir / subrelpath.with_suffix('.cc')
