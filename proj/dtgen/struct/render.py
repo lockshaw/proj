@@ -224,7 +224,7 @@ def render_json_checks(spec: StructSpec, f: TextIO) -> None:
                     f.write('::FlexFlow::is_json_serializable_v')
                     with angles(f):
                         f.write(field.type_)
-                    f.write(f', "Field {field.name} of type {field.type} should be json-serializeable, but is not"')
+                    f.write(f', "Field {field.name} of type {field.type_} should be json-serializeable, but is not"')
     # with render_namespace_block('nlohmann', f):
     #     with semicolon(f):
     #         for field in spec.fields:

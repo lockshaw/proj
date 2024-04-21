@@ -153,7 +153,7 @@ def generate_files(root: Path, config: ProjectConfig, spec_path: Path) -> Sequen
         spec = load_enum_spec(spec_path)
 
     header_path = spec_path.with_suffix('').with_suffix('.dtg' + config.header_extension)
-    source_path = get_source_path(header_path).with_suffix('.cc')
+    source_path = get_source_path(header_path)
 
     generate_header(spec=spec, spec_path=spec_path, root=root, out=header_path)
     generate_source(spec=spec, spec_path=spec_path, root=root, out=source_path)

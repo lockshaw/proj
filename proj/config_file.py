@@ -1,17 +1,16 @@
 from pathlib import Path
 from dataclasses import dataclass
-try:
-    import tomllib as toml
-except ImportError:
-    import toml
 from typing import (
     Optional,
     Mapping,
     Dict,
     Tuple,
+    Iterator,
 )
 import string
 import re
+import io
+import proj.toml as toml
 
 @dataclass(frozen=True)
 class ProjectConfig:
@@ -124,20 +123,20 @@ class ProjectConfig:
         else:
             return self._test_header_path
 
-def find_config_root(d: Path) -> Optional[Path]:
+def _possible_config_paths(d: Path) -> Iterator[Path]:
     d = Path(d).resolve()
     assert d.is_absolute()
 
-    while True:
-        config_path = d / '.proj.toml'
+    for _d in [d, *d.parents]:
+        config_path = _d / '.proj.toml'
+        yield config_path
 
-        if config_path.is_file():
-            return d
+def find_config_root(d: Path) -> Optional[Path]:
+    for possible_config in _possible_config_paths(d):
+        if possible_config.is_file():
+            return possible_config.parent
 
-        if d == d.parent:
-            return None
-        else:
-            d = d.parent
+    return None
 
 def _load_config(d: Path) -> Optional[ProjectConfig]:
     config_root = find_config_root(d)
@@ -161,17 +160,30 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         _test_header_path=raw.get('test_header_path'),
     )
 
+def load_config(d: Path) -> ProjectConfig:
+    config = _load_config(d)
+
+    if config is None:
+        s = io.StringIO()
+        s.write('Could not find config file at any of the following paths:\n')
+        for searched_path in _possible_config_paths(d):
+            s.write(f'- {searched_path}\n')
+
+        raise FileNotFoundError(s.getvalue())
+    else:
+        return config
+
 def gen_ifndef_uid(p):
     p = Path(p).absolute()
     config_root = find_config_root(p)
     relpath = p.relative_to(config_root)
-    config = _load_config(p)
+    config = load_config(p)
     unfixed = f'_{config.ifndef_name}_' + str(relpath)
     return re.sub(r'[^a-zA-Z0-9_]', '_', unfixed).upper()
 
-def get_config(p) -> Optional[ProjectConfig]:
+def get_config(p) -> ProjectConfig:
     p = Path(p).absolute()
-    config = _load_config(p)
+    config = load_config(p)
     return config
 
 def get_lib_root(p: Path) -> Path:
@@ -180,8 +192,7 @@ def get_lib_root(p: Path) -> Path:
     return config_root / 'lib'
 
 def get_test_header_path(p: Path) -> Path:
-    config = _load_config(p)
-    assert config is not None
+    config = load_config(p)
     return config.test_header_path
 
 def with_suffixes(p, suffs):
@@ -189,6 +200,13 @@ def with_suffixes(p, suffs):
     while '.' in name:
         name = name[:name.rfind('.')]
     return p.with_name(name + suffs)
+
+def with_suffix_appended(p, suff):
+    assert suff.startswith('.')
+    return p.with_name(p.name + suff)
+
+def with_suffix_removed(p):
+    return p.with_suffix('')
 
 def get_sublib_root(p: Path):
     p = Path(p).resolve()
@@ -206,24 +224,75 @@ def get_sublib_root(p: Path):
         else:
             p = p.parent
 
+def get_src_dir(p: Path) -> Path:
+    return get_sublib_root(p) / 'src'
+
+def get_include_dir(p: Path) -> Path:
+    return get_sublib_root(p) / 'include'
+
+def with_project_specific_extension_removed(p: Path, config: ProjectConfig) -> Path:
+    project_specific = [
+        '.struct.toml',
+        '.variant.toml',
+        '.enum.toml',
+        '.test.cc',
+        '.cc',
+        '.cu',
+        '.cpp',
+        config.header_extension,
+    ]
+
+    suffixes = ''.join(p.suffixes)
+
+    for extension in project_specific:
+        if suffixes.endswith(extension):
+            return with_suffixes(p, suffixes[:-len(extension)])
+
+    raise ValueError(f'Could not find project-specific extension for path {p}')
+
+def get_subrelpath(p: Path, config: Optional[ProjectConfig] = None) -> Path:
+    p = Path(p).absolute()
+    if config is None:
+        config = load_config(p)
+
+    sublib_root = get_sublib_root(p)
+    include_dir = sublib_root / 'include'
+    assert include_dir.is_dir()
+    src_dir = sublib_root / 'src'
+    assert src_dir.is_dir()
+    if p.is_relative_to(src_dir):
+        return with_project_specific_extension_removed(p.relative_to(src_dir), config=config)
+    elif p.is_relative_to(include_dir):
+        return with_project_specific_extension_removed(p.relative_to(include_dir), config=config)
+    else:
+        raise ValueError(f'Path {p} not relative to either src or include')
+
+def get_possible_spec_paths(p: Path) -> Iterator[Path]:
+    p = Path(p).absolute()
+    config = get_config(p)
+    assert p.name.endswith('.dtg.cc') or p.name.endswith('.dtg' + config.header_extension)
+    subrelpath = get_subrelpath(p)
+    include_dir = get_include_dir(p)
+    src_dir = get_src_dir(p)
+    for d in [include_dir, src_dir]:
+        for ext in ['.struct.toml', '.enum.toml', '.variant.toml']:
+            yield d / with_suffix_appended(with_suffix_removed(subrelpath), ext)
+
 def get_include_path(p: Path) -> str:
     p = Path(p).absolute()
     sublib_root = get_sublib_root(p)
-    config = _load_config(p)
-    assert config is not None
-    subrelpath = p.relative_to(sublib_root / 'src')
+    config = load_config(p)
+    subrelpath = get_subrelpath(p)
+
     include_dir = sublib_root / 'include'
     assert include_dir.is_dir()
     src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
 
-    if subrelpath.suffixes[-2:] == '.test.cc':
-        baserelpath = subrelpath.with_suffix('').with_suffix(config.header_extension)
-    else:
-        baserelpath = subrelpath.with_suffix(config.header_extension)
+    subrelpath_with_extension = with_suffix_appended(subrelpath, config.header_extension)
 
-    public_include = include_dir / baserelpath
-    private_include = src_dir / baserelpath
+    public_include = include_dir / subrelpath_with_extension
+    private_include = src_dir / subrelpath_with_extension
     if public_include.exists():
         return str(public_include.relative_to(include_dir))
     if private_include.exists():
@@ -232,17 +301,8 @@ def get_include_path(p: Path) -> str:
 
 def get_source_path(p: Path) -> Path:
     p = Path(p).absolute()
-    config = _load_config(p)
-    assert config is not None
     sublib_root = get_sublib_root(p)
-    include_dir = sublib_root / 'include'
-    assert include_dir.is_dir()
     src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
-    if p.is_relative_to(src_dir):
-        subrelpath = p.relative_to(src_dir)
-    elif p.is_relative_to(include_dir):
-        subrelpath = p.relative_to(include_dir)
-    else:
-        raise ValueError(p)
-    return src_dir / subrelpath.with_suffix('.cc')
+
+    return src_dir / with_suffix_appended(get_subrelpath(p), '.cc')

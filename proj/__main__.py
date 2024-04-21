@@ -15,6 +15,7 @@ from .config_file import (
 )
 from .dtgen import run_dtgen
 from .format import run_formatter
+from .dtgen.find_outdated import find_outdated
 import proj.fix_compile_commands as fix_compile_commands
 import logging
 from dataclasses import dataclass
@@ -65,7 +66,6 @@ def main_cmake(args: MainCmakeArgs) -> None:
     ))
 
     config = get_config(args.path)
-    assert config is not None
     if args.force and config.build_dir.exists():
         shutil.rmtree(config.build_dir)
     config.build_dir.mkdir(exist_ok=True, parents=True)
@@ -106,7 +106,6 @@ def main_build(args: MainBuildArgs) -> None:
     ))
 
     config = get_config(args.path)
-    assert config is not None
     subprocess_check_call([
         'make', '-j', str(args.jobs), *config.build_targets,
     ], env={
@@ -128,7 +127,6 @@ def main_test(args: MainTestArgs) -> None:
     ))
 
     config = get_config(args.path)
-    assert config is not None
     subprocess_check_call([
         'make', '-j', str(args.jobs), *config.test_targets,
     ], env={
@@ -165,7 +163,6 @@ def main_dtgen(args: MainDtgenArgs) -> None:
     root = find_config_root(args.path)
     assert root is not None
     config = get_config(args.path)
-    assert config is not None
     if len(args.files) == 0:
         files = None
     else:
@@ -177,7 +174,10 @@ def main_dtgen(args: MainDtgenArgs) -> None:
         config=config,
         files=files,
     )
-    
+    for outdated in find_outdated(root, config):
+        _l.warning(f'Possible out-of-date file at {outdated}')
+
+
 def main() -> None:
     import argparse 
 
