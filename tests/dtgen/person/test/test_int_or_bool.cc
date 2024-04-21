@@ -1,7 +1,7 @@
 #include "doctest/doctest.h"
 #include "nlohmann/json.hpp"
 #include <type_traits>
-#include "int_or_bool.hh"
+#include "int_or_bool.dtg.hh"
 #include "rapidcheck.h"
 #include "fmt/format.h"
 #include <string>

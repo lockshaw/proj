@@ -141,8 +141,8 @@ def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: P
             render_enum_source(spec, f) 
 
 def generate_files(root: Path, config: ProjectConfig, spec_path: Path) -> Sequence[Path]:
-    source_path = get_source_path(spec_path)
-    header_path = with_suffixes(spec_path, config.header_extension)
+    source_path = get_source_path(spec_path).with_suffix('.dtg.cc')
+    header_path = spec_path.with_suffix('.dtg' + config.header_extension)
 
     suffix = ''.join(spec_path.suffixes[-2:])
 

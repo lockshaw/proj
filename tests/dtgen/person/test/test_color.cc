@@ -1,7 +1,7 @@
 #include "doctest/doctest.h"
 #include "nlohmann/json.hpp"
 #include <type_traits>
-#include "color.hh"
+#include "color.dtg.hh"
 #include "rapidcheck.h"
 #include "fmt/format.h"
 

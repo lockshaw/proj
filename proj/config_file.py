@@ -216,8 +216,14 @@ def get_include_path(p: Path) -> str:
     assert include_dir.is_dir()
     src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
-    public_include = include_dir / with_suffixes(subrelpath, config.header_extension)
-    private_include = src_dir / with_suffixes(subrelpath, config.header_extension)
+
+    if subrelpath.suffixes[-2:] == '.test.cc':
+        baserelpath = subrelpath.with_suffix('').with_suffix(config.header_extension)
+    else:
+        baserelpath = subrelpath.with_suffix(config.header_extension)
+
+    public_include = include_dir / baserelpath
+    private_include = src_dir / baserelpath
     if public_include.exists():
         return str(public_include.relative_to(include_dir))
     if private_include.exists():
