@@ -143,8 +143,6 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
     config_root = find_config_root(d)
     if config_root is None:
         return None
-    print("called?")
-    print("lalal")
     with (config_root / '.proj.toml').open('r') as f:
         raw = toml.loads(f.read())
     return ProjectConfig(

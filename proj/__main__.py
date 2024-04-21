@@ -12,7 +12,6 @@ import proj.fix_compile_commands as fix_compile_commands
 DIR = Path(__file__).resolve().parent
 
 def main_root(args: Any) -> None:
-    print("hello 1")
     config_root = lockshaw.find_config_root(args.path)
     if config_root is not None:
         print(config_root)
@@ -72,7 +71,6 @@ def main_cmake(args: Any) -> None:
         ], stdout=f, cwd=config.build_dir, env=os.environ)
 
 def main_build(args: Any) -> None:
-    print("hello 5")
     config = lockshaw.get_config(args.path)
     assert config is not None
     subprocess_check_call([
@@ -84,7 +82,6 @@ def main_build(args: Any) -> None:
     }, stderr=sys.stdout, cwd=config.build_dir)
 
 def main_test(args: Any) -> None:
-    print("hello 6")
     config = lockshaw.get_config(args.path)
     assert config is not None
     subprocess_check_call([
@@ -102,9 +99,26 @@ def main_test(args: Any) -> None:
         '-L',
         target_regex,
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+    
+    
+def main_coverage(args: Any) -> None:
+    config = lockshaw.get_config(args.path)
+    assert config is not None
+    
+    # Run lcov and genhtml commands with checkall
+    subprocess_run([
+        'lcov',
+        '-c',
+        '-d', '.',
+        '-o', 'main_coverage.info'
+    ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+    subprocess_run([
+        'genhtml',
+        'main_coverage.info',
+        '--output-directory', config.build_dir,
+    ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
 def main() -> None:
-    print("remote")
     import argparse 
 
     p = argparse.ArgumentParser()
@@ -131,9 +145,12 @@ def main() -> None:
     cmake_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     cmake_p.add_argument('--force', '-f', action='store_true')
     cmake_p.add_argument('--trace', action='store_true')
+    
+    coverage_p = subparsers.add_parser('coverage')
+    coverage_p.set_defaults(func=main_coverage)
+    coverage_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
 
     args = p.parse_args()
-    print("args: ", args)
     if hasattr(args, 'func') and args.func is not None:
         args.func(args)
     else:
@@ -141,5 +158,4 @@ def main() -> None:
         exit(1)
 
 if __name__ == '__main__':
-    print("hello Bob!")
     main()
