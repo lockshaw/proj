@@ -76,7 +76,7 @@ class ProjectConfig:
     @property
     def cmake_flags(self) -> Mapping[str, str]:
         if self._cmake_flags_extra is None:
-            extra: Dict[str, str] = {}
+            extra: Mapping[str, str] = {}
         else:
             extra = self._cmake_flags_extra
         return {

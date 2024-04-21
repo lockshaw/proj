@@ -63,6 +63,7 @@ def main_cmake(args: MainCmakeArgs) -> None:
     main_dtgen(args=MainDtgenArgs(
         path=args.path,
         files=[],
+        delete_outdated=False,
     ))
 
     config = get_config(args.path)
@@ -103,6 +104,7 @@ def main_build(args: MainBuildArgs) -> None:
     main_dtgen(args=MainDtgenArgs(
         path=args.path,
         files=[],
+        delete_outdated=False,
     ))
 
     config = get_config(args.path)
@@ -124,6 +126,7 @@ def main_test(args: MainTestArgs) -> None:
     main_dtgen(args=MainDtgenArgs(
         path=args.path,
         files=[],
+        delete_outdated=False,
     ))
 
     config = get_config(args.path)
@@ -158,6 +161,7 @@ def main_format(args: Any) -> None:
 class MainDtgenArgs:
     path: Path
     files: Sequence[Path]
+    delete_outdated: bool
 
 def main_dtgen(args: MainDtgenArgs) -> None:
     root = find_config_root(args.path)
@@ -174,8 +178,13 @@ def main_dtgen(args: MainDtgenArgs) -> None:
         config=config,
         files=files,
     )
-    for outdated in find_outdated(root, config):
-        _l.warning(f'Possible out-of-date file at {outdated}')
+    if args.delete_outdated:
+        for outdated in find_outdated(root, config):
+            _l.info(f'Removing out-of-date file at {outdated}')
+            outdated.unlink()
+    else:
+        for outdated in find_outdated(root, config):
+            _l.warning(f'Possible out-of-date file at {outdated}')
 
 
 def main() -> None:
@@ -211,6 +220,7 @@ def main() -> None:
     dtgen_p = subparsers.add_parser('dtgen')
     dtgen_p.set_defaults(func=main_dtgen)
     dtgen_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    dtgen_p.add_argument('--delete-outdated', action='store_true')
     dtgen_p.add_argument('files', nargs='*', type=Path)
 
     format_p = subparsers.add_parser('format')

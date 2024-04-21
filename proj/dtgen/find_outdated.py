@@ -4,11 +4,11 @@ from proj.config_file import (
 )
 from pathlib import Path
 from typing import (
-    Sequence,
+    Iterator,
 )
 import itertools
 
-def find_outdated(root: Path, config: ProjectConfig) -> Sequence[Path]:
+def find_outdated(root: Path, config: ProjectConfig) -> Iterator[Path]:
     for p in itertools.chain( 
         root.rglob('**/*.dtg' + config.header_extension),
         root.rglob('**/*.dtg.cc'),
