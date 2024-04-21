@@ -115,7 +115,7 @@ def main_coverage(args: Any) -> None:
     subprocess_run([
         'genhtml',
         'main_coverage.info',
-        '--output-directory', config.build_dir,
+        '--output-directory', 'code_coverage',
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
 def main() -> None:
