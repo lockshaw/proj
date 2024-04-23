@@ -301,9 +301,10 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
                         with sline(f):
                             f.write(f'oss << "<{spec.name} {value.key}=" << x.get<{value.type_}>() << ">"')
                 with render_default_case(f=f):
-                    with braces(f):
-                        with sline(f):
-                            f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))')
+                    with sline(f):
+                        f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))')
+            with sline(f):
+                f.write("return oss.str()")
 
         with render_function_definition(
             return_type='std::ostream &',
