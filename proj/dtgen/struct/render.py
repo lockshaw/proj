@@ -35,7 +35,6 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return [IncludeSpec(path='rapidcheck.h', system=False)]
     elif feature == Feature.FMT:
         return [
-            IncludeSpec(path='sstream', system=True),
             IncludeSpec(path='ostream', system=True),
             IncludeSpec(path='fmt/format.h', system=False),
         ]
@@ -43,10 +42,13 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return []
 
 def impl_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
-    # if feature == Feature.SERIALIZE:
-    #     return [IncludeSpec(path='utils/serialize.h', system=False)]
-    # else:
-    return []
+    if feature == Feature.FMT:
+        return [
+            IncludeSpec(path='sstream', system=True),
+            IncludeSpec(path='utils/fmt.h', system=False),
+        ]
+    else:
+        return []
 
 def _infer_includes(
     spec: StructSpec, 
