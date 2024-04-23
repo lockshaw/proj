@@ -67,6 +67,24 @@ def render_switch_block(cond: str, f: TextIO) -> Iterator[None]:
         yield
 
 @contextmanager
+def render_case(*, cond: str, include_break: bool = True, f: TextIO) -> Iterator[None]:
+    f.write(f'case {cond}: ')
+    with braces(f):
+        yield
+        if include_break:
+            with sline(f):
+                f.write('break')
+
+@contextmanager
+def render_default_case(*, include_break: bool = True, f: TextIO) -> Iterator[None]:
+    f.write('default: ')
+    with braces(f):
+        yield
+        if include_break:
+            with sline(f):
+                f.write('break')
+
+@contextmanager
 def render_namespace_block(name: Optional[str], f: TextIO) -> Iterator[None]:
     if name is not None:
         f.write(f'namespace {name}')
@@ -98,7 +116,7 @@ def render_struct_block(name: str, template_params: Sequence[str], f: TextIO, sp
         with braces(f):
             yield 
 
-def render_function_declaration(*, template_params: Sequence[str] = tuple(), is_static: bool = False, name: str, return_type: str, args: Sequence[str], is_const: bool=False, f: TextIO) -> None:
+def render_function_declaration(*, template_params: Sequence[str] = tuple(), is_static: bool = False, return_type: str, name: str, args: Sequence[str], is_const: bool=False, f: TextIO) -> None:
     if len(template_params) > 0:
         render_template_abs(template_params, f)
     if is_static:

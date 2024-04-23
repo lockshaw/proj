@@ -22,6 +22,8 @@ from proj.dtgen.render_utils import (
     sline,
     braces,
     render_switch_block,
+    render_case,
+    render_default_case,
 )
 import io
 import itertools
@@ -33,6 +35,11 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return [
             IncludeSpec(path='nlohmann/json.hpp', system=False),
         ]
+    elif feature == Feature.FMT:
+        return [
+            IncludeSpec(path='ostream', system=True),
+            IncludeSpec(path='fmt/format.h', system=False),
+        ]
     else:
         return []
 
@@ -41,6 +48,10 @@ def source_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return [
             IncludeSpec(path='fmt/format.h', system=False),
             IncludeSpec(path='stdexcept', system=True),
+        ]
+    elif feature == Feature.FMT:
+        return [
+            IncludeSpec(path='sstream', system=True),
         ]
     else:
         return []
@@ -255,6 +266,54 @@ def render_json_impl(spec: VariantSpec, f: TextIO) -> None:
                     with sline(f):
                         f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))')
 
+def render_fmt_decl(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=True)
+
+    with render_namespace_block(spec.namespace, f):
+        render_function_declaration(
+            return_type='std::string',
+            name='format_as',
+            args=[f'{typename} const &'],
+            f=f,
+        )
+        render_function_declaration(
+            return_type='std::ostream &',
+            name='operator<<',
+            args=['std::ostream &', f'{typename} const &'],
+            f=f,
+        )
+
+def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=True)
+
+    with render_namespace_block(spec.namespace, f):
+        with render_function_definition(
+            return_type='std::string',
+            name='format_as',
+            args=[f'{typename} const &x'],
+            f=f,
+        ):
+            with sline(f):
+                f.write('std::ostringstream oss')
+            with render_switch_block(cond='x.index()', f=f):
+                for idx, value in enumerate(spec.values):
+                    with render_case(cond=str(idx), f=f):
+                        with sline(f):
+                            f.write(f'oss << "<{spec.name} {value.key}=" << x.get<{value.type_}>() << ">"')
+                with render_default_case(f=f):
+                    with braces(f):
+                        with sline(f):
+                            f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))')
+
+        with render_function_definition(
+            return_type='std::ostream &',
+            name='operator<<',
+            args=['std::ostream &s', f'{typename} const &x'],
+            f=f,
+        ):
+            with sline(f):
+                f.write('return s << fmt::to_string(x)')
+
 def render_variant_type(spec: VariantSpec, f: TextIO) -> None:
     render_template_app('std::variant', [v.type_ for v in spec.values], f=f)
 
@@ -307,6 +366,9 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
     if Feature.JSON in spec.features:
         render_json_decl(spec=spec, f=f)
 
+    if Feature.FMT in spec.features:
+        render_fmt_decl(spec=spec, f=f)
+
 def render_impls(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
         for value in lined(spec.values, f=f):
@@ -326,6 +388,9 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
 
     if Feature.JSON in spec.features:
         render_json_impl(spec=spec, f=f)
+
+    if Feature.FMT in spec.features:
+        render_fmt_impl(spec=spec, f=f)
 
 def render_header(spec: VariantSpec, f: TextIO) -> None:
     render_includes(infer_header_includes(spec), f)

@@ -168,4 +168,42 @@ TEST_SUITE(FF_TEST_SUITE) {
     
     CHECK(result == correct);
   }
+
+  TEST_CASE("fmt (bool)") {
+    IntOrBool x = IntOrBool{b};
+
+    std::string correct = "<IntOrBool bool=true>";
+    CHECK(fmt::to_string(x) == correct);
+  }
+
+  TEST_CASE("fmt (int)") {
+    IntOrBool x = IntOrBool{i};
+
+    std::string correct = "<IntOrBool int=5>";
+    CHECK(fmt::to_string(x) == correct);
+  }
+
+  TEST_CASE("ostream operator<< (bool)") {
+    IntOrBool x = IntOrBool{b};
+
+    std::ostringstream oss;
+    oss << x;
+    std::string result = oss.str();
+
+    std::string correct = "<IntOrBool bool=true>";
+    CHECK(result == correct);
+  }
+
+  TEST_CASE("ostream operator<< (int)") {
+    IntOrBool x = IntOrBool{i};
+
+    std::ostringstream oss;
+    oss << x;
+    std::string result = oss.str();
+
+    std::string correct = "<IntOrBool int=5>";
+    CHECK(result == correct);
+  }
+
+
 }

@@ -19,18 +19,34 @@ class Feature(Enum):
     ORD = auto()
     HASH = auto()
     JSON = auto()
-    # FMT = auto()
+    FMT = auto()
     # RAPIDCHECK = auto()
 
 @dataclass(frozen=True)
 class ValueSpec:
     type_: str
+    _key: Optional[str]
     _json_key: Optional[str]
+    _fmt_key: Optional[str]
+
+    @property
+    def key(self) -> str:
+        if self._key is None:
+            return self.type_
+        else:
+            return self._key
+
+    @property
+    def fmt_key(self) -> str:
+        if self._fmt_key is None:
+            return self.key
+        else:
+            return self._fmt_key
 
     @property
     def json_key(self) -> str:
         if self._json_key is None:
-            return self.type_
+            return self.key
         else:
             return self._json_key
 
@@ -51,13 +67,17 @@ def parse_feature(raw: str) -> Feature:
         return Feature.HASH
     elif raw == 'json':
         return Feature.JSON
+    elif raw == 'fmt':
+        return Feature.FMT
     else:
         raise ValueError(f'Unknown feature: {raw}')
 
 def parse_value_spec(raw: Mapping[str, Any]) -> ValueSpec:
     return ValueSpec(
         type_=raw['type'],
+        _key=raw.get('key', None),
         _json_key=raw.get('json_key', None),
+        _fmt_key=raw.get('fmt_key', None),
     )
 
 def parse_variant_spec(raw: Mapping[str, Any]) -> VariantSpec:
