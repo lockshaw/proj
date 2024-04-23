@@ -57,6 +57,7 @@ class VariantSpec:
     name: str
     values: Sequence[ValueSpec]
     features: FrozenSet[Feature]
+    explicit_constructors: bool
 
 def parse_feature(raw: str) -> Feature:
     if raw == 'eq':
@@ -84,6 +85,7 @@ def parse_variant_spec(raw: Mapping[str, Any]) -> VariantSpec:
     return VariantSpec(
         namespace=raw.get('namespace', None),
         includes=[parse_include_spec(include) for include in raw.get('includes', [])],
+        explicit_constructors=raw.get('explicit_constructors', True),
         name=raw['name'],
         values=[parse_value_spec(value) for value in raw['values']],
         features=frozenset([parse_feature(feature) for feature in raw['features']]),

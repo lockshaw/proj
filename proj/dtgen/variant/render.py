@@ -334,8 +334,9 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
             f=f
         ):
             f.write(f'{spec.name}() = delete;\n')
+            explicit_prefix = 'explicit' if spec.explicit_constructors else ''
             for value in lined(spec.values, f=f):
-                f.write(f'explicit {spec.name}({value.type_} const &);')
+                f.write(f'{explicit_prefix} {spec.name}({value.type_} const &);')
 
             render_is_part_of(spec=spec, f=f)
 
