@@ -80,14 +80,16 @@ def render_visit_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
         is_const=is_const,
         f=f,
     ):
-        const_modifier = 'const' if is_const else ''
-        for value in lined(spec.values, f=f):
-            render_static_assert(
-                cond=f'std::is_same_v<ReturnType, std::invoke_result_t<Visitor, {value.type_} {const_modifier} &>>',
-                message=f'Visitor has incorrect return type when called with parameter type {value.type_}',
-                f=f,
-            )
-        f.write('return std::visit(v, this->raw_variant);')
+        with render_switch_block(cond='this->index()', f=f):
+            for idx, value in enumerate(spec.values):
+                with render_case(cond=str(idx), include_break=False, f=f):
+                    with sline(f):
+                        f.write(f'ReturnType result = v(this->get<{value.type_}>())')
+                    with sline(f):
+                        f.write('return result')
+            with render_default_case(include_break=False, f=f):
+                with sline(f):
+                    f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", this->index()))')
 
 def render_is_part_of(spec: VariantSpec, f: TextIO) -> None:
     with semicolon(f):
