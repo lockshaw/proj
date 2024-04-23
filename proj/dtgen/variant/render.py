@@ -52,7 +52,7 @@ def source_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     elif feature == Feature.FMT:
         return [
             IncludeSpec(path='sstream', system=True),
-            IncludeSpec(path='utils/fmt.h', system=False),
+            # IncludeSpec(path='utils/fmt.h', system=False),
         ]
     else:
         return []
