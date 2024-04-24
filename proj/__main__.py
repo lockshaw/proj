@@ -20,6 +20,10 @@ from .dtgen.find_outdated import find_outdated
 import proj.fix_compile_commands as fix_compile_commands
 import logging
 from dataclasses import dataclass
+from .verbosity import (
+    add_verbosity_args,
+    calculate_log_level,
+)
 
 _l = logging.getLogger(name='proj')
 
@@ -207,14 +211,13 @@ def main_dtgen(args: MainDtgenArgs) -> None:
 def main() -> None:
     import argparse 
 
-    logging.basicConfig(level=logging.INFO)
-
     p = argparse.ArgumentParser()
     subparsers = p.add_subparsers()
 
     root_p = subparsers.add_parser('root')
     root_p.set_defaults(func=main_root)
     root_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    add_verbosity_args(root_p)
 
     test_p = subparsers.add_parser('test')
     test_p.set_defaults(func=main_test)
@@ -233,6 +236,7 @@ def main() -> None:
     cmake_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     cmake_p.add_argument('--force', '-f', action='store_true')
     cmake_p.add_argument('--trace', action='store_true')
+    add_verbosity_args(cmake_p)
 
     dtgen_p = subparsers.add_parser('dtgen')
     dtgen_p.set_defaults(func=main_dtgen)
@@ -240,19 +244,27 @@ def main() -> None:
     dtgen_p.add_argument('--force', action='store_true', help='Disable incremental toml->c++ generation')
     dtgen_p.add_argument('--delete-outdated', action='store_true')
     dtgen_p.add_argument('files', nargs='*', type=Path)
+    add_verbosity_args(dtgen_p)
 
     format_p = subparsers.add_parser('format')
     format_p.set_defaults(func=main_format)
     format_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     format_p.add_argument('files', nargs='*', type=Path)
+    add_verbosity_args(format_p)
 
     lint_p = subparsers.add_parser('lint')
     lint_p.set_defaults(func=main_lint)
     lint_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     lint_p.add_argument('--profile-checks', action='store_true')
     lint_p.add_argument('files', nargs='*', type=Path)
+    add_verbosity_args(lint_p)
 
     args = p.parse_args()
+
+    logging.basicConfig(
+        level=calculate_log_level(args),
+    )
+
     if hasattr(args, 'func') and args.func is not None:
         args.func(args)
     else:
