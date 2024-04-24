@@ -98,7 +98,7 @@ def main_cmake(args: MainCmakeArgs) -> None:
 @dataclass(frozen=True)
 class MainBuildArgs:
     path: Path
-    verbose: bool
+    verbosity: int
     jobs: int
 
 def main_build(args: MainBuildArgs) -> None:
@@ -115,13 +115,13 @@ def main_build(args: MainBuildArgs) -> None:
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
-        **({'VERBOSE': '1'} if args.verbose else {})
+        **({'VERBOSE': '1'} if args.verbosity > logging.INFO else {})
     }, stderr=sys.stdout, cwd=config.build_dir)
 
 @dataclass(frozen=True)
 class MainTestArgs:
     path: Path
-    verbose: bool
+    verbosity: int
     jobs: int
 
 def main_test(args: MainTestArgs) -> None:
@@ -138,7 +138,7 @@ def main_test(args: MainTestArgs) -> None:
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
-        **({'VERBOSE': '1'} if args.verbose else {})
+        **({'VERBOSE': '1'} if args.verbosity > logging.INFO else {})
     }, stderr=sys.stdout, cwd=config.build_dir)
     target_regex = '^' + '|'.join(config.test_targets) + '$'
     subprocess_run([
@@ -222,14 +222,16 @@ def main() -> None:
     test_p = subparsers.add_parser('test')
     test_p.set_defaults(func=main_test)
     test_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
-    test_p.add_argument('--verbose', '-v', action='store_true')
+    # test_p.add_argument('--verbose', '-v', action='store_true')
     test_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
+    add_verbosity_args(test_p)
 
     build_p = subparsers.add_parser('build')
     build_p.set_defaults(func=main_build)
     build_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
-    build_p.add_argument('--verbose', '-v', action='store_true')
+    # build_p.add_argument('--verbose', '-v', action='store_true')
     build_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
+    add_verbosity_args(build_p)
 
     cmake_p = subparsers.add_parser('cmake')
     cmake_p.set_defaults(func=main_cmake)

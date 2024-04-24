@@ -17,4 +17,5 @@ def calculate_log_level(args: Any) -> int:
     log_level = LEVELS[verbosity]
     if args.silent:
         log_level = max(LEVELS) + 1
+    setattr(args, 'verbosity', log_level)
     return log_level

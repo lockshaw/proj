@@ -37,6 +37,8 @@ set_target_properties(${target}
     CXX_EXTENSIONS NO
 )
 
+
+include(CTest)
 target_compile_definitions(${target} PRIVATE FF_TEST_SUITE="${target}")
 doctest_discover_tests(${target} ADD_LABELS 1)
 

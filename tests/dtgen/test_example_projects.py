@@ -18,6 +18,7 @@ from proj.dtgen.find_outdated import (
     find_outdated,
 )
 import proj.lint as lint
+import logging
 
 DIR = Path(__file__).absolute().parent
 
@@ -33,7 +34,7 @@ def _test_project(name: str):
 
     test_args = MainTestArgs(
         path=testdir,
-        verbose=False,
+        verbosity=logging.WARNING,
         jobs=1,
     )
     main_test(args=test_args)

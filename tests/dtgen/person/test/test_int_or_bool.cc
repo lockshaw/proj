@@ -104,9 +104,12 @@ TEST_SUITE(FF_TEST_SUITE) {
   }
 
   TEST_CASE("std::hash") {
-    auto xi1 = IntOrBool{0};
-    auto xi2 = IntOrBool{1};
+    auto xi1 = IntOrBool{4};
+    auto xi2 = IntOrBool{2};
     auto xb = IntOrBool{false};
+
+    CHECK(xi1.index() == xi2.index());
+    CHECK(xb.index() != xi2.index());
 
     auto get_hash = [](IntOrBool const &x) -> std::size_t {
       return std::hash<IntOrBool>{}(x);
@@ -172,7 +175,7 @@ TEST_SUITE(FF_TEST_SUITE) {
   TEST_CASE("fmt (bool)") {
     IntOrBool x = IntOrBool{b};
 
-    std::string correct = "<IntOrBool bool=true>";
+    std::string correct = "<IntOrBool bool=1>";
     CHECK(fmt::to_string(x) == correct);
   }
 
@@ -190,7 +193,7 @@ TEST_SUITE(FF_TEST_SUITE) {
     oss << x;
     std::string result = oss.str();
 
-    std::string correct = "<IntOrBool bool=true>";
+    std::string correct = "<IntOrBool bool=1>";
     CHECK(result == correct);
   }
 
