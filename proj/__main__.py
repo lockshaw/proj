@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from .verbosity import (
     add_verbosity_args,
     calculate_log_level,
+    add_logging_level,
 )
 
 _l = logging.getLogger(name='proj')
@@ -115,7 +116,7 @@ def main_build(args: MainBuildArgs) -> None:
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
-        **({'VERBOSE': '1'} if args.verbosity > logging.INFO else {})
+        **({'VERBOSE': '1'} if args.verbosity <= logging.DEBUG else {})
     }, stderr=sys.stdout, cwd=config.build_dir)
 
 @dataclass(frozen=True)
@@ -138,7 +139,7 @@ def main_test(args: MainTestArgs) -> None:
     ], env={
         **os.environ, 
         'CCACHE_BASEDIR': str(DIR.parent.parent.parent),
-        **({'VERBOSE': '1'} if args.verbosity > logging.INFO else {})
+        **({'VERBOSE': '1'} if args.verbosity <= logging.DEBUG else {})
     }, stderr=sys.stdout, cwd=config.build_dir)
     target_regex = '^' + '|'.join(config.test_targets) + '$'
     subprocess_run([
@@ -210,6 +211,8 @@ def main_dtgen(args: MainDtgenArgs) -> None:
 
 def main() -> None:
     import argparse 
+
+    add_logging_level('TRACE', logging.DEBUG - 5)
 
     p = argparse.ArgumentParser()
     subparsers = p.add_subparsers()

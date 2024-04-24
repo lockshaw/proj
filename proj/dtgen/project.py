@@ -3,7 +3,6 @@ from proj.config_file import (
     gen_ifndef_uid,
     get_include_path,
     get_source_path,
-    with_suffixes,
 )
 from proj.format import run_formatter
 from os import PathLike
@@ -44,7 +43,7 @@ from .variant.render import (
 from proj.hash import get_file_hash
 import json
 
-import logging
+import proj.logging as logging
 
 _l = logging.getLogger(__name__)
 
@@ -130,7 +129,7 @@ def needs_generate_to_path(spec_path: Path, root: Path, out: Path) -> bool:
     new_hash = get_file_hash(spec_path)
     assert new_hash is not None
 
-    _l.debug(f'Hash diff: {new_hash!r} vs {current_hash!r}')
+    _l.trace(f'Hash diff: {new_hash!r} vs {current_hash!r}')
     return new_hash != current_hash
 
 def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path, force: bool) -> bool:
