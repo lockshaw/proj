@@ -159,6 +159,19 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         _test_header_path=raw.get('test_header_path'),
     )
 
+def get_config_root(d: Path) -> Path:
+    config_root = find_config_root(d)
+
+    if config_root is None:
+        s = io.StringIO()
+        s.write('Could not find config file at any of the following paths:\n')
+        for searched_path in _possible_config_paths(d):
+            s.write(f'- {searched_path}\n')
+
+        raise FileNotFoundError(s.getvalue())
+    else:
+        return config_root
+
 def load_config(d: Path) -> ProjectConfig:
     config = _load_config(d)
 

@@ -39,3 +39,9 @@ set_target_properties(${target}
 
 target_compile_definitions(${target} PRIVATE FF_TEST_SUITE="${target}")
 doctest_discover_tests(${target} ADD_LABELS 1)
+
+# TODO @lockshaw remove me
+# https://discourse.nixos.org/t/get-clangd-to-find-standard-headers-in-nix-shell/11268/6
+if(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CMAKE_CXX_STANDARD_INCLUDE_DIRECTORIES ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+endif()

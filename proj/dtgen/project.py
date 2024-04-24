@@ -168,4 +168,4 @@ def run_dtgen(root: Path, config: ProjectConfig, files: Optional[Sequence[PathLi
         _l.info(f'- {f}')
     for spec_path in files:
         generated = generate_files(root=root, config=config, spec_path=Path(spec_path))
-        run_formatter(root, generated)
+        run_formatter(root, config, generated)

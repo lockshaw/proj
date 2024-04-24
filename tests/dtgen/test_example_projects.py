@@ -1,14 +1,15 @@
 from proj.__main__ import (
     main_cmake,
     main_test,
+    main_lint,
     MainCmakeArgs,
     MainTestArgs,
+    MainLintArgs,
 )
 # import subprocess
 from pathlib import Path
 from proj.config_file import (
     find_config_root, 
-    _possible_config_paths,
     get_source_path,
     get_config,
     get_possible_spec_paths,
@@ -16,6 +17,7 @@ from proj.config_file import (
 from proj.dtgen.find_outdated import (
     find_outdated,
 )
+import proj.lint as lint
 
 DIR = Path(__file__).absolute().parent
 
@@ -80,3 +82,35 @@ def test_find_outdated():
         testdir / 'src' / 'out_of_date2.dtg.cc',
     ])
     assert found == correct
+
+def test_lint_find_files() -> None:
+    testdir = DIR / 'person'
+    config = get_config(testdir)
+
+    found = set(lint.find_files(
+        root=testdir,
+        config=config,
+    ))
+    correct = set([
+        *(testdir / 'src').rglob('*.cc'),
+        *(testdir / 'include').rglob('*.hh'),
+    ])
+
+    assert found == correct
+
+def test_lint() -> None:
+    testdir = DIR / 'person'
+
+    cmake_args = MainCmakeArgs(
+        path=testdir,
+        force=True,
+        trace=False,
+    )
+    main_cmake(args=cmake_args)
+
+    lint_args = MainLintArgs(
+        path=testdir,
+        files=[],
+        profile_checks=False,
+    )
+    main_lint(args=lint_args)

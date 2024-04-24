@@ -10,11 +10,12 @@ import multiprocessing
 import shlex
 import sys
 from .config_file import (
-    find_config_root,
     get_config,
+    get_config_root,
 )
 from .dtgen import run_dtgen
 from .format import run_formatter
+from .lint import run_linter
 from .dtgen.find_outdated import find_outdated
 import proj.fix_compile_commands as fix_compile_commands
 import logging
@@ -25,13 +26,8 @@ _l = logging.getLogger(name='proj')
 DIR = Path(__file__).resolve().parent
 
 def main_root(args: Any) -> None:
-    config_root = find_config_root(args.path)
-    if config_root is not None:
-        print(config_root)
-    else:
-        _l.error('ERROR: Could not find config root')
-        _l.error('Exiting unsuccessfully...')
-        exit(1)
+    config_root = get_config_root(args.path)
+    print(config_root)
 
 def subprocess_check_call(command, **kwargs):
     if kwargs.get('shell', False):
@@ -146,16 +142,33 @@ def main_test(args: MainTestArgs) -> None:
         target_regex,
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
 
-def main_format(args: Any) -> None:
-    root = find_config_root(args.path)
-    assert root is not None
+@dataclass(frozen=True)
+class MainLintArgs:
+    path: Path
+    files: Sequence[Path]
+    profile_checks: bool
+
+def main_lint(args: MainLintArgs) -> None:
+    root = get_config_root(args.path)
+    config = get_config(args.path)
     if len(args.files) == 0:
         files = None
     else:
         for file in args.files:
             assert file.is_file()
         files = list(args.files)
-    run_formatter(root, files)
+    run_linter(root, config, files, profile_checks=args.profile_checks)
+
+def main_format(args: Any) -> None:
+    root = get_config_root(args.path)
+    config = get_config(args.path)
+    if len(args.files) == 0:
+        files = None
+    else:
+        for file in args.files:
+            assert file.is_file()
+        files = list(args.files)
+    run_formatter(root, config, files)
 
 @dataclass(frozen=True)
 class MainDtgenArgs:
@@ -164,8 +177,7 @@ class MainDtgenArgs:
     delete_outdated: bool
 
 def main_dtgen(args: MainDtgenArgs) -> None:
-    root = find_config_root(args.path)
-    assert root is not None
+    root = get_config_root(args.path)
     config = get_config(args.path)
     if len(args.files) == 0:
         files = None
@@ -227,6 +239,12 @@ def main() -> None:
     format_p.set_defaults(func=main_format)
     format_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     format_p.add_argument('files', nargs='*', type=Path)
+
+    lint_p = subparsers.add_parser('lint')
+    lint_p.set_defaults(func=main_lint)
+    lint_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    lint_p.add_argument('--profile-checks', action='store_true')
+    lint_p.add_argument('files', nargs='*', type=Path)
 
     args = p.parse_args()
     if hasattr(args, 'func') and args.func is not None:
