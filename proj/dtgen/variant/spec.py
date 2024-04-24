@@ -13,6 +13,7 @@ from proj.dtgen.render_utils import (
 )
 import proj.toml as toml
 from pathlib import Path
+from proj.json import Json
 
 class Feature(Enum):
     EQ = auto()
@@ -22,12 +23,23 @@ class Feature(Enum):
     FMT = auto()
     # RAPIDCHECK = auto()
 
+    def json(self) -> Json:
+        return self.name
+
 @dataclass(frozen=True)
 class ValueSpec:
     type_: str
     _key: Optional[str]
     _json_key: Optional[str]
     _fmt_key: Optional[str]
+
+    def json(self) -> Json:
+        return {
+            'type_': self.type_,
+            'key': self.key,
+            'json_key': self.json_key,
+            'fmt_key': self.fmt_key,
+        }
 
     @property
     def key(self) -> str:
@@ -58,6 +70,16 @@ class VariantSpec:
     values: Sequence[ValueSpec]
     features: FrozenSet[Feature]
     explicit_constructors: bool
+
+    def json(self) -> Json:
+        return {
+            'includes': [include.json() for include in self.includes],
+            'namespace': self.namespace,
+            'name': self.name,
+            'values': [value.json() for value in self.values],
+            'features': [feature.json() for feature in self.features],
+            'explicit_constructors': self.explicit_constructors,
+        }
 
 def parse_feature(raw: str) -> Feature:
     if raw == 'eq':

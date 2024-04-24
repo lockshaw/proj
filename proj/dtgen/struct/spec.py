@@ -13,6 +13,7 @@ from proj.dtgen.render_utils import (
     parse_include_spec,
 )
 import proj.toml as toml
+from proj.json import Json
 
 class Feature(Enum):
     JSON = auto()
@@ -22,6 +23,9 @@ class Feature(Enum):
     FMT = auto()
     RAPIDCHECK = auto()
     # SERIALIZE = auto()
+
+    def json(self) -> Json:
+        return self.name
 
 @dataclass(frozen=True)
 class FieldSpec:
@@ -36,6 +40,13 @@ class FieldSpec:
         else:
             return self._json_key
 
+    def json(self) -> Json:
+        return {
+            'name': self.name,
+            'type_': self.type_,
+            'json_key': self.json_key,
+        }
+
 @dataclass(frozen=True)
 class StructSpec:
     includes: Sequence[IncludeSpec]
@@ -44,6 +55,17 @@ class StructSpec:
     name: str
     fields: Sequence[FieldSpec]
     features: FrozenSet[Feature]
+
+    def json(self) -> Json:
+        return {
+            'includes': [inc.json() for inc in self.includes],
+            'namespace': self.namespace,
+            'template_params': list(self.template_params),
+            'name': self.name,
+            'fields': [field.json() for field in self.fields],
+            'features': [feature.json() for feature in sorted(self.features, key=lambda f: f.name)]
+        }
+
 
 def parse_feature(raw: str) -> Feature:
     if raw == 'json':

@@ -44,7 +44,6 @@ from .variant.render import (
 from proj.hash import get_file_hash
 import json
 
-
 import logging
 
 _l = logging.getLogger(__name__)
@@ -74,10 +73,12 @@ def render_disclaimer(spec_path: Path, root: Path, f: TextIO) -> None:
     f.write(f'// {spec_path.relative_to(root)}\n')
 
 def render_proj_metadata(spec_path: Path, root: Path, f: TextIO) -> None:
-    proj_metadata = {'generated_from': get_file_hash(spec_path)}
-    f.write('/* proj-data')
+    _hash = get_file_hash(spec_path)
+    assert _hash is not None
+    proj_metadata = {'generated_from': _hash.hex()}
+    f.write('/* proj-data\n')
     f.write(json.dumps(proj_metadata, sort_keys=True, indent=2))
-    f.write('*/')
+    f.write('\n*/\n')
 
 def _load_proj_metadata(f: TextIO) -> Optional[Mapping[str, Any]]:
     found = ''
@@ -85,6 +86,10 @@ def _load_proj_metadata(f: TextIO) -> Optional[Mapping[str, Any]]:
     has_finished = False
     while not has_finished:
         line = f.readline()
+        if line == '':
+            break
+        else:
+            line = line.rstrip()
 
         if line == '/* proj-data':
             assert not has_started
@@ -98,18 +103,47 @@ def _load_proj_metadata(f: TextIO) -> Optional[Mapping[str, Any]]:
     else:
         return None
 
-def load_proj_metadata(p: Path) -> Mapping[str, Any]:
+def load_proj_metadata(p: Path) -> Optional[Mapping[str, Any]]:
     with p.open('r') as f:
         found = _load_proj_metadata(f)
-    if found is None:
-        raise RuntimeError('Could not find proj metadata in path {p}')
-    else:
-        return found
+    return found
 
-def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path) -> None:
+def get_existing_hash(p: Path) -> Optional[bytes]:
+    if not p.is_file():
+        return None
+
+    _loaded = load_proj_metadata(p)
+    if _loaded is None:
+        return None
+
+    as_hex_str = _loaded.get('generated_from', None)
+    if as_hex_str is None:
+        return None
+
+    return bytes.fromhex(as_hex_str)
+
+def needs_generate_to_path(spec_path: Path, root: Path, out: Path) -> bool:
+    if not out.is_file():
+        return False
+
+    current_hash = get_existing_hash(p=out)
+    new_hash = get_file_hash(spec_path)
+    assert new_hash is not None
+
+    _l.debug(f'Hash diff: {new_hash!r} vs {current_hash!r}')
+    return new_hash != current_hash
+
+def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path, force: bool) -> bool:
+    if not (force or needs_generate_to_path(spec_path=spec_path, root=root, out=out)):
+        _l.info(f'No generation needed for {spec_path.relative_to(root)} -> {out.relative_to(root)}')
+        return False
+
+    _l.info(f'Regenerating {spec_path.relative_to(root)} -> {out.relative_to(root)}')
+
     out.parent.mkdir(exist_ok=True, parents=True)
     with out.open('w') as f:
         render_disclaimer(spec_path=spec_path, root=root, f=f)
+        render_proj_metadata(spec_path=spec_path, root=root, f=f)
         ifndef = gen_ifndef_uid(out)
         f.write('\n')
         f.write(f'#ifndef {ifndef}\n')
@@ -125,10 +159,19 @@ def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: P
         f.write('\n')
         f.write(f'#endif // {ifndef}\n')
 
-def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path) -> None:
+    return True
+
+def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path, force: bool) -> bool:
+    if not (force or needs_generate_to_path(spec_path=spec_path, root=root, out=out)):
+        _l.info(f'No generation needed for {spec_path.relative_to(root)} -> {out.relative_to(root)}')
+        return False
+
+    _l.info(f'Regenerating {spec_path.relative_to(root)} -> {out.relative_to(root)}')
+
     out.parent.mkdir(exist_ok=True, parents=True)
     with out.open('w') as f:
         render_disclaimer(spec_path=spec_path, root=root, f=f)
+        render_proj_metadata(spec_path=spec_path, root=root, f=f)
         f.write('\n')
         f.write(f'#include "{get_include_path(out)}"\n')
         f.write('\n')
@@ -140,7 +183,9 @@ def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: P
             assert isinstance(spec, EnumSpec)
             render_enum_source(spec, f) 
 
-def generate_files(root: Path, config: ProjectConfig, spec_path: Path) -> Sequence[Path]:
+    return True 
+
+def generate_files(root: Path, config: ProjectConfig, spec_path: Path, force: bool) -> Iterator[Path]:
     suffix = ''.join(spec_path.suffixes[-2:])
 
     spec: Union[StructSpec, EnumSpec, VariantSpec]
@@ -155,17 +200,18 @@ def generate_files(root: Path, config: ProjectConfig, spec_path: Path) -> Sequen
     header_path = spec_path.with_suffix('').with_suffix('.dtg' + config.header_extension)
     source_path = get_source_path(header_path)
 
-    generate_header(spec=spec, spec_path=spec_path, root=root, out=header_path)
-    generate_source(spec=spec, spec_path=spec_path, root=root, out=source_path)
+    if generate_header(spec=spec, spec_path=spec_path, root=root, out=header_path, force=force):
+        yield header_path
+    if generate_source(spec=spec, spec_path=spec_path, root=root, out=source_path, force=force):
+        yield source_path
 
-    return [header_path, source_path]
-
-def run_dtgen(root: Path, config: ProjectConfig, files: Optional[Sequence[PathLike[str]]] = None) -> None:
+def run_dtgen(root: Path, config: ProjectConfig, force: bool, files: Optional[Sequence[PathLike[str]]] = None) -> None:
     if files is None:
         files = list(find_files(root))
     _l.info('Running dtgen on following files:')
     for f in files:
         _l.info(f'- {f}')
     for spec_path in files:
-        generated = generate_files(root=root, config=config, spec_path=Path(spec_path))
-        run_formatter(root, config, generated)
+        generated = list(generate_files(root=root, config=config, spec_path=Path(spec_path), force=force))
+        if len(generated) > 0:
+            run_formatter(root, config, generated)

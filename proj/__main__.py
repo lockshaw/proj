@@ -59,7 +59,8 @@ def main_cmake(args: MainCmakeArgs) -> None:
     main_dtgen(args=MainDtgenArgs(
         path=args.path,
         files=[],
-        delete_outdated=False,
+        delete_outdated=True,
+        force=False,
     ))
 
     config = get_config(args.path)
@@ -100,7 +101,8 @@ def main_build(args: MainBuildArgs) -> None:
     main_dtgen(args=MainDtgenArgs(
         path=args.path,
         files=[],
-        delete_outdated=False,
+        delete_outdated=True,
+        force=False,
     ))
 
     config = get_config(args.path)
@@ -122,7 +124,8 @@ def main_test(args: MainTestArgs) -> None:
     main_dtgen(args=MainDtgenArgs(
         path=args.path,
         files=[],
-        delete_outdated=False,
+        delete_outdated=True,
+        force=False,
     ))
 
     config = get_config(args.path)
@@ -175,6 +178,7 @@ class MainDtgenArgs:
     path: Path
     files: Sequence[Path]
     delete_outdated: bool
+    force: bool
 
 def main_dtgen(args: MainDtgenArgs) -> None:
     root = get_config_root(args.path)
@@ -189,6 +193,7 @@ def main_dtgen(args: MainDtgenArgs) -> None:
         root=root,
         config=config,
         files=files,
+        force=args.force,
     )
     if args.delete_outdated:
         for outdated in find_outdated(root, config):
@@ -232,6 +237,7 @@ def main() -> None:
     dtgen_p = subparsers.add_parser('dtgen')
     dtgen_p.set_defaults(func=main_dtgen)
     dtgen_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    dtgen_p.add_argument('--force', action='store_true', help='Disable incremental toml->c++ generation')
     dtgen_p.add_argument('--delete-outdated', action='store_true')
     dtgen_p.add_argument('files', nargs='*', type=Path)
 

@@ -7,6 +7,7 @@ from typing import (
     Optional,
     TypeVar,
 )
+from proj.json import Json
 
 @contextmanager
 def sline(f: TextIO) -> Iterator[None]:
@@ -42,10 +43,16 @@ def angles(f: TextIO) -> Iterator[None]:
     yield
     f.write('>')
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class IncludeSpec:
     path: str
     system: bool
+
+    def json(self) -> Json:
+        return {
+            'path': self.path,
+            'system': self.system,
+        }
 
 def parse_include_spec(raw: str) -> IncludeSpec:
     if raw.startswith('<') and raw.endswith('>'):

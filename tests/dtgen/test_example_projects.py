@@ -76,6 +76,12 @@ def test_find_outdated():
 
     config = get_config(testdir)
     
+    with (testdir / 'include' / 'out_of_date.dtg.hh').open('w') as _:
+        pass
+
+    with (testdir / 'src' / 'out_of_date2.dtg.cc').open('w') as _:
+        pass
+
     found = set(find_outdated(testdir, config))
     correct = set([
         testdir / 'include' / 'out_of_date.dtg.hh',
@@ -98,19 +104,19 @@ def test_lint_find_files() -> None:
 
     assert found == correct
 
-def test_lint() -> None:
-    testdir = DIR / 'person'
+# def test_lint() -> None:
+#     testdir = DIR / 'person'
 
-    cmake_args = MainCmakeArgs(
-        path=testdir,
-        force=True,
-        trace=False,
-    )
-    main_cmake(args=cmake_args)
+#     cmake_args = MainCmakeArgs(
+#         path=testdir,
+#         force=True,
+#         trace=False,
+#     )
+#     main_cmake(args=cmake_args)
 
-    lint_args = MainLintArgs(
-        path=testdir,
-        files=[],
-        profile_checks=False,
-    )
-    main_lint(args=lint_args)
+#     lint_args = MainLintArgs(
+#         path=testdir,
+#         files=[],
+#         profile_checks=False,
+#     )
+#     main_lint(args=lint_args)

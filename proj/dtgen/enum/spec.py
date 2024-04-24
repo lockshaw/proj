@@ -9,12 +9,16 @@ from typing import (
 from enum import Enum, auto
 from pathlib import Path
 import proj.toml as toml
+from proj.json import Json
 
 class Feature(Enum):
     JSON = auto()
     HASH = auto()
     FMT = auto()
     RAPIDCHECK = auto()
+
+    def json(self) -> Json:
+        return self.value
 
 @dataclass(frozen=True)
 class ValueSpec:
@@ -28,12 +32,26 @@ class ValueSpec:
         else:
             return self._json_key
 
+    def json(self) -> Json:
+        return {
+            'name': self.name,
+            'json_key': self.json_key,
+        }
+
 @dataclass(frozen=True)
 class EnumSpec:
     namespace: Optional[str]
     name: str
     values: Sequence[ValueSpec]
     features: FrozenSet[Feature]
+
+    def json(self) -> Json:
+        return {
+            'namespace': self.namespace,
+            'name': self.name,
+            'values': [v.json() for v in self.values],
+            'features': [feature.json() for feature in sorted(self.features, key=lambda f: f.name)],
+        }
 
 def parse_feature(raw: str) -> Feature:
     if raw == 'json':
