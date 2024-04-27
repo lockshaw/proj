@@ -1,3 +1,4 @@
+import pytest
 from proj.__main__ import (
     main_cmake,
     main_test,
@@ -105,19 +106,20 @@ def test_lint_find_files() -> None:
 
     assert found == correct
 
-# def test_lint() -> None:
-#     testdir = DIR / 'person'
+@pytest.mark.slow
+def test_lint() -> None:
+    testdir = DIR / 'person'
 
-#     cmake_args = MainCmakeArgs(
-#         path=testdir,
-#         force=True,
-#         trace=False,
-#     )
-#     main_cmake(args=cmake_args)
+    cmake_args = MainCmakeArgs(
+        path=testdir,
+        force=True,
+        trace=False,
+    )
+    main_cmake(args=cmake_args)
 
-#     lint_args = MainLintArgs(
-#         path=testdir,
-#         files=[],
-#         profile_checks=False,
-#     )
-#     main_lint(args=lint_args)
+    lint_args = MainLintArgs(
+        path=testdir,
+        files=[],
+        profile_checks=False,
+    )
+    main_lint(args=lint_args)

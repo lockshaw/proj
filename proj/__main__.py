@@ -23,7 +23,6 @@ from dataclasses import dataclass
 from .verbosity import (
     add_verbosity_args,
     calculate_log_level,
-    add_logging_level,
 )
 
 _l = logging.getLogger(name='proj')
@@ -211,8 +210,6 @@ def main_dtgen(args: MainDtgenArgs) -> None:
 
 def main() -> None:
     import argparse 
-
-    add_logging_level('TRACE', logging.DEBUG - 5)
 
     p = argparse.ArgumentParser()
     subparsers = p.add_subparsers()

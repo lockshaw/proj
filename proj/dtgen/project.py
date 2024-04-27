@@ -42,8 +42,7 @@ from .variant.render import (
 )
 from proj.hash import get_file_hash
 import json
-
-import proj.logging as logging
+import logging
 
 _l = logging.getLogger(__name__)
 
@@ -123,13 +122,13 @@ def get_existing_hash(p: Path) -> Optional[bytes]:
 
 def needs_generate_to_path(spec_path: Path, root: Path, out: Path) -> bool:
     if not out.is_file():
-        return False
+        return True
 
     current_hash = get_existing_hash(p=out)
     new_hash = get_file_hash(spec_path)
     assert new_hash is not None
 
-    _l.trace(f'Hash diff: {new_hash!r} vs {current_hash!r}')
+    _l.debug(f'Hash diff: {new_hash!r} vs {current_hash!r}')
     return new_hash != current_hash
 
 def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path, force: bool) -> bool:

@@ -11,10 +11,32 @@
         config.allowUnfree = true;
       };
 
+      lib = pkgs.lib;
     in 
     {
       packages = rec {
         proj = pkgs.python3Packages.callPackage ./proj.nix { };
+
+        pytest-skip-slow = pkgs.python3Packages.buildPythonPackage rec {
+          pname = "pytest-skip-slow";
+          version = "0.0.5";
+          pyproject = true;
+
+          src = pkgs.python3Packages.fetchPypi {
+            inherit pname version;
+            sha256 = "sha256-ZV6lx0jHKUfg0wIzTn+o75mSkleiorySj2MN21oWHYg=";
+          };
+
+          nativeBuildInputs = [
+            pkgs.python3Packages.flit-core
+          ];
+
+          build-system = with pkgs.python3Packages; [
+            flit 
+          ];
+        };
+
+
         proj-nvim = pkgs.vimUtils.buildVimPlugin {
           name = "proj-nvim";
           src = ./vim;
@@ -60,6 +82,7 @@
           ])
           (with self.packages.${system}; [
             rapidcheckFull
+            pytest-skip-slow
           ])
         ];
       };
