@@ -105,18 +105,35 @@ def main_coverage(args: Any) -> None:
     config = lockshaw.get_config(args.path)
     assert config is not None
     
+    target_regex = '^' + '|'.join(config.test_targets) + '$'
+    
     # Run lcov and genhtml commands with checkall
+    # print current directory
+    print(f'Current Directory: {os.getcwd()}')
     subprocess_run([
         'lcov',
         '-c',
         '-d', '.',
-        '-o', 'main_coverage.info'
+        '-o', 'main_coverage.info',
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
-    subprocess_run([
+    
+    # check whether --browser is passed
+    if args.browser:
+        print("opening coverage info in browser")
+        subprocess_run([
         'genhtml',
         'main_coverage.info',
         '--output-directory', 'code_coverage',
     ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+    else:
+        subprocess_run([
+            'lcov',  
+            '--list',  
+            'main_coverage.info',
+        ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+    
+    
+    
 
 def main() -> None:
     import argparse 
@@ -149,6 +166,7 @@ def main() -> None:
     coverage_p = subparsers.add_parser('coverage')
     coverage_p.set_defaults(func=main_coverage)
     coverage_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    coverage_p.add_argument('--browser', '-b')
 
     args = p.parse_args()
     if hasattr(args, 'func') and args.func is not None:
