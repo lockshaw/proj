@@ -124,7 +124,14 @@ def main_coverage(args: Any) -> None:
         'genhtml',
         'main_coverage.info',
         '--output-directory', 'code_coverage',
-    ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+        ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
+        
+        # run xdg-open to open the browser
+        # not able to test it now as I am running on remote linux
+        subprocess_run([
+            'xdg-open',
+            'code_coverage/index.html',
+        ], stderr=sys.stdout, cwd=config.build_dir, env=os.environ)
     else:
         subprocess_run([
             'lcov',  
@@ -166,7 +173,7 @@ def main() -> None:
     coverage_p = subparsers.add_parser('coverage')
     coverage_p.set_defaults(func=main_coverage)
     coverage_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
-    coverage_p.add_argument('--browser', '-b')
+    coverage_p.add_argument('--browser', '-b', action='store_true', help='open coverage info in browser')
 
     args = p.parse_args()
     if hasattr(args, 'func') and args.func is not None:
