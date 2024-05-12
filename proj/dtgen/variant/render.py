@@ -164,7 +164,7 @@ def get_typename(*, spec: VariantSpec, qualified: bool) -> str:
 
 def render_namespaced_typename(spec: VariantSpec, f: TextIO) -> None:
     f.write(f'{spec.namespace}::')
-    render_typename(spec=spec, f=f)
+    render_typename(spec=spec, qualified=True, f=f)
 
 def render_hash_decl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
