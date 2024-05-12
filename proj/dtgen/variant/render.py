@@ -162,7 +162,7 @@ def get_typename(*, spec: VariantSpec, qualified: bool) -> str:
     render_typename(spec=spec, qualified=qualified, f=f)
     return f.getvalue()
 
-def render_namespaced_typename(spec: StructSpec, f: TextIO) -> None:
+def render_namespaced_typename(spec: VariantSpec, f: TextIO) -> None:
     f.write(f'{spec.namespace}::')
     render_typename(spec, f)
 
