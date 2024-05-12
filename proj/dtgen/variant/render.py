@@ -343,19 +343,20 @@ def render_rapidcheck_decl(spec: VariantSpec, f: TextIO) -> None:
 def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
 
-    with render_function_definition(
-            return_type=f'Gen<{typename}>',
-            name=f'Arbitrary<{typename}>::arbitrary',
-            args=[],
-            f=f,
-        ):
-        with sline(f):
-            f.write('return gen::oneOf')
-            with parens(f):
-                for value in commad(spec.values, f):
-                    f.write(f'gen::cast<{typename}>')
-                    with parens(f):
-                        f.write(f'gen::arbitrary<{value.type_}>()')
+    with render_namespace_block('rc', f):
+        with render_function_definition(
+                return_type=f'Gen<{typename}>',
+                name=f'Arbitrary<{typename}>::arbitrary',
+                args=[],
+                f=f,
+            ):
+            with sline(f):
+                f.write('return gen::oneOf')
+                with parens(f):
+                    for value in commad(spec.values, f):
+                        f.write(f'gen::cast<{typename}>')
+                        with parens(f):
+                            f.write(f'gen::arbitrary<{value.type_}>()')
 
 def render_variant_type(spec: VariantSpec, f: TextIO) -> None:
     render_template_app('std::variant', [v.type_ for v in spec.values], f=f)
