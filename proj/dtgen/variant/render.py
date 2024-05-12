@@ -320,7 +320,7 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
             with sline(f):
                 f.write('return s << fmt::to_string(x)')
 
-def render_rapidcheck_decl(spec: StructSpec, f: TextIO) -> None:
+def render_rapidcheck_decl(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block('rc', f):
         render_template_abs(spec.template_params, f)
         with semicolon(f):
@@ -333,7 +333,7 @@ def render_rapidcheck_decl(spec: StructSpec, f: TextIO) -> None:
                     render_namespaced_typename(spec, f)
                 f.write(' arbitrary();\n')
 
-def render_rapidcheck_impl(spec: StructSpec, f: TextIO) -> None:
+def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block('rc', f):
         if len(spec.template_params) > 0:
             render_template_abs(spec.template_params, f)
