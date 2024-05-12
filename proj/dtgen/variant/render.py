@@ -26,6 +26,7 @@ from proj.dtgen.render_utils import (
     render_default_case,
     angles,
     parens,
+    commad,
 )
 import io
 import itertools
@@ -160,6 +161,10 @@ def get_typename(*, spec: VariantSpec, qualified: bool) -> str:
     f = io.StringIO() 
     render_typename(spec=spec, qualified=qualified, f=f)
     return f.getvalue()
+
+def render_namespaced_typename(spec: StructSpec, f: TextIO) -> None:
+    f.write(f'{spec.namespace}::')
+    render_typename(spec, f)
 
 def render_hash_decl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
@@ -323,22 +328,32 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
                 f.write('return s << fmt::to_string(x)')
 
 def render_rapidcheck_decl(spec: VariantSpec, f: TextIO) -> None:
-    typename = get_typename(spec=spec, qualified=True)
+    # typename = get_typename(spec=spec, qualified=True)
 
+    # with render_namespace_block('rc', f):
+    #     with render_struct_block(
+    #         name=f'Arbitrary<{typename}>',
+    #         template_params=[],
+    #         specialization=True,
+    #         f=f,
+    #     ):
+    #         render_function_declaration(
+    #             is_static=True,
+    #             return_type=f'Gen<{typename}>',
+    #             name='arbitrary',
+    #             args=[],
+    #             f=f,
+    #         )
     with render_namespace_block('rc', f):
-        with render_struct_block(
-            name=f'Arbitrary<{typename}>',
-            template_params=[],
-            specialization=True,
-            f=f,
-        ):
-            render_function_declaration(
-                is_static=True,
-                return_type=f'Gen<{typename}>',
-                name='arbitrary',
-                args=[],
-                f=f,
-            )
+        with semicolon(f):
+            f.write('struct Arbitrary')
+            with angles(f):
+                render_namespaced_typename(spec, f)
+            with braces(f):
+                f.write('static Gen')
+                with angles(f):
+                    render_namespaced_typename(spec, f)
+                f.write(' arbitrary();\n')
 
 def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block('rc', f):
@@ -437,8 +452,8 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
     if Feature.JSON in spec.features:
         render_json_impl(spec=spec, f=f)
     
-    if Feature.RAPIDCHECK in spec.features:
-        render_rapidcheck_impl(spec=spec, f=f)
+    # if Feature.RAPIDCHECK in spec.features:
+    #     render_rapidcheck_impl(spec=spec, f=f)
 
     if Feature.FMT in spec.features:
         render_fmt_impl(spec=spec, f=f)
