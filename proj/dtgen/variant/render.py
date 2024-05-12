@@ -164,7 +164,7 @@ def get_typename(*, spec: VariantSpec, qualified: bool) -> str:
 
 def render_namespaced_typename(spec: VariantSpec, f: TextIO) -> None:
     f.write(f'{spec.namespace}::')
-    render_typename(spec, f)
+    render_typename(spec=spec, f=f)
 
 def render_hash_decl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
@@ -442,8 +442,8 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
     if Feature.JSON in spec.features:
         render_json_impl(spec=spec, f=f)
     
-    # if Feature.RAPIDCHECK in spec.features:
-    #     render_rapidcheck_impl(spec=spec, f=f)
+    if Feature.RAPIDCHECK in spec.features:
+        render_rapidcheck_impl(spec=spec, f=f)
 
     if Feature.FMT in spec.features:
         render_fmt_impl(spec=spec, f=f)
