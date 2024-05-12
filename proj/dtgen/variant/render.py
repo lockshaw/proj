@@ -35,6 +35,8 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return [
             IncludeSpec(path='nlohmann/json.hpp', system=False),
         ]
+    elif feature == Feature.RAPIDCHECK:
+        return [IncludeSpec(path='rapidcheck.h', system=False)]
     elif feature == Feature.FMT:
         return [
             IncludeSpec(path='ostream', system=True),
@@ -318,6 +320,39 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
             with sline(f):
                 f.write('return s << fmt::to_string(x)')
 
+def render_rapidcheck_decl(spec: StructSpec, f: TextIO) -> None:
+    with render_namespace_block('rc', f):
+        render_template_abs(spec.template_params, f)
+        with semicolon(f):
+            f.write('struct Arbitrary')
+            with angles(f):
+                render_namespaced_typename(spec, f)
+            with braces(f):
+                f.write('static Gen')
+                with angles(f):
+                    render_namespaced_typename(spec, f)
+                f.write(' arbitrary();\n')
+
+def render_rapidcheck_impl(spec: StructSpec, f: TextIO) -> None:
+    with render_namespace_block('rc', f):
+        if len(spec.template_params) > 0:
+            render_template_abs(spec.template_params, f)
+        f.write('Gen')
+        with angles(f):
+            render_namespaced_typename(spec, f)
+        f.write(' Arbitrary')
+        with angles(f):
+            render_namespaced_typename(spec, f)
+        f.write('::arbitrary() ')
+        with braces(f):
+            with semicolon(f):
+                f.write('return gen::construct')
+                with angles(f):
+                    render_namespaced_typename(spec, f)
+                with parens(f):
+                    for field in commad(spec.fields, f):
+                        f.write(f'gen::arbitrary<{field.type_}>()')
+
 def render_variant_type(spec: VariantSpec, f: TextIO) -> None:
     render_template_app('std::variant', [v.type_ for v in spec.values], f=f)
 
@@ -371,6 +406,9 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
     if Feature.JSON in spec.features:
         render_json_decl(spec=spec, f=f)
 
+    if Feature.RAPIDCHECK in spec.features:
+        render_rapidcheck_decl(spec=spec, f=f)
+
     if Feature.FMT in spec.features:
         render_fmt_decl(spec=spec, f=f)
 
@@ -393,6 +431,9 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
 
     if Feature.JSON in spec.features:
         render_json_impl(spec=spec, f=f)
+    
+    if Feature.RAPIDCHECK in spec.features:
+        render_rapidcheck_impl(spec=spec, f=f)
 
     if Feature.FMT in spec.features:
         render_fmt_impl(spec=spec, f=f)
