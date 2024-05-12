@@ -24,6 +24,8 @@ from proj.dtgen.render_utils import (
     render_switch_block,
     render_case,
     render_default_case,
+    angles,
+    parens,
 )
 import io
 import itertools
