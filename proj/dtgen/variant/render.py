@@ -452,8 +452,8 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
     if Feature.JSON in spec.features:
         render_json_impl(spec=spec, f=f)
     
-    # if Feature.RAPIDCHECK in spec.features:
-    #     render_rapidcheck_impl(spec=spec, f=f)
+    if Feature.RAPIDCHECK in spec.features:
+        render_rapidcheck_impl(spec=spec, f=f)
 
     if Feature.FMT in spec.features:
         render_fmt_impl(spec=spec, f=f)
