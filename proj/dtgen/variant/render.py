@@ -164,7 +164,7 @@ def get_typename(*, spec: VariantSpec, qualified: bool) -> str:
 
 def render_namespaced_typename(spec: VariantSpec, f: TextIO) -> None:
     f.write(f'{spec.namespace}::')
-    render_typename(spec=spec, qualified=True, f=f)
+    render_typename(spec=spec, qualified=False, f=f)
 
 def render_hash_decl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
@@ -356,12 +356,14 @@ def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
         f.write('::arbitrary() ')
         with braces(f):
             with semicolon(f):
-                f.write('return gen::construct')
-                with angles(f):
-                    render_namespaced_typename(spec, f)
+                f.write('return gen::oneOf')
                 with parens(f):
                     for value in commad(spec.values, f):
-                        f.write(f'gen::arbitrary<{value.type_}>()')
+                        f.write('gen::cast')
+                        with angles(f):
+                            render_namespaced_typename(spec, f)
+                        with parens(f):
+                            f.write(f'gen::arbitrary<{value.type_}>()')
 
 def render_variant_type(spec: VariantSpec, f: TextIO) -> None:
     render_template_app('std::variant', [v.type_ for v in spec.values], f=f)
