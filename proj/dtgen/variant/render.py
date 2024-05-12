@@ -321,22 +321,25 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
                 f.write('return s << fmt::to_string(x)')
 
 def render_rapidcheck_decl(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=True)
+
     with render_namespace_block('rc', f):
-        render_template_abs(spec.template_params, f)
-        with semicolon(f):
-            f.write('struct Arbitrary')
-            with angles(f):
-                render_namespaced_typename(spec, f)
-            with braces(f):
-                f.write('static Gen')
-                with angles(f):
-                    render_namespaced_typename(spec, f)
-                f.write(' arbitrary();\n')
+        with render_struct_block(
+            name=f'Arbitrary<{typename}>',
+            template_params=[],
+            specialization=True,
+            f=f,
+        ):
+            render_function_declaration(
+                is_static=True,
+                return_type=f'Gen<{typename}>',
+                name='arbitrary',
+                args=[],
+                f=f,
+            )
 
 def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block('rc', f):
-        if len(spec.template_params) > 0:
-            render_template_abs(spec.template_params, f)
         f.write('Gen')
         with angles(f):
             render_namespaced_typename(spec, f)
@@ -350,8 +353,8 @@ def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
                 with angles(f):
                     render_namespaced_typename(spec, f)
                 with parens(f):
-                    for field in commad(spec.fields, f):
-                        f.write(f'gen::arbitrary<{field.type_}>()')
+                    for value in commad(spec.values, f):
+                        f.write(f'gen::arbitrary<{value.type_}>()')
 
 def render_variant_type(spec: VariantSpec, f: TextIO) -> None:
     render_template_app('std::variant', [v.type_ for v in spec.values], f=f)
