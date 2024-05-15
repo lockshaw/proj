@@ -208,5 +208,10 @@ TEST_SUITE(FF_TEST_SUITE) {
     CHECK(result == correct);
   }
 
+  TEST_CASE("rapidcheck example") {
+    rc::check([&](IntOrBool const &x) {
+      CHECK(x.has<int>() || x.has<bool>());
+    });
+  }
 
 }
