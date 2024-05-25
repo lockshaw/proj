@@ -21,7 +21,7 @@ class Feature(Enum):
     HASH = auto()
     JSON = auto()
     FMT = auto()
-    # RAPIDCHECK = auto()
+    RAPIDCHECK = auto()
 
     def json(self) -> Json:
         return self.name
@@ -92,6 +92,8 @@ def parse_feature(raw: str) -> Feature:
         return Feature.JSON
     elif raw == 'fmt':
         return Feature.FMT
+    elif raw == 'rapidcheck':
+        return Feature.RAPIDCHECK
     else:
         raise ValueError(f'Unknown feature: {raw}')
 
