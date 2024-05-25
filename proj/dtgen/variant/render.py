@@ -354,7 +354,7 @@ def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
                 f.write('return gen::oneOf')
                 with parens(f):
                     for value in commad(spec.values, f):
-                        f.write(f'gen::cast<{typename}>')
+                        f.write(f'gen::construct<{typename}>')
                         with parens(f):
                             f.write(f'gen::arbitrary<{value.type_}>()')
 
