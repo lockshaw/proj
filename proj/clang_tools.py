@@ -121,6 +121,9 @@ def download(url: str, path: Path) -> None:
     except subprocess.CalledProcessError:
         _l.debug("wget command failed")
         pass
+    except FileNotFoundError:
+        _l.debug('Could not find wget in $PATH')
+        pass
 
     try:
         _l.debug(f"Trying to download {url} to {path} via curl")
@@ -128,6 +131,9 @@ def download(url: str, path: Path) -> None:
         return
     except subprocess.CalledProcessError:
         _l.debug("curl command failed")
+        pass
+    except FileNotFoundError:
+        _l.debug('Could not find curl in $PATH')
         pass
 
     _l.critical(f"Failed to download {url} with both wget and curl. Is at least one of wget and curl installed?")
