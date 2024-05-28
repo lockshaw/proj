@@ -173,6 +173,30 @@ def main_test(args: Any) -> None:
             cwd=cwd,
             env=os.environ,
         )
+        
+        subprocess_run(
+            [
+                "lcov", 
+                "--remove",
+                "main_coverage.info",
+                "/nix/store/*",
+                "--output-file",
+                "main_coverage.info",
+            ],
+            stderr=sys.stdout,
+            cwd=cwd,
+            env=os.environ,
+        )
+        subprocess_run(
+            [
+                "lcov",
+                "--list",
+                "main_coverage.info",
+            ],
+            stderr=sys.stdout,
+            cwd=cwd,
+            env=os.environ,
+        )
         if args.browser:
             print("opening coverage info in browser")
             subprocess_run(
