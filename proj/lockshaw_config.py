@@ -34,6 +34,10 @@ class ProjectConfig:
     @property
     def build_dir(self) -> Path:
         return self.base / "build"
+    
+    @property
+    def cov_dir(self) -> Path:
+        return self.base / "build_codecov"
 
     @property
     def build_targets(self) -> Tuple[str, ...]:
