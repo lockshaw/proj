@@ -43,28 +43,38 @@ def subprocess_run(command, **kwargs):
         print(f"+++ $ {pretty_cmd}", file=sys.stderr)
         subprocess.check_call(command, **kwargs)
 
-
-def main_cmake(args: Any) -> None:
-    config = lockshaw.get_config(args.path)
-    assert config is not None
-    if args.force and config.build_dir.exists():
-        shutil.rmtree(config.build_dir)
-    config.build_dir.mkdir(exist_ok=True, parents=True)
-    cmake_args = [f"-D{k}={v}" for k, v in config.cmake_flags.items()]
-    cmake_args += shlex.split(os.environ.get("CMAKE_FLAGS", ""))
-    if args.trace:
-        cmake_args += ["--trace", "--trace-expand", "--trace-redirect=trace.log"]
+def cmake(cmake_args, config, is_coverage):
+    if is_coverage:
+        cwd = config.cov_dir
+    else:
+        cwd = config.build_dir
     subprocess_check_call(
         [
             "cmake",
             *cmake_args,
-            "..",
+            "../..",
         ],
         stderr=sys.stdout,
-        cwd=config.build_dir,
+        cwd=cwd,
         env=os.environ,
         shell=config.cmake_require_shell,
     )
+
+def main_cmake(args: Any) -> None:
+    config = lockshaw.get_config(args.path)
+    assert config is not None
+    if args.force:
+        if config.build_dir.exists():
+            shutil.rmtree(config.build_dir)
+        if config.cov_dir.exists():
+            shutil.rmtree(config.cov_dir)
+    config.build_dir.mkdir(exist_ok=True, parents=True)
+    config.cov_dir.mkdir(exist_ok=True, parents=True)
+    cmake_args = [f"-D{k}={v}" for k, v in config.cmake_flags.items()]
+    cmake_args += shlex.split(os.environ.get("CMAKE_FLAGS", ""))
+    if args.trace:
+        cmake_args += ["--trace", "--trace-expand", "--trace-redirect=trace.log"]
+    cmake(cmake_args, config, False)
     COMPILE_COMMANDS_FNAME = "compile_commands.json"
     if config.fix_compile_commands:
         fix_compile_commands.fix_file(
@@ -84,6 +94,8 @@ def main_cmake(args: Any) -> None:
             cwd=config.build_dir,
             env=os.environ,
         )
+        
+    cmake(cmake_args + ["-DFF_USE_CODE_COVERAGE=ON"], config, True)
 
 
 def main_build(args: Any) -> None:
@@ -109,6 +121,11 @@ def main_build(args: Any) -> None:
 def main_test(args: Any) -> None:
     config = lockshaw.get_config(args.path)
     assert config is not None
+    if args.coverage:
+        cwd = config.cov_dir
+    else:
+        cwd = config.build_dir
+    
     subprocess_check_call(
         [
             "make",
@@ -122,7 +139,7 @@ def main_test(args: Any) -> None:
             **({"VERBOSE": "1"} if args.verbose else {}),
         },
         stderr=sys.stdout,
-        cwd=config.build_dir,
+        cwd=cwd,
     )
     target_regex = "^" + "|".join(config.test_targets) + "$"
     subprocess_run(
@@ -134,71 +151,75 @@ def main_test(args: Any) -> None:
             target_regex,
         ],
         stderr=sys.stdout,
-        cwd=config.build_dir,
+        cwd=cwd,
         env=os.environ,
     )
-
-
-def main_coverage(args: Any) -> None:
-    config = lockshaw.get_config(args.path)
-    assert config is not None
-
-    target_regex = "^" + "|".join(config.test_targets) + "$"
-
-    # Run lcov and genhtml commands with checkall
-    # print current directory
-    print(f"Current Directory: {os.getcwd()}")
-    subprocess_run(
-        [
-            "lcov",
-            "-c",
-            "-d",
-            ".",
-            "-o",
-            "main_coverage.info",
-        ],
-        stderr=sys.stdout,
-        cwd=config.build_dir,
-        env=os.environ,
-    )
-
-    # check whether --browser is passed
-    if args.browser:
-        print("opening coverage info in browser")
-        subprocess_run(
-            [
-                "genhtml",
-                "main_coverage.info",
-                "--output-directory",
-                "code_coverage",
-            ],
-            stderr=sys.stdout,
-            cwd=config.build_dir,
-            env=os.environ,
-        )
-
-        # run xdg-open to open the browser
-        # not able to test it now as I am running on remote linux
-        subprocess_run(
-            [
-                "xdg-open",
-                "code_coverage/index.html",
-            ],
-            stderr=sys.stdout,
-            cwd=config.build_dir,
-            env=os.environ,
-        )
-    else:
+    
+    if args.coverage:
         subprocess_run(
             [
                 "lcov",
-                "--list",
+                "--capture",
+                "--directory",
+                ".",
+                "--output-file",
                 "main_coverage.info",
             ],
             stderr=sys.stdout,
-            cwd=config.build_dir,
+            cwd=cwd,
             env=os.environ,
         )
+        
+        subprocess_run(
+            [
+                "lcov", 
+                "--extract",
+                "main_coverage.info",
+                f"{config.base}/lib/*",
+                "--output-file",
+                "main_coverage.info",
+            ],
+            stderr=sys.stdout,
+            cwd=cwd,
+            env=os.environ,
+        )
+        if args.browser:
+            print("opening coverage info in browser")
+            subprocess_run(
+                [
+                    "genhtml",
+                    "main_coverage.info",
+                    "--output-directory",
+                    "code_coverage",
+                ],
+                stderr=sys.stdout,
+                cwd=config.build_dir,
+                env=os.environ,
+            )
+
+            # run xdg-open to open the browser
+            # not able to test it now as I am running on remote linux
+            subprocess_run(
+                [
+                    "xdg-open",
+                    "code_coverage/index.html",
+                ],
+                stderr=sys.stdout,
+                cwd=config.cov_dir,
+                env=os.environ,
+            )
+        else:
+            subprocess_run(
+                [
+                    "lcov",
+                    "--list",
+                    "main_coverage.info",
+                ],
+                stderr=sys.stdout,
+                cwd=config.cov_dir,
+                env=os.environ,
+            )
+    
 
 
 def main() -> None:
@@ -216,6 +237,10 @@ def main() -> None:
     test_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     test_p.add_argument("--verbose", "-v", action="store_true")
     test_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
+    test_p.add_argument("--coverage", "-c", action="store_true")
+    test_p.add_argument(
+        "--browser", "-b", action="store_true", help="open coverage info in browser"
+    )
 
     build_p = subparsers.add_parser("build")
     build_p.set_defaults(func=main_build)
@@ -228,13 +253,6 @@ def main() -> None:
     cmake_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     cmake_p.add_argument("--force", "-f", action="store_true")
     cmake_p.add_argument("--trace", action="store_true")
-
-    coverage_p = subparsers.add_parser("coverage")
-    coverage_p.set_defaults(func=main_coverage)
-    coverage_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
-    coverage_p.add_argument(
-        "--browser", "-b", action="store_true", help="open coverage info in browser"
-    )
 
     args = p.parse_args()
     if hasattr(args, "func") and args.func is not None:
