@@ -43,17 +43,11 @@ def subprocess_run(command, **kwargs):
         print(f"+++ $ {pretty_cmd}", file=sys.stderr)
         subprocess.check_call(command, **kwargs)
 
-
-def main_cmake(args: Any) -> None:
-    config = lockshaw.get_config(args.path)
-    assert config is not None
-    if args.force and config.build_dir.exists():
-        shutil.rmtree(config.build_dir)
-    config.build_dir.mkdir(exist_ok=True, parents=True)
-    cmake_args = [f"-D{k}={v}" for k, v in config.cmake_flags.items()]
-    cmake_args += shlex.split(os.environ.get("CMAKE_FLAGS", ""))
-    if args.trace:
-        cmake_args += ["--trace", "--trace-expand", "--trace-redirect=trace.log"]
+def cmake(cmake_args, config, is_coverage):
+    if is_coverage:
+        cwd = config.cov_dir
+    else:
+        cwd = config.build_dir
     subprocess_check_call(
         [
             "cmake",
@@ -61,10 +55,26 @@ def main_cmake(args: Any) -> None:
             "..",
         ],
         stderr=sys.stdout,
-        cwd=config.build_dir,
+        cwd=cwd,
         env=os.environ,
         shell=config.cmake_require_shell,
     )
+
+def main_cmake(args: Any) -> None:
+    config = lockshaw.get_config(args.path)
+    assert config is not None
+    if args.force:
+        if config.build_dir.exists():
+            shutil.rmtree(config.build_dir)
+        if config.cov_dir.exists():
+            shutil.rmtree(config.cov_dir)
+    config.build_dir.mkdir(exist_ok=True, parents=True)
+    config.cov_dir.mkdir(exist_ok=True, parents=True)
+    cmake_args = [f"-D{k}={v}" for k, v in config.cmake_flags.items()]
+    cmake_args += shlex.split(os.environ.get("CMAKE_FLAGS", ""))
+    if args.trace:
+        cmake_args += ["--trace", "--trace-expand", "--trace-redirect=trace.log"]
+    cmake(cmake_args, config, False)
     COMPILE_COMMANDS_FNAME = "compile_commands.json"
     if config.fix_compile_commands:
         fix_compile_commands.fix_file(
@@ -86,20 +96,7 @@ def main_cmake(args: Any) -> None:
         )
         
     cmake_args += ["-DFF_USE_CODE_COVERAGE=ON"]
-    if args.force and config.cov_dir.exists():
-        shutil.rmtree(config.cov_dir)
-    config.cov_dir.mkdir(exist_ok=True, parents=True)
-    subprocess_check_call(
-        [
-            "cmake",
-            *cmake_args,
-            "..",
-        ],
-        stderr=sys.stdout,
-        cwd=config.cov_dir,
-        env=os.environ,
-        shell=config.cmake_require_shell,
-    )
+    cmake(cmake_args, config, True)
 
 
 def main_build(args: Any) -> None:
@@ -127,8 +124,9 @@ def main_test(args: Any) -> None:
     assert config is not None
     cwd = config.build_dir
     if args.coverage:
-        print("will use separate dir for code coverage")
         cwd = config.cov_dir
+    else:
+        cwd = config.build_dir
     
     subprocess_check_call(
         [
@@ -177,20 +175,10 @@ def main_test(args: Any) -> None:
         subprocess_run(
             [
                 "lcov", 
-                "--remove",
+                "--extract",
                 "main_coverage.info",
-                "/nix/store/*",
+                "lib/*",
                 "--output-file",
-                "main_coverage.info",
-            ],
-            stderr=sys.stdout,
-            cwd=cwd,
-            env=os.environ,
-        )
-        subprocess_run(
-            [
-                "lcov",
-                "--list",
                 "main_coverage.info",
             ],
             stderr=sys.stdout,
