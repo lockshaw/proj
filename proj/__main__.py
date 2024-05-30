@@ -95,8 +95,7 @@ def main_cmake(args: Any) -> None:
             env=os.environ,
         )
         
-    cmake_args += ["-DFF_USE_CODE_COVERAGE=ON"]
-    cmake(cmake_args, config, True)
+    cmake(cmake_args + ["-DFF_USE_CODE_COVERAGE=ON"], config, True)
 
 
 def main_build(args: Any) -> None:
