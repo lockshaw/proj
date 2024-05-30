@@ -52,7 +52,7 @@ def cmake(cmake_args, config, is_coverage):
         [
             "cmake",
             *cmake_args,
-            "..",
+            "../..",
         ],
         stderr=sys.stdout,
         cwd=cwd,
@@ -122,7 +122,6 @@ def main_build(args: Any) -> None:
 def main_test(args: Any) -> None:
     config = lockshaw.get_config(args.path)
     assert config is not None
-    cwd = config.build_dir
     if args.coverage:
         cwd = config.cov_dir
     else:
@@ -177,7 +176,7 @@ def main_test(args: Any) -> None:
                 "lcov", 
                 "--extract",
                 "main_coverage.info",
-                "lib/*",
+                f"{config.base}/lib/*",
                 "--output-file",
                 "main_coverage.info",
             ],

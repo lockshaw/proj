@@ -17,7 +17,7 @@ def load_options_file(p: Path) -> List[str]:
 def get_relpath(entry, base_dir: Path):
     file = Path(entry["file"])
     directory = Path(entry["directory"])
-    reldir = directory.relative_to(base_dir / "build")
+    reldir = directory.relative_to(base_dir / "build/normal")
     relative = file.relative_to(base_dir / reldir)
     return relative
 
