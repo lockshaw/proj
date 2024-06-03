@@ -220,7 +220,6 @@ def main_test(args: MainTestArgs) -> None:
         )
         
         # only keep the coverage info of the lib directory
-        print("remove dtgen!")
         subprocess_run(
             [
                 "lcov", 
