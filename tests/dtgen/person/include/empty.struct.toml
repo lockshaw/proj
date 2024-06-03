@@ -1,0 +1,11 @@
+namespace = "FlexFlow"
+name = "empty_t"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "rapidcheck",
+  "fmt",
+]
+fields = []

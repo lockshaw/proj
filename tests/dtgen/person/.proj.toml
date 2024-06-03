@@ -1,0 +1,5 @@
+project_name = "person"
+
+build_targets = [
+  "person-tests",
+]
