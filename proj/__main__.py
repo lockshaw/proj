@@ -219,6 +219,7 @@ def main_test(args: MainTestArgs) -> None:
             env=os.environ,
         )
         
+        # only keep the coverage info of the lib directory
         subprocess_run(
             [
                 "lcov", 
@@ -232,6 +233,23 @@ def main_test(args: MainTestArgs) -> None:
             cwd=cwd,
             env=os.environ,
         )
+        
+        # filter out dtg.h and .dtg.cc
+        subprocess_run(
+            [
+                "lcov",
+                "--remove",
+                "main_coverage.info",
+                f"{config.base}/lib/*.dtg.h",
+                f"{config.base}/lib/*.dtg.cc",
+                "--output-file",
+                "main_coverage.info",
+            ],
+            stderr=sys.stdout,
+            cwd=cwd,
+            env=os.environ,
+        )
+        
         if args.browser:
             print("opening coverage info in browser")
             subprocess_run(
