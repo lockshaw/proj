@@ -210,7 +210,7 @@ TEST_SUITE(FF_TEST_SUITE) {
 
   TEST_CASE("rapidcheck example") {
     rc::check([&](IntOrBool const &x) {
-      CHECK(x.has<int>() || x.has<bool>());
+      RC_ASSERT(x.has<int>() || x.has<bool>());
     });
   }
 

@@ -1,0 +1,16 @@
+namespace = "FlexFlow"
+name = "wrapper_int_t"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "rapidcheck",
+  "fmt",
+]
+
+includes = []
+
+[[fields]]
+name = "raw_int"
+type = "int"

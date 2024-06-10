@@ -8,6 +8,7 @@ from typing import (
     TypeVar,
 )
 from proj.json import Json
+import io
 
 @contextmanager
 def sline(f: TextIO) -> Iterator[None]:
@@ -123,12 +124,16 @@ def render_struct_block(name: str, template_params: Sequence[str], f: TextIO, sp
         with braces(f):
             yield 
 
-def render_function_declaration(*, template_params: Sequence[str] = tuple(), is_static: bool = False, return_type: str, name: str, args: Sequence[str], is_const: bool=False, f: TextIO) -> None:
+def render_function_declaration(*, template_params: Sequence[str] = tuple(), is_static: bool = False, is_explicit: bool = False, return_type: Optional[str], name: str, args: Sequence[str], is_const: bool=False, f: TextIO) -> None:
     if len(template_params) > 0:
         render_template_abs(template_params, f)
     if is_static:
         f.write('static ')
-    f.write(f'{return_type} {name}')
+    if is_explicit:
+        f.write('explicit ')
+    if return_type is not None:
+        f.write(f'{return_type} ')
+    f.write(f'{name}')
     with parens(f):
         for arg in commad(args, f):
             f.write(arg)
@@ -137,15 +142,22 @@ def render_function_declaration(*, template_params: Sequence[str] = tuple(), is_
     f.write(';\n')
 
 @contextmanager
-def render_function_definition(*, template_params: Sequence[str] = tuple(), return_type: str, name: str, args: Sequence[str], is_const: bool = False, f: TextIO) -> Iterator[None]:
+def render_function_definition(*, template_params: Sequence[str] = tuple(), return_type: Optional[str], name: str, args: Sequence[str], is_const: bool = False, initializer_list: Sequence[str] = tuple(), f: TextIO) -> Iterator[None]:
     if len(template_params) > 0:
         render_template_abs(template_params, f)
-    f.write(f'{return_type} {name}')
+    if return_type is not None:
+        f.write(f'{return_type} ')
+    f.write(name)
     with parens(f):
         for arg in commad(args, f):
             f.write(arg)
     if is_const:
         f.write(' const')
+    initializer_list = list(initializer_list)
+    if len(initializer_list) > 0:
+        f.write(' : ')
+        for initializer in commad(initializer_list, f):
+            f.write(initializer)
     with braces(f):
         yield
     f.write('\n')
