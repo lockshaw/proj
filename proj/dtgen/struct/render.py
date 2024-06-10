@@ -23,6 +23,7 @@ from proj.dtgen.render_utils import (
     render_template_abs,
 )
 import proj.dtgen.render_utils as render_utils
+import io
 
 def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
@@ -74,16 +75,6 @@ def render_field_decls(spec: StructSpec, f: TextIO) -> None:
     for field in spec.fields:
         f.write(f'{field.type_} {field.name};\n')
 
-def render_typename(spec: StructSpec, f: TextIO) -> None:
-    if len(spec.template_params) == 0:
-        f.write(spec.name)
-    else:
-        f.write(spec.name + '<' + ', '.join(spec.template_params) + '>')
-
-def render_namespaced_typename(spec: StructSpec, f: TextIO) -> None:
-    f.write(f'{spec.namespace}::')
-    render_typename(spec, f)
-
 @contextmanager
 def render_struct_block(spec: StructSpec, f: TextIO) -> Iterator[None]:
     with render_utils.render_struct_block(name=spec.name, template_params=spec.template_params, f=f):
@@ -111,32 +102,51 @@ def render_struct_impl_scope(spec: StructSpec, f: TextIO, return_type: Optional[
     render_template_app(spec, f)
     f.write('::')
 
-def render_constructor_sig(spec: StructSpec, f: TextIO) -> None:
-    f.write(''.join([
-        spec.name,
-        '(',
-        ', '.join([
+def render_constructor_decl(spec: StructSpec, f: TextIO) -> None:
+    render_utils.render_function_declaration(
+        template_params=[],
+        is_static=False,
+        is_explicit=True,
+        return_type=None,
+        name=spec.name,
+        args=[
             f'{field.type_} const &{field.name}'
             for field in spec.fields
-        ]),
-        ')',
-    ]))
+        ],
+        is_const=False,
+        f=f,
+    )
 
-def render_constructor_decl(spec: StructSpec, f: TextIO) -> None:
-    render_constructor_sig(spec, f)
-    f.write(';\n')
+def render_typename(*, spec: StructSpec, qualified: bool, f: TextIO) -> None:
+    if qualified:
+        f.write(f'::{spec.namespace}::')
+    if len(spec.template_params) > 0:
+        render_utils.render_template_app(spec.name, params=spec.template_params, f=f)
+    else:
+        f.write(spec.name)
+
+def get_typename(*, spec: StructSpec, qualified: bool) -> str:
+    f = io.StringIO() 
+    render_typename(spec=spec, qualified=qualified, f=f)
+    return f.getvalue()
 
 def render_constructor_impl(spec: StructSpec, f: TextIO) -> None:
-    render_struct_impl_scope(spec, f)
-    render_constructor_sig(spec, f)
-    f.write(' '.join([
-        ':',
-        ', '.join([
+    with render_utils.render_function_definition(
+        template_params=spec.template_params,
+        return_type=None,
+        name=f'{get_typename(spec=spec, qualified=False)}::{spec.name}',
+        args=[
+            f'{field.type_} const &{field.name}'
+            for field in spec.fields
+        ],
+        is_const=False,
+        initializer_list=[
             f'{field.name}({field.name})'
             for field in spec.fields
-        ]),
-        '{}'
-    ]))
+        ],
+        f=f,
+    ):
+        pass # no function body
 
 def render_binop_decl(spec: StructSpec, op: str, f: TextIO) -> None:
     f.write(f'bool operator{op}({spec.name} const &) const;')
@@ -171,12 +181,12 @@ def render_hash_decl(spec: StructSpec, f: TextIO) -> None:
         with semicolon(f):
             f.write('struct hash')
             with angles(f):
-                render_namespaced_typename(spec, f)
+                render_typename(spec=spec, qualified=True, f=f)
             with braces(f):
                 with semicolon(f):
                     f.write('size_t operator()')
                     with parens(f):
-                        render_namespaced_typename(spec, f)
+                        render_typename(spec=spec, qualified=True, f=f)
                         f.write(' const &')
                     f.write('const')
 
@@ -190,7 +200,7 @@ def render_hash_impl(spec: StructSpec, f: TextIO) -> None:
             render_template_app(spec, f, with_namespace=True)
         f.write('::operator()')
         with parens(f):
-            render_namespaced_typename(spec, f)
+            render_typename(spec=spec, qualified=True, f=f)
             f.write(' const &x')
         f.write('const')
         with braces(f):
@@ -206,13 +216,13 @@ def render_json_decl(spec: StructSpec, f: TextIO) -> None:
         with semicolon(f):
             f.write('struct adl_serializer')
             with angles(f):
-                render_namespaced_typename(spec, f)
+                render_typename(spec=spec, qualified=True, f=f)
             with braces(f):
                 f.write('static ')
-                render_namespaced_typename(spec, f)
+                render_typename(spec=spec, qualified=True, f=f)
                 f.write(' from_json(json const &);\n')
                 f.write('static void to_json(json &, ')
-                render_namespaced_typename(spec, f)
+                render_typename(spec=spec, qualified=True, f=f)
                 f.write(' const &);\n')
 
 def render_json_checks(spec: StructSpec, f: TextIO) -> None:
@@ -236,14 +246,15 @@ def render_json_impl(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block('nlohmann', f):
         if len(spec.template_params) > 0:
             render_template_abs(spec.template_params, f)
-        render_namespaced_typename(spec, f)
+        render_typename(spec=spec, qualified=True, f=f)
         f.write(' adl_serializer')
         with angles(f):
-            render_namespaced_typename(spec, f)
+            render_typename(spec=spec, qualified=True, f=f)
         f.write('::from_json(json const &j) ')
         with braces(f):
             with semicolon(f):
                 f.write('return ')
+                render_typename(spec=spec, qualified=True, f=f)
                 with braces(f):
                     for field in commad(spec.fields, f):
                         f.write(f'j.at("{field.json_key}").template get<{field.type_}>()')
@@ -251,9 +262,9 @@ def render_json_impl(spec: StructSpec, f: TextIO) -> None:
             render_template_abs(spec.template_params, f)
         f.write('void adl_serializer')
         with angles(f):
-            render_namespaced_typename(spec, f)
+            render_typename(spec=spec, qualified=True, f=f)
         f.write('::to_json(json &j, ')
-        render_namespaced_typename(spec, f)
+        render_typename(spec=spec, qualified=True, f=f)
         f.write(' const &v) ')
         with braces(f):
             f.write(f'j["__type"] = "{spec.name}";\n')
@@ -267,7 +278,7 @@ def render_fmt_decl(spec: StructSpec, f: TextIO) -> None:
         with semicolon(f):
             f.write('std::string format_as')
             with parens(f):
-                render_typename(spec, f)
+                render_typename(spec=spec, qualified=False, f=f)
                 f.write(' const &')
 
         if len(spec.template_params) > 0:
@@ -276,7 +287,7 @@ def render_fmt_decl(spec: StructSpec, f: TextIO) -> None:
             f.write('std::ostream &operator<<')
             with parens(f):
                 f.write('std::ostream &, ')
-                render_typename(spec, f)
+                render_typename(spec=spec, qualified=False, f=f)
                 f.write(' const &')
 
 
@@ -286,7 +297,7 @@ def render_fmt_impl(spec: StructSpec, f: TextIO) -> None:
             render_template_abs(spec.template_params, f)
         f.write('std::string format_as')
         with parens(f):
-            render_typename(spec, f)
+            render_typename(spec=spec, qualified=False, f=f)
             f.write(' const &x')
         with braces(f):
             f.write('std::ostringstream oss;\n')
@@ -299,7 +310,7 @@ def render_fmt_impl(spec: StructSpec, f: TextIO) -> None:
         if len(spec.template_params) > 0:
             render_template_abs(spec.template_params, f)
         f.write('std::ostream &operator<<(std::ostream &s, ')
-        render_typename(spec, f)
+        render_typename(spec=spec, qualified=False, f=f)
         f.write(' const &x')
         f.write(') ')
         with braces(f):
@@ -311,11 +322,11 @@ def render_rapidcheck_decl(spec: StructSpec, f: TextIO) -> None:
         with semicolon(f):
             f.write('struct Arbitrary')
             with angles(f):
-                render_namespaced_typename(spec, f)
+                render_typename(spec=spec, qualified=True, f=f)
             with braces(f):
                 f.write('static Gen')
                 with angles(f):
-                    render_namespaced_typename(spec, f)
+                    render_typename(spec=spec, qualified=True, f=f)
                 f.write(' arbitrary();\n')
 
 def render_rapidcheck_impl(spec: StructSpec, f: TextIO) -> None:
@@ -324,16 +335,16 @@ def render_rapidcheck_impl(spec: StructSpec, f: TextIO) -> None:
             render_template_abs(spec.template_params, f)
         f.write('Gen')
         with angles(f):
-            render_namespaced_typename(spec, f)
+            render_typename(spec=spec, qualified=True, f=f)
         f.write(' Arbitrary')
         with angles(f):
-            render_namespaced_typename(spec, f)
+            render_typename(spec=spec, qualified=True, f=f)
         f.write('::arbitrary() ')
         with braces(f):
             with semicolon(f):
                 f.write('return gen::construct')
                 with angles(f):
-                    render_namespaced_typename(spec, f)
+                    render_typename(spec=spec, qualified=True, f=f)
                 with parens(f):
                     for field in commad(spec.fields, f):
                         f.write(f'gen::arbitrary<{field.type_}>()')
@@ -344,16 +355,16 @@ def render_rapidcheck_impl(spec: StructSpec, f: TextIO) -> None:
 #             render_template_abs(spec.template_params, f)
 #         f.write('Gen')
 #         with angles(f):
-#             render_namespaced_typename(spec, f)
+#             render_typename(spec=spec, qualified=True, f=f)
 #         f.write(' Arbitrary')
 #         with angles(f):
-#             render_namespaced_typename(spec, f)
+#             render_typename(spec=spec, qualified=True, f=f)
 #         f.write('::arbitrary() ')
 #         with braces(f):
 #             with semicolon(f):
 #                 f.write('return gen::construct')
 #                 with angles(f):
-#                     render_namespaced_typename(spec, f)
+#                     render_typename(spec=spec, qualified=True, f=f)
 #                 with parens(f):
 #                     for field in commad(spec.fields, f):
 #                         f.write(f'gen::arbitrary<{field.type_}>()')

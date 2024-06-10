@@ -158,15 +158,17 @@ def main_build(args: MainBuildArgs) -> None:
 @dataclass(frozen=True)
 class MainTestArgs:
     path: Path
+    coverage: bool
     verbosity: int
     jobs: int
+    dtgen_force: bool
 
 def main_test(args: MainTestArgs) -> None:
     main_dtgen(args=MainDtgenArgs(
         path=args.path,
         files=[],
         delete_outdated=True,
-        force=False,
+        force=args.dtgen_force,
     ))
 
     config = get_config(args.path)
@@ -365,6 +367,7 @@ def main() -> None:
     # test_p.add_argument("--verbose", "-v", action="store_true")
     test_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     test_p.add_argument("--coverage", "-c", action="store_true")   
+    test_p.add_argument("--dtgen-force", action="store_true")   
     add_verbosity_args(test_p)
 
     test_p.add_argument(

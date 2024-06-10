@@ -35,8 +35,11 @@ def _test_project(name: str):
 
     test_args = MainTestArgs(
         path=testdir,
+        coverage=False,
         verbosity=logging.WARNING,
         jobs=1,
+        dtgen_force=True, # otherwise dtgen files won't get regenerated on changes to 
+                          # the proj implementation code being tested
     )
     main_test(args=test_args)
 
