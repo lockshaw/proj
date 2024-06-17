@@ -124,12 +124,11 @@ def needs_generate_to_path(spec_path: Path, root: Path, out: Path) -> bool:
     if not out.is_file():
         return True
 
-    current_hash = get_existing_hash(p=out)
-    new_hash = get_file_hash(spec_path)
-    assert new_hash is not None
+    spec_mtime = spec_path.stat().st_mtime
+    out_mtime = out.stat().st_mtime
 
-    _l.debug(f'Hash diff: {new_hash!r} vs {current_hash!r}')
-    return new_hash != current_hash
+    _l.debug(f'Spec modified time: {spec_mtime!r} vs Out modified time {out_mtime!r}')
+    return spec_mtime > out_mtime
 
 def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path, force: bool) -> bool:
     if not (force or needs_generate_to_path(spec_path=spec_path, root=root, out=out)):

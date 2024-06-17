@@ -76,7 +76,7 @@ def cmake(cmake_args, config, is_coverage):
 @dataclass(frozen=True)
 class MainCmakeArgs:
     path: Path
-    force: bool
+    fast: bool
     trace: bool
 
 def main_cmake(args: MainCmakeArgs) -> None:
@@ -88,7 +88,7 @@ def main_cmake(args: MainCmakeArgs) -> None:
     ))
 
     config = get_config(args.path)
-    if args.force:
+    if not args.fast:
         if config.build_dir.exists():
             shutil.rmtree(config.build_dir)
         if config.cov_dir.exists():
@@ -384,7 +384,7 @@ def main() -> None:
     cmake_p = subparsers.add_parser("cmake")
     cmake_p.set_defaults(func=main_cmake)
     cmake_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
-    cmake_p.add_argument("--force", "-f", action="store_true")
+    cmake_p.add_argument("--fast", action="store_true")
     cmake_p.add_argument("--trace", action="store_true")
     add_verbosity_args(cmake_p)
 
