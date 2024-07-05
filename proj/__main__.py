@@ -78,14 +78,16 @@ class MainCmakeArgs:
     path: Path
     fast: bool
     trace: bool
+    dtgen_skip: bool
 
 def main_cmake(args: MainCmakeArgs) -> None:
-    main_dtgen(args=MainDtgenArgs(
-        path=args.path,
-        files=[],
-        delete_outdated=True,
-        force=False,
-    ))
+    if not args.dtgen_skip:
+        main_dtgen(args=MainDtgenArgs(
+            path=args.path,
+            files=[],
+            delete_outdated=True,
+            force=False,
+        ))
 
     config = get_config(args.path)
     if not args.fast:
@@ -128,14 +130,16 @@ class MainBuildArgs:
     path: Path
     verbosity: int
     jobs: int
+    dtgen_skip: bool
 
 def main_build(args: MainBuildArgs) -> None:
-    main_dtgen(args=MainDtgenArgs(
-        path=args.path,
-        files=[],
-        delete_outdated=True,
-        force=False,
-    ))
+    if not args.dtgen_skip:
+        main_dtgen(args=MainDtgenArgs(
+            path=args.path,
+            files=[],
+            delete_outdated=True,
+            force=False,
+        ))
 
     config = get_config(args.path)
     subprocess_check_call(
@@ -162,14 +166,17 @@ class MainTestArgs:
     verbosity: int
     jobs: int
     dtgen_force: bool
+    dtgen_skip: bool
+    browser: bool
 
 def main_test(args: MainTestArgs) -> None:
-    main_dtgen(args=MainDtgenArgs(
-        path=args.path,
-        files=[],
-        delete_outdated=True,
-        force=args.dtgen_force,
-    ))
+    if not args.dtgen_skip:
+        main_dtgen(args=MainDtgenArgs(
+            path=args.path,
+            files=[],
+            delete_outdated=True,
+            force=args.dtgen_force,
+        ))
 
     config = get_config(args.path)
     if args.coverage:
@@ -368,6 +375,7 @@ def main() -> None:
     test_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     test_p.add_argument("--coverage", "-c", action="store_true")   
     test_p.add_argument("--dtgen-force", action="store_true")   
+    test_p.add_argument("--dtgen-skip", action="store_true")
     add_verbosity_args(test_p)
 
     test_p.add_argument(
@@ -379,6 +387,7 @@ def main() -> None:
     build_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     # build_p.add_argument("--verbose", "-v", action="store_true")
     build_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
+    build_p.add_argument("--dtgen-skip", action="store_true")
     add_verbosity_args(build_p)
 
     cmake_p = subparsers.add_parser("cmake")
@@ -386,6 +395,7 @@ def main() -> None:
     cmake_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     cmake_p.add_argument("--fast", action="store_true")
     cmake_p.add_argument("--trace", action="store_true")
+    cmake_p.add_argument("--dtgen-skip", action="store_true")
     add_verbosity_args(cmake_p)
 
     dtgen_p = subparsers.add_parser('dtgen')

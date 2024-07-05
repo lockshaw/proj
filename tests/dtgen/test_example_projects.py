@@ -28,8 +28,9 @@ def _test_project(name: str):
 
     cmake_args = MainCmakeArgs(
         path=testdir,
-        force=True,
+        fast=False,
         trace=False,
+        dtgen_skip=False,
     )
     main_cmake(args=cmake_args)
 
@@ -40,6 +41,8 @@ def _test_project(name: str):
         jobs=1,
         dtgen_force=True, # otherwise dtgen files won't get regenerated on changes to 
                           # the proj implementation code being tested
+        dtgen_skip=False,
+        browser=False,
     )
     main_test(args=test_args)
 
@@ -115,8 +118,9 @@ def test_lint() -> None:
 
     cmake_args = MainCmakeArgs(
         path=testdir,
-        force=True,
+        fast=False,
         trace=False,
+        dtgen_skip=False,
     )
     main_cmake(args=cmake_args)
 
