@@ -50,6 +50,7 @@ class FieldSpec:
 @dataclass(frozen=True)
 class StructSpec:
     includes: Sequence[IncludeSpec]
+    src_includes: Sequence[IncludeSpec]
     namespace: Optional[str]
     template_params: Sequence[str]
     name: str
@@ -59,6 +60,7 @@ class StructSpec:
     def json(self) -> Json:
         return {
             'includes': [inc.json() for inc in self.includes],
+            'src_includes': [inc.json() for inc in self.src_includes],
             'namespace': self.namespace,
             'template_params': list(self.template_params),
             'name': self.name,
@@ -96,6 +98,7 @@ def parse_struct_spec(raw: Mapping[str, Any]) -> StructSpec:
     return StructSpec(
         namespace=raw.get('namespace', None),
         includes=[parse_include_spec(include) for include in raw.get('includes', [])],
+        src_includes=[parse_include_spec(src_include) for src_include in raw.get('src_includes', [])],
         template_params=raw.get('template_params', ()),
         name=raw['name'],
         fields=[parse_field_spec(field) for field in raw['fields']],

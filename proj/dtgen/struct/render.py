@@ -24,6 +24,7 @@ from proj.dtgen.render_utils import (
 )
 import proj.dtgen.render_utils as render_utils
 import io
+import itertools
 
 def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
@@ -51,22 +52,24 @@ def impl_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     else:
         return []
 
-def _infer_includes(
-    spec: StructSpec, 
-    includes_for_feature: Callable[[Feature], Sequence[IncludeSpec]]
-) -> Sequence[IncludeSpec]:
-    result = list(spec.includes)
-    for feature in spec.features:
-        for include in includes_for_feature(feature):
-            if include not in result:
-                result.append(include)
-    return result
+def header_includes_for_features(spec: StructSpec) -> Sequence[IncludeSpec]:
+    return list(set(itertools.chain.from_iterable(header_includes_for_feature(feature) for feature in spec.features)))
 
 def infer_header_includes(spec: StructSpec) -> Sequence[IncludeSpec]:
-    return _infer_includes(spec, header_includes_for_feature)
+    return list(set([
+        *spec.includes, 
+        *header_includes_for_features(spec=spec),
+    ]))
+
+def impl_includes_for_features(spec: StructSpec) -> Sequence[IncludeSpec]:
+    return list(set(itertools.chain.from_iterable(impl_includes_for_feature(feature) for feature in spec.features)))
+
 
 def infer_impl_includes(spec: StructSpec) -> Sequence[IncludeSpec]:
-    return _infer_includes(spec, impl_includes_for_feature)
+    return list(set([
+        *spec.src_includes, 
+        *impl_includes_for_features(spec=spec),
+    ]))
 
 def render_delete_default_constructor(spec: StructSpec, f: TextIO) -> None:
     f.write(f'{spec.name}() = delete;\n')
