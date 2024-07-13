@@ -73,8 +73,14 @@ def infer_header_includes(spec: VariantSpec) -> Sequence[IncludeSpec]:
         *header_includes_for_features(spec=spec),
     ]))
 
-def infer_source_includes(spec: VariantSpec) -> Sequence[IncludeSpec]:
+def source_includes_for_features(spec: VariantSpec) -> Sequence[IncludeSpec]:
     return list(set(itertools.chain.from_iterable(source_includes_for_feature(feature) for feature in spec.features)))
+
+def infer_source_includes(spec: VariantSpec) -> Sequence[IncludeSpec]:
+    return list(set([
+        *spec.src_includes, 
+        *source_includes_for_features(spec=spec),
+    ]))
 
 def render_visit_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
     with render_function_definition(

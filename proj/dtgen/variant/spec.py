@@ -65,6 +65,7 @@ class ValueSpec:
 @dataclass(frozen=True)
 class VariantSpec:
     includes: Sequence[IncludeSpec]
+    src_includes: Sequence[IncludeSpec]
     namespace: Optional[str]
     name: str
     values: Sequence[ValueSpec]
@@ -74,6 +75,7 @@ class VariantSpec:
     def json(self) -> Json:
         return {
             'includes': [include.json() for include in self.includes],
+            'src_includes': [include.json() for include in self.src_includes],
             'namespace': self.namespace,
             'name': self.name,
             'values': [value.json() for value in self.values],
@@ -109,6 +111,7 @@ def parse_variant_spec(raw: Mapping[str, Any]) -> VariantSpec:
     return VariantSpec(
         namespace=raw.get('namespace', None),
         includes=[parse_include_spec(include) for include in raw.get('includes', [])],
+        src_includes=[parse_include_spec(include) for include in raw.get('src_includes', [])],
         explicit_constructors=raw.get('explicit_constructors', True),
         name=raw['name'],
         values=[parse_value_spec(value) for value in raw['values']],
