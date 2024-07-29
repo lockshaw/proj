@@ -85,7 +85,7 @@ def main_cmake(args: MainCmakeArgs) -> None:
         main_dtgen(args=MainDtgenArgs(
             path=args.path,
             files=[],
-            delete_outdated=True,
+            no_delete_outdated=False,
             force=False,
         ))
 
@@ -137,7 +137,7 @@ def main_build(args: MainBuildArgs) -> None:
         main_dtgen(args=MainDtgenArgs(
             path=args.path,
             files=[],
-            delete_outdated=True,
+            no_delete_outdated=False,
             force=False,
         ))
 
@@ -174,7 +174,7 @@ def main_test(args: MainTestArgs) -> None:
         main_dtgen(args=MainDtgenArgs(
             path=args.path,
             files=[],
-            delete_outdated=True,
+            no_delete_outdated=False,
             force=args.dtgen_force,
         ))
 
@@ -330,7 +330,7 @@ def main_format(args: Any) -> None:
 class MainDtgenArgs:
     path: Path
     files: Sequence[Path]
-    delete_outdated: bool
+    no_delete_outdated: bool
     force: bool
 
 def main_dtgen(args: MainDtgenArgs) -> None:
@@ -348,13 +348,12 @@ def main_dtgen(args: MainDtgenArgs) -> None:
         files=files,
         force=args.force,
     )
-    if args.delete_outdated:
-        for outdated in find_outdated(root, config):
+    for outdated in find_outdated(root, config):
+        if args.no_delete_outdated:
+            _l.warning(f'Possible out-of-date file at {outdated}')
+        else:
             _l.info(f'Removing out-of-date file at {outdated}')
             outdated.unlink()
-    else:
-        for outdated in find_outdated(root, config):
-            _l.warning(f'Possible out-of-date file at {outdated}')
 
 
 def main() -> None:
@@ -402,7 +401,7 @@ def main() -> None:
     dtgen_p.set_defaults(func=main_dtgen)
     dtgen_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     dtgen_p.add_argument('--force', action='store_true', help='Disable incremental toml->c++ generation')
-    dtgen_p.add_argument('--delete-outdated', action='store_true')
+    dtgen_p.add_argument('--no-delete-outdated', action='store_true')
     dtgen_p.add_argument('files', nargs='*', type=Path)
     add_verbosity_args(dtgen_p)
 
