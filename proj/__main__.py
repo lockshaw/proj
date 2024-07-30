@@ -199,7 +199,7 @@ def main_test(args: MainTestArgs) -> None:
         stderr=sys.stdout,
         cwd=cwd,
     )
-    target_regex = "^" + "|".join(config.test_targets) + "$"
+    target_regex = "^(" + "|".join(config.test_targets) + ")$"
     subprocess_run(
         [
             "ctest",
