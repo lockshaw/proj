@@ -36,6 +36,10 @@ class ProjectConfig:
         return self.base / 'build/codecov'
 
     @property
+    def doxygen_dir(self) -> Path:
+        return self.base / 'build/doxygen'
+
+    @property
     def build_targets(self) -> Tuple[str, ...]:
         if self._build_targets is None:
             return tuple([self.project_name])

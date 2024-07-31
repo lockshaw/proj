@@ -44,5 +44,9 @@ def calculate_log_level(args: Any) -> int:
         print(f'Verbosity set to ({max_verbosity - verbosity}/{max_verbosity})', file=sys.stderr)
 
     setattr(args, 'verbosity', level.value)
+    delattr(args, 'verbose')
+    delattr(args, 'quiet')
+    delattr(args, 'silent')
+    delattr(args, 'supports_verbosity')
 
     return level.value

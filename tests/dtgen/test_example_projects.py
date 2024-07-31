@@ -31,6 +31,7 @@ def _test_project(name: str):
         fast=False,
         trace=False,
         dtgen_skip=False,
+        verbosity=logging.WARNING,
     )
     main_cmake(args=cmake_args)
 
