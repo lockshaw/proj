@@ -404,6 +404,7 @@ def main_doxygen(args: MainDoxygenArgs) -> None:
         stderr = subprocess.DEVNULL
         stdout = subprocess.DEVNULL
 
+    config.doxygen_dir.mkdir(exist_ok=True, parents=True)
     subprocess_check_call(
         ['doxygen', 'docs/doxygen/Doxyfile'],
         env=env,
