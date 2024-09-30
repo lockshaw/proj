@@ -20,18 +20,24 @@ from .config_file import ProjectConfig
 _l = logging.getLogger(__name__)
 
 def find_files(root: Path, config: ProjectConfig) -> Iterator[Path]:
-    patterns = [f'*{config.header_extension}', '*.cc', '*.cpp', '*.cu', '*.c', '*.decl']
+    #patterns = [f'*{config.header_extension}', '*.cc', '*.cpp', '*.cu', '*.c', '*.decl']
+    patterns = ['*.cc', '*.cpp', '*.cu', '*.c']
     blacklist = [
-        root / 'triton',
-        root / 'deps',
-        root / 'build',
+        root / 'lib' / 'runtime',
+        root / 'lib' / 'kernels',
+    ]
+    whitelist = [
+        root / 'lib',
     ]
     
     def is_blacklisted(p: Path) -> bool:
-        for blacklisted in blacklist:
-            if p.is_relative_to(blacklisted):
-                return True
+        if not any(p.is_relative_to(whitelisted) for whitelisted in whitelist):
+            return True
+        if any(p.is_relative_to(blacklisted) for blacklisted in blacklist):
+            return True
         if any(parent.name == 'test' for parent in p.parents if parent.is_relative_to(root)):
+            return True
+        if '.dtg' in p.suffixes:
             return True
         return False
 

@@ -97,8 +97,8 @@ def parse_field_spec(raw: Mapping[str, Any]) -> FieldSpec:
 def parse_struct_spec(raw: Mapping[str, Any]) -> StructSpec:
     return StructSpec(
         namespace=raw.get('namespace', None),
-        includes=[parse_include_spec(include) for include in raw.get('includes', [])],
-        src_includes=[parse_include_spec(src_include) for src_include in raw.get('src_includes', [])],
+        includes=[parse_include_spec(include) for include in raw.get('includes', ())],
+        src_includes=[parse_include_spec(src_include) for src_include in raw.get('src_includes', ())],
         template_params=raw.get('template_params', ()),
         name=raw['name'],
         fields=[parse_field_spec(field) for field in raw['fields']],

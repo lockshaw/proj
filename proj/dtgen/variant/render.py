@@ -27,6 +27,7 @@ from proj.dtgen.render_utils import (
     parens,
     commad,
 )
+import proj.dtgen.render_utils as render_utils
 import io
 import itertools
 
@@ -35,14 +36,14 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return [IncludeSpec(path='functional', system=True)]
     elif feature == Feature.JSON:
         return [
-            IncludeSpec(path='nlohmann/json.hpp', system=False),
+            IncludeSpec(path='nlohmann/json.hpp', system=True),
         ]
     elif feature == Feature.RAPIDCHECK:
-        return [IncludeSpec(path='rapidcheck.h', system=False)]
+        return [IncludeSpec(path='rapidcheck.h', system=True)]
     elif feature == Feature.FMT:
         return [
             IncludeSpec(path='ostream', system=True),
-            IncludeSpec(path='fmt/format.h', system=False),
+            IncludeSpec(path='fmt/format.h', system=True),
         ]
     else:
         return []
@@ -148,10 +149,13 @@ def render_binop_decl(spec: VariantSpec, op: str, f: TextIO) -> None:
     f.write(f'bool operator{op}({spec.name} const &) const;')
 
 def render_binop_impl(spec: VariantSpec, op: str, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
     with render_function_definition(
+        template_params=spec.template_params,
         return_type='bool',
-        name=f'{spec.name}::operator{op}',
-        args=[f'{spec.name} const &other'],
+        name=f'{typename}::operator{op}',
+        args=[f'{typename} const &other'],
         is_const=True,
         f=f,
     ):
@@ -160,7 +164,10 @@ def render_binop_impl(spec: VariantSpec, op: str, f: TextIO) -> None:
 def render_typename(*, spec: VariantSpec, qualified: bool, f: TextIO) -> None:
     if qualified:
         f.write(f'::{spec.namespace}::')
-    f.write(spec.name)
+    if len(spec.template_params) > 0:
+        render_utils.render_template_app(spec.name, params=spec.template_params, f=f)
+    else:
+        f.write(spec.name)
 
 def get_typename(*, spec: VariantSpec, qualified: bool) -> str:
     f = io.StringIO() 
@@ -173,7 +180,7 @@ def render_hash_decl(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block('std', f):
         with render_struct_block(
             name=f'hash<{typename}>',
-            template_params=[],
+            template_params=spec.template_params,
             specialization=True,
             f=f,
         ):
@@ -190,6 +197,7 @@ def render_hash_impl(spec: VariantSpec, f: TextIO) -> None:
 
     with render_namespace_block('std', f):
         with render_function_definition(
+            template_params=spec.template_params,
             name=f'hash<{typename}>::operator()',
             return_type='size_t',
             args=[f'{typename} const &x'],
@@ -211,7 +219,7 @@ def render_json_decl(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block('nlohmann', f):
         with render_struct_block(
             name=f'adl_serializer<{typename}>',
-            template_params=[],
+            template_params=spec.template_params,
             specialization=True,
             f=f,
         ):
@@ -235,6 +243,7 @@ def render_json_impl(spec: VariantSpec, f: TextIO) -> None:
 
     with render_namespace_block('nlohmann', f):
         with render_function_definition(
+            template_params=spec.template_params,
             return_type=typename,
             name=f'adl_serializer<{typename}>::from_json',
             args=['json const &j'],
@@ -257,6 +266,7 @@ def render_json_impl(spec: VariantSpec, f: TextIO) -> None:
                     f.write('throw std::runtime_error(fmt::format("Unknown type key {}", key))')
 
         with render_function_definition(
+            template_params=spec.template_params,
             return_type='void',
             name=f'adl_serializer<{typename}>::to_json',
             args=['json &j', f'{typename} const &x'],
@@ -271,7 +281,7 @@ def render_json_impl(spec: VariantSpec, f: TextIO) -> None:
                         with sline(f):
                             f.write(f'j["type"] = "{value.json_key}"')
                         with sline(f):
-                            f.write(f'j["value"] = x.get<{value.type_}>()')
+                            f.write(f'j["value"] = x.template get<{value.type_}>()')
                         with sline(f):
                             f.write('break')
                 f.write('default:')
@@ -284,12 +294,14 @@ def render_fmt_decl(spec: VariantSpec, f: TextIO) -> None:
 
     with render_namespace_block(spec.namespace, f):
         render_function_declaration(
+            template_params=spec.template_params,
             return_type='std::string',
             name='format_as',
             args=[f'{typename} const &'],
             f=f,
         )
         render_function_declaration(
+            template_params=spec.template_params,
             return_type='std::ostream &',
             name='operator<<',
             args=['std::ostream &', f'{typename} const &'],
@@ -301,6 +313,7 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
 
     with render_namespace_block(spec.namespace, f):
         with render_function_definition(
+            template_params=spec.template_params,
             return_type='std::string',
             name='format_as',
             args=[f'{typename} const &x'],
@@ -312,7 +325,7 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
                 for idx, value in enumerate(spec.values):
                     with render_case(cond=str(idx), f=f):
                         with sline(f):
-                            f.write(f'oss << "<{spec.name} {value.key}=" << x.get<{value.type_}>() << ">"')
+                            f.write(f'oss << "<{spec.name} {value.key}=" << x.template get<{value.type_}>() << ">"')
                 with render_default_case(f=f):
                     with sline(f):
                         f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))')
@@ -320,6 +333,7 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
                 f.write("return oss.str()")
 
         with render_function_definition(
+            template_params=spec.template_params,
             return_type='std::ostream &',
             name='operator<<',
             args=['std::ostream &s', f'{typename} const &x'],
@@ -334,7 +348,7 @@ def render_rapidcheck_decl(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block('rc', f):
         with render_struct_block(
             name=f'Arbitrary<{typename}>',
-            template_params=[],
+            template_params=spec.template_params,
             specialization=True,
             f=f,
         ):
@@ -351,6 +365,7 @@ def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
 
     with render_namespace_block('rc', f):
         with render_function_definition(
+                template_params=spec.template_params,
                 return_type=f'Gen<{typename}>',
                 name=f'Arbitrary<{typename}>::arbitrary',
                 args=[],
@@ -379,7 +394,7 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
         with render_struct_block(
             name=spec.name, 
-            template_params=[],
+            template_params=spec.template_params,
             f=f
         ):
             f.write(f'{spec.name}() = delete;\n')
@@ -426,7 +441,9 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
 def render_impls(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
         for value in lined(spec.values, f=f):
-            f.write(f'{spec.name}::{spec.name}({value.type_} const &v)')
+            if len(spec.template_params) > 0:
+                render_template_abs(params=spec.template_params, f=f)
+            f.write(f'{get_typename(spec=spec, qualified=False)}::{spec.name}({value.type_} const &v)')
             f.write(' : raw_variant(v) { }')
 
         if Feature.EQ in spec.features:
@@ -451,14 +468,22 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
 
 def render_header(spec: VariantSpec, f: TextIO) -> None:
     render_includes(infer_header_includes(spec), f)
+    if len(spec.template_params) > 0:
+        render_includes(infer_source_includes(spec), f)
 
     f.write('\n')
 
     render_decls(spec, f)
 
+    if len(spec.template_params) > 0:
+        f.write('\n')
+        render_impls(spec, f)
+
+
 def render_source(spec: VariantSpec, f: TextIO) -> None:
-    render_includes(infer_source_includes(spec), f)
+    if len(spec.template_params) == 0:
+        render_includes(infer_source_includes(spec), f)
 
-    f.write('\n')
+        f.write('\n')
 
-    render_impls(spec, f)
+        render_impls(spec, f)

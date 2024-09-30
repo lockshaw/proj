@@ -22,14 +22,14 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
         return [IncludeSpec(path='functional', system=True)]
     elif feature == Feature.JSON:
-        return [IncludeSpec(path='nlohmann/json.hpp', system=False)]
+        return [IncludeSpec(path='nlohmann/json.hpp', system=True)]
     elif feature == Feature.RAPIDCHECK:
-        return [IncludeSpec(path='rapidcheck.h', system=False)]
+        return [IncludeSpec(path='rapidcheck.h', system=True)]
     elif feature == Feature.FMT:
         return [
             IncludeSpec(path='string', system=True),
             IncludeSpec(path='ostream', system=True),
-            IncludeSpec(path='fmt/format.h', system=False),
+            IncludeSpec(path='fmt/format.h', system=True),
         ]
     else:
         return []

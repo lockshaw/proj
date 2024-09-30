@@ -67,6 +67,7 @@ class VariantSpec:
     includes: Sequence[IncludeSpec]
     src_includes: Sequence[IncludeSpec]
     namespace: Optional[str]
+    template_params: Sequence[str]
     name: str
     values: Sequence[ValueSpec]
     features: FrozenSet[Feature]
@@ -77,6 +78,7 @@ class VariantSpec:
             'includes': [include.json() for include in self.includes],
             'src_includes': [include.json() for include in self.src_includes],
             'namespace': self.namespace,
+            'template_params': list(self.template_params),
             'name': self.name,
             'values': [value.json() for value in self.values],
             'features': [feature.json() for feature in self.features],
@@ -110,9 +112,10 @@ def parse_value_spec(raw: Mapping[str, Any]) -> ValueSpec:
 def parse_variant_spec(raw: Mapping[str, Any]) -> VariantSpec:
     return VariantSpec(
         namespace=raw.get('namespace', None),
-        includes=[parse_include_spec(include) for include in raw.get('includes', [])],
-        src_includes=[parse_include_spec(include) for include in raw.get('src_includes', [])],
+        includes=[parse_include_spec(include) for include in raw.get('includes', ())],
+        src_includes=[parse_include_spec(include) for include in raw.get('src_includes', ())],
         explicit_constructors=raw.get('explicit_constructors', True),
+        template_params=raw.get('template_params', ()),
         name=raw['name'],
         values=[parse_value_spec(value) for value in raw['values']],
         features=frozenset([parse_feature(feature) for feature in raw['features']]),

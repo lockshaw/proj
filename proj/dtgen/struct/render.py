@@ -32,13 +32,13 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     elif feature in [Feature.ORD, Feature.EQ]:
         return [IncludeSpec(path='tuple', system=True)]
     elif feature == Feature.JSON:
-        return [IncludeSpec(path='nlohmann/json.hpp', system=False)]
+        return [IncludeSpec(path='nlohmann/json.hpp', system=True)]
     elif feature == Feature.RAPIDCHECK:
-        return [IncludeSpec(path='rapidcheck.h', system=False)]
+        return [IncludeSpec(path='rapidcheck.h', system=True)]
     elif feature == Feature.FMT:
         return [
             IncludeSpec(path='ostream', system=True),
-            IncludeSpec(path='fmt/format.h', system=False),
+            IncludeSpec(path='fmt/format.h', system=True),
         ]
     else:
         return []
