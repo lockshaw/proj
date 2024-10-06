@@ -517,6 +517,8 @@ def render_header(spec: StructSpec, f: TextIO) -> None:
         f.write('\n')
         render_impls(spec, f)
 
+    render_includes(spec.post_includes, f)
+
 def render_source(spec: StructSpec, f: TextIO) -> None:
     if len(spec.template_params) == 0:
         render_includes(infer_impl_includes(spec), f)

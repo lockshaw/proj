@@ -1,0 +1,26 @@
+namespace = "FlexFlow"
+name = "MyIntListCons"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "fmt",
+]
+
+fwd_decls = [
+  "struct MyIntList",
+]
+
+post_includes = [
+  "my_int_list.dtg.hh",
+]
+
+[[fields]]
+name = "head"
+type = "int"
+
+[[fields]]
+name = "tail"
+type = "::FlexFlow::MyIntList"
+indirect = true
