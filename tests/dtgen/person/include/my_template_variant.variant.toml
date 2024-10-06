@@ -1,0 +1,22 @@
+namespace = "FlexFlow"
+name = "MyTemplateVariant"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "rapidcheck",
+  "fmt",
+]
+
+template_params = [
+  'T1', 'T2',
+]
+
+includes = []
+
+[[values]]
+type = 'T1'
+
+[[values]]
+type = 'T2'

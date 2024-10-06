@@ -1,0 +1,11 @@
+namespace = "FlexFlow"
+name = "MyListEmpty"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "fmt",
+]
+
+fields = []

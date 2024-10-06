@@ -1,0 +1,24 @@
+#include "doctest/doctest.h"
+#include "nlohmann/json.hpp"
+#include <type_traits>
+#include "person.hh"
+#include "rapidcheck.h"
+#include "fmt/format.h"
+
+using ::FlexFlow::Student;
+using ::nlohmann::json;
+
+TEST_SUITE(FF_TEST_SUITE) {
+  std::string first_name = "first";
+  std::string last_name = "last";
+  int age = 15;
+  int school_year = 11;
+
+  TEST_CASE("brace construction") {
+    Student s = { first_name, last_name, age, school_year };
+    CHECK(s.first_name == first_name);
+    CHECK(s.last_name == last_name);
+    CHECK(s.age == age);
+    CHECK(s.school_year == school_year);
+  };
+}

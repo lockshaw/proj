@@ -1,0 +1,37 @@
+namespace = "FlexFlow"
+name = "PersonIndirect"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "fmt",
+]
+
+includes = [
+  "<string>",
+  "<optional>",
+]
+
+src_includes = [
+  "fmt/optional.h",
+  "json/optional.h",
+]
+
+[[fields]]
+name = "first_name"
+type = "std::string"
+
+[[fields]]
+name = "last_name"
+type = "std::string"
+
+[[fields]]
+name = "age"
+type = "int"
+json_key = "age_in_years"
+
+[[fields]]
+name = "spouse"
+type = "std::optional<::FlexFlow::PersonIndirect>"
+indirect = true

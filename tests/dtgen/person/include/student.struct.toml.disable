@@ -1,0 +1,19 @@
+namespace = "FlexFlow"
+name = "Student"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "rapidcheck",
+  "fmt",
+]
+# inherits_from = "::FlexFlow::Person"
+
+includes = [
+  "person.hh"
+]
+
+[[fields]]
+name = "school_year"
+type = "int"

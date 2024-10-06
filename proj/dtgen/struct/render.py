@@ -7,6 +7,7 @@ from typing import (
 )
 from .spec import (
     StructSpec,
+    FieldSpec,
     Feature,
 )
 from contextlib import contextmanager
@@ -56,10 +57,13 @@ def header_includes_for_features(spec: StructSpec) -> Sequence[IncludeSpec]:
     return list(set(itertools.chain.from_iterable(header_includes_for_feature(feature) for feature in spec.features)))
 
 def infer_header_includes(spec: StructSpec) -> Sequence[IncludeSpec]:
-    return list(set([
+    includes = set([
         *spec.includes, 
         *header_includes_for_features(spec=spec),
-    ]))
+    ])
+    if any(field.indirect for field in spec.fields):
+        includes.add(IncludeSpec(path='memory', system=True))
+    return list(includes)
 
 def impl_includes_for_features(spec: StructSpec) -> Sequence[IncludeSpec]:
     return list(set(itertools.chain.from_iterable(impl_includes_for_feature(feature) for feature in spec.features)))
@@ -76,7 +80,13 @@ def render_delete_default_constructor(spec: StructSpec, f: TextIO) -> None:
 
 def render_field_decls(spec: StructSpec, f: TextIO) -> None:
     for field in spec.fields:
-        f.write(f'{field.type_} {field.name};\n')
+        if field.indirect:
+            f.write('private:\n')
+            f.write(f'std::shared_ptr<{field.type_}> {field.name}_ptr;\n')
+            f.write('public:\n')
+            f.write(f'{field.type_} const &{get_field_accessor(field)} const;\n')
+        else:
+            f.write(f'{field.type_} {field.name};\n')
 
 @contextmanager
 def render_struct_block(spec: StructSpec, f: TextIO) -> Iterator[None]:
@@ -144,12 +154,25 @@ def render_constructor_impl(spec: StructSpec, f: TextIO) -> None:
         ],
         is_const=False,
         initializer_list=[
-            f'{field.name}({field.name})'
+            f'{field.name}({field.name})' if not field.indirect else f'{field.name}_ptr(std::make_shared<{field.type_}>({field.name}))'
             for field in spec.fields
         ],
         f=f,
     ):
         pass # no function body
+
+def render_field_accessor_impls(spec: StructSpec, f: TextIO) -> None:
+    for field in spec.fields:
+        if field.indirect:
+            with render_utils.render_function_definition(
+                template_params=spec.template_params,
+                return_type=f'{field.type_} const &',
+                name=f'{get_typename(spec=spec, qualified=False)}::get_{field.name}',
+                args=[],
+                is_const=True,
+                f=f,
+            ):
+                f.write(f'return *this->{field.name}_ptr;\n')
 
 def render_binop_decl(spec: StructSpec, op: str, f: TextIO) -> None:
     f.write(f'bool operator{op}({spec.name} const &) const;')
@@ -168,7 +191,7 @@ def render_binop_impl(spec: StructSpec, op: str, f: TextIO) -> None:
         with parens(f):
             for field in commad(spec.fields, f):
                 f.write(prefix)
-                f.write(field.name)
+                f.write(get_field_accessor(field))
 
     with braces(f):
         with nlblock(f):
@@ -193,6 +216,12 @@ def render_hash_decl(spec: StructSpec, f: TextIO) -> None:
                         f.write(' const &')
                     f.write('const')
 
+def get_field_accessor(field: FieldSpec) -> str:
+    if field.indirect:
+        return f'get_{field.name}()'
+    else:
+        return field.name
+
 def render_hash_impl(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block('std', f):
         if len(spec.template_params) > 0:
@@ -209,7 +238,7 @@ def render_hash_impl(spec: StructSpec, f: TextIO) -> None:
         with braces(f):
             f.write('size_t result = 0;\n')
             for field in spec.fields:
-                f.write(f'result ^= std::hash<{field.type_}>{{}}(x.{field.name}) + 0x9e3779b9 + (result << 6) + (result >> 2);')
+                f.write(f'result ^= std::hash<{field.type_}>{{}}(x.{get_field_accessor(field)}) + 0x9e3779b9 + (result << 6) + (result >> 2);')
                 # f.write(f'hash_combine(result, x.{field.name});\n')
             f.write('return result;\n')
 
@@ -272,7 +301,7 @@ def render_json_impl(spec: StructSpec, f: TextIO) -> None:
         with braces(f):
             f.write(f'j["__type"] = "{spec.name}";\n')
             for field in spec.fields:
-                f.write(f'j["{field.json_key}"] = v.{field.name};\n')
+                f.write(f'j["{field.json_key}"] = v.{get_field_accessor(field)};\n')
 
 def render_fmt_decl(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
@@ -306,7 +335,7 @@ def render_fmt_impl(spec: StructSpec, f: TextIO) -> None:
             f.write('std::ostringstream oss;\n')
             f.write(f'oss << "<{spec.name}";\n')
             for field in spec.fields:
-                f.write(f'oss << " {field.name}=" << x.{field.name};\n')
+                f.write(f'oss << " {field.name}=" << x.{get_field_accessor(field)};\n')
             f.write('oss << ">";\n')
             f.write('return oss.str();')
         
@@ -405,6 +434,12 @@ def render_ord_function_impls(spec: StructSpec, f: TextIO) -> None:
     for op in ['<', '>', '<=', '>=']:
         render_binop_impl(spec, op, f)
 
+def render_fwd_decls(spec: StructSpec, f: TextIO) -> None:
+    with render_namespace_block(spec.namespace, f):
+        for fwd_decl in spec.fwd_decls:
+            with render_utils.sline(f):
+                f.write(fwd_decl)
+
 def render_decls(spec: StructSpec, f: TextIO) -> None:
     # render_includes(infer_includes(spec), f)
     with render_namespace_block(spec.namespace, f):
@@ -425,6 +460,8 @@ def render_impls(spec: StructSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
         if len(spec.fields) > 0:
             render_constructor_impl(spec, f)
+        if len(spec.fields) > 0:
+            render_field_accessor_impls(spec, f)
         if Feature.EQ in spec.features:
             render_eq_function_impls(spec, f)
         if Feature.ORD in spec.features:
@@ -446,6 +483,11 @@ def render_header(spec: StructSpec, f: TextIO) -> None:
     render_includes(infer_header_includes(spec), f)
     if len(spec.template_params) > 0:
         render_includes(infer_impl_includes(spec), f)
+
+    f.write('\n')
+    
+    if len(spec.fwd_decls) > 0:
+        render_fwd_decls(spec, f)
 
     f.write('\n')
     
