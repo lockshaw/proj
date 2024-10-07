@@ -29,6 +29,103 @@ TEST_SUITE(FF_TEST_SUITE) {
       MyList<int> l = cons(3, cons(2, cons(1, empty)));
     }
 
+    SUBCASE("has") {
+      SUBCASE("empty list") {
+        MyList<int> l = empty;
+
+        CHECK(l.has<MyListEmpty>());
+        CHECK_FALSE(l.has<MyListCons<int>>());
+      }
+
+      SUBCASE("nonempty list") {
+        MyList<int> l = cons(1, empty);
+
+        CHECK_FALSE(l.has<MyListEmpty>());
+        CHECK(l.has<MyListCons<int>>());
+      }
+    }
+
+    SUBCASE("is methods") {
+      SUBCASE("empty list") {
+        MyList<int> l = empty;
+
+        CHECK(l.is_empty());
+        CHECK_FALSE(l.is_cons());
+      }
+
+      SUBCASE("nonempty list") {
+        MyList<int> l = cons(1, empty);
+
+        CHECK_FALSE(l.is_empty());
+        CHECK(l.is_cons());
+      }
+    }
+
+
+    SUBCASE("get") {
+      SUBCASE("has empty list") {
+        MyList<int> l = empty;
+
+        SUBCASE("get<MyListEmpty>") {
+          MyListEmpty result = l.get<MyListEmpty>();
+          MyListEmpty correct = MyListEmpty{};
+
+          CHECK(result == correct);
+        };
+
+        SUBCASE("get<MyListCons<int>>") {
+          CHECK_THROWS(l.get<MyListCons<int>>());
+        }
+      }
+
+      SUBCASE("has nonempty list") {
+        MyList<int> l = cons(1, empty);
+
+        SUBCASE("get<MyListEmpty>") {
+          CHECK_THROWS(l.get<MyListEmpty>());
+        }
+
+        SUBCASE("get<MyListCons<int>>") {
+          MyListCons<int> result = l.get<MyListCons<int>>();
+          MyListCons<int> correct = MyListCons<int>{1, empty};
+
+          CHECK(result == correct);
+        }
+      }
+    }
+
+    SUBCASE("require methods") {
+      SUBCASE("has empty list") {
+        MyList<int> l = empty;
+
+        SUBCASE("require_empty") {
+          MyListEmpty result = l.require_empty();
+          MyListEmpty correct = MyListEmpty{};
+
+          CHECK(result == correct);
+        };
+
+        SUBCASE("require_cons") {
+          CHECK_THROWS(l.require_cons());
+        }
+      }
+
+      SUBCASE("has nonempty list") {
+        MyList<int> l = cons(1, empty);
+
+        SUBCASE("require_empty") {
+          CHECK_THROWS(l.require_empty());
+        }
+
+        SUBCASE("require_cons") {
+          MyListCons<int> result = l.require_cons();
+          MyListCons<int> correct = MyListCons<int>{1, empty};
+
+          CHECK(result == correct);
+        }
+      }
+    }
+
     SUBCASE("check accesses") {
       MyList<int> l = cons(3, cons(2, cons(1, empty)));
 

@@ -30,6 +30,7 @@ from proj.dtgen.render_utils import (
 import proj.dtgen.render_utils as render_utils
 import io
 import itertools
+import string
 
 def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
@@ -84,11 +85,13 @@ def infer_source_includes(spec: VariantSpec) -> Sequence[IncludeSpec]:
     ]))
 
 def render_visit_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
+    return_type_var = get_fresh_typevar(spec, 'ReturnType')
+    visitor_type_var = get_fresh_typevar(spec, 'Visitor')
     with render_function_definition(
-        template_params=['ReturnType', 'Visitor'],
+        template_params=[return_type_var, visitor_type_var],
         name='visit',
-        return_type='ReturnType',
-        args=['Visitor &&v'],
+        return_type=return_type_var,
+        args=[f'{visitor_type_var} &&v'],
         is_const=is_const,
         f=f,
     ):
@@ -96,23 +99,89 @@ def render_visit_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
             for idx, value in enumerate(spec.values):
                 with render_case(cond=str(idx), include_break=False, f=f):
                     with sline(f):
-                        f.write(f'ReturnType result = v(this->get<{value.type_}>())')
+                        f.write(f'{return_type_var} result = v(this->get<{value.type_}>())')
                     with sline(f):
                         f.write('return result')
             with render_default_case(include_break=False, f=f):
                 with sline(f):
                     f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", this->index()))')
 
+def get_fresh_typevar(spec: VariantSpec, prefix='T'):
+    if prefix not in spec.template_params:
+        return prefix
+    for s in string.digits:
+        typevar = prefix + s
+        if typevar not in spec.template_params:
+            return typevar
+    raise RuntimeError(f'Could not generate fresh typevar for spec {spec}')
+
 def render_is_part_of(spec: VariantSpec, f: TextIO) -> None:
+    typevar = get_fresh_typevar(spec)
     with semicolon(f):
-        render_template_abs(['T'], f=f)
+        render_template_abs([typevar], f=f)
         f.write(f'static constexpr bool IsPartOf{spec.name}_v =')
         for value in sepbyd(spec.values, ' || ', f=f):
-            f.write(f'std::is_same_v<T, {value.type_}>')
+            f.write(f'std::is_same_v<{typevar}, {value.type_}>')
+
+def render_is_method_decls(spec: VariantSpec, f: TextIO) -> None:
+    for value in spec.values:
+        if value.method_key is not None:
+            render_function_declaration(
+                name=f'is_{value.method_key}',
+                return_type='bool',
+                args=[],
+                is_const=True,
+                f=f
+            )
+
+def render_is_method_impls(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
+    for value in spec.values:
+        if value.method_key is not None:
+            with render_function_definition(
+                template_params=spec.template_params,
+                return_type='bool',
+                name=f'{typename}::is_{value.method_key}',
+                args=[],
+                is_const=True,
+                f=f,
+            ):
+                with sline(f=f):
+                    f.write(f'return std::holds_alternative<{value.type_}>(this->raw_variant)')
+
+def render_require_method_decls(spec: VariantSpec, f: TextIO) -> None:
+    for value in spec.values:
+        if value.method_key is not None:
+            render_function_declaration(
+                name=f'require_{value.method_key}',
+                return_type=f'{value.type_} const &',
+                args=[],
+                is_const=True,
+                f=f
+            )
+
+def render_require_method_impls(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
+    for value in spec.values:
+        if value.method_key is not None:
+            with render_function_definition(
+                template_params=spec.template_params,
+                return_type=f'{value.type_} const &',
+                name=f'{typename}::require_{value.method_key}',
+                args=[],
+                is_const=True,
+                f=f,
+            ):
+                with sline(f=f):
+                    f.write(f'return std::get<{value.type_}>(this->raw_variant)')
 
 def render_has_method(spec: VariantSpec, f: TextIO) -> None:
+    typevar = get_fresh_typevar(spec)
+
     with render_function_definition(
-        template_params=['T'],
+        template_params=[typevar],
         name='has',
         return_type='bool',
         args=[],
@@ -121,17 +190,19 @@ def render_has_method(spec: VariantSpec, f: TextIO) -> None:
     ):
         type_list = ', '.join(v.type_ for v in spec.values)
         render_static_assert(
-            cond=f'IsPartOf{spec.name}_v<T>',
-            message=f'{spec.name}::has() expected one of [{type_list}], received T',
+            cond=f'IsPartOf{spec.name}_v<{typevar}>',
+            message=f'{spec.name}::has() expected one of [{type_list}], received {typevar}',
             f=f,
         )
-        f.write('return std::holds_alternative<T>(this->raw_variant);')
+        f.write(f'return std::holds_alternative<{typevar}>(this->raw_variant);')
 
 def render_get_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
+    typevar = get_fresh_typevar(spec)
+
     const_modifier = 'const' if is_const else ''
     with render_function_definition(
-        template_params=['T'],
-        return_type=f'T {const_modifier} &',
+        template_params=[typevar],
+        return_type=f'{typevar} {const_modifier} &',
         name='get',
         args=[],
         is_const=is_const,
@@ -139,11 +210,11 @@ def render_get_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
     ):
         type_list = ', '.join(v.type_ for v in spec.values)
         render_static_assert(
-            cond=f'IsPartOf{spec.name}_v<T>',
-            message=f'{spec.name}::get() expected one of [{type_list}], received T',
+            cond=f'IsPartOf{spec.name}_v<{typevar}>',
+            message=f'{spec.name}::get() expected one of [{type_list}], received {typevar}',
             f=f,
         )
-        f.write('return std::get<T>(this->raw_variant);')
+        f.write(f'return std::get<{typevar}>(this->raw_variant);')
 
 def render_binop_decl(spec: VariantSpec, op: str, f: TextIO) -> None:
     f.write(f'bool operator{op}({spec.name} const &) const;')
@@ -422,6 +493,9 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
                 for op in ORD_OPS:
                     render_binop_decl(spec=spec, op=op, f=f)
 
+            render_require_method_decls(spec=spec, f=f)
+            render_is_method_decls(spec=spec, f=f)
+
             with semicolon(f):
                 render_variant_type(spec=spec, f=f)
                 f.write(' raw_variant')
@@ -453,6 +527,9 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
         if Feature.ORD in spec.features:
             for op in ORD_OPS:
                 render_binop_impl(spec=spec, op=op, f=f)
+
+        render_require_method_impls(spec=spec, f=f)
+        render_is_method_impls(spec=spec, f=f)
 
     if Feature.HASH in spec.features:
         render_hash_impl(spec=spec, f=f)

@@ -25,6 +25,103 @@ TEST_SUITE(FF_TEST_SUITE) {
       return l.get<MyIntListCons>();
     };
 
+    SUBCASE("has") {
+      SUBCASE("empty list") {
+        MyIntList l = empty;
+
+        CHECK(l.has<MyListEmpty>());
+        CHECK_FALSE(l.has<MyIntListCons>());
+      }
+
+      SUBCASE("nonempty list") {
+        MyIntList l = cons(1, empty);
+
+        CHECK_FALSE(l.has<MyListEmpty>());
+        CHECK(l.has<MyIntListCons>());
+      }
+    }
+
+    SUBCASE("is methods") {
+      SUBCASE("empty list") {
+        MyIntList l = empty;
+
+        CHECK(l.is_empty());
+        CHECK_FALSE(l.is_cons());
+      }
+
+      SUBCASE("nonempty list") {
+        MyIntList l = cons(1, empty);
+
+        CHECK_FALSE(l.is_empty());
+        CHECK(l.is_cons());
+      }
+    }
+
+
+    SUBCASE("get") {
+      SUBCASE("has empty list") {
+        MyIntList l = empty;
+
+        SUBCASE("get<MyListEmpty>") {
+          MyListEmpty result = l.get<MyListEmpty>();
+          MyListEmpty correct = MyListEmpty{};
+
+          CHECK(result == correct);
+        };
+
+        SUBCASE("get<MyIntListCons>") {
+          CHECK_THROWS(l.get<MyIntListCons>());
+        }
+      }
+
+      SUBCASE("has nonempty list") {
+        MyIntList l = cons(1, empty);
+
+        SUBCASE("get<MyListEmpty>") {
+          CHECK_THROWS(l.get<MyListEmpty>());
+        }
+
+        SUBCASE("get<MyIntListCons>") {
+          MyIntListCons result = l.get<MyIntListCons>();
+          MyIntListCons correct = MyIntListCons{1, empty};
+
+          CHECK(result == correct);
+        }
+      }
+    }
+
+    SUBCASE("require methods") {
+      SUBCASE("has empty list") {
+        MyIntList l = empty;
+
+        SUBCASE("require_empty") {
+          MyListEmpty result = l.require_empty();
+          MyListEmpty correct = MyListEmpty{};
+
+          CHECK(result == correct);
+        };
+
+        SUBCASE("require_cons") {
+          CHECK_THROWS(l.require_cons());
+        }
+      }
+
+      SUBCASE("has nonempty list") {
+        MyIntList l = cons(1, empty);
+
+        SUBCASE("require_empty") {
+          CHECK_THROWS(l.require_empty());
+        }
+
+        SUBCASE("require_cons") {
+          MyIntListCons result = l.require_cons();
+          MyIntListCons correct = MyIntListCons{1, empty};
+
+          CHECK(result == correct);
+        }
+      }
+    }
+
     SUBCASE("make nonempty list") {
       MyIntList l = cons(3, cons(2, cons(1, empty)));
     }
@@ -42,6 +139,7 @@ TEST_SUITE(FF_TEST_SUITE) {
         CHECK(require_cons(l).get_tail() == correct);
       }
     }
+
 
     auto tail = [&](MyIntList const &l) {
       return require_cons(l).get_tail();

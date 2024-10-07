@@ -49,6 +49,10 @@ class ValueSpec:
             return self._key
 
     @property
+    def method_key(self) -> Optional[str]:
+        return self._key
+
+    @property
     def fmt_key(self) -> str:
         if self._fmt_key is None:
             return self.key
@@ -128,6 +132,9 @@ def load_spec(path: Path) -> VariantSpec:
     except toml.TOMLDecodeError as e:
         raise RuntimeError(f'Failed to load spec {path}') from e
     try:
-        return parse_variant_spec(raw)
+        spec = parse_variant_spec(raw)
+        if any(val.method_key is not None for val in spec.values) and any(val.method_key is None for val in spec.values):
+            raise RuntimeError(f'Failed to load spec {path}. Expected either all values to have a key or no values to have a key, but found otherwise.')
+        return spec
     except KeyError as e:
         raise RuntimeError(f'Failed to parse spec {path}') from e

@@ -8,7 +8,6 @@ from typing import (
     TypeVar,
 )
 from proj.json import Json
-import io
 
 @contextmanager
 def sline(f: TextIO) -> Iterator[None]:
