@@ -26,6 +26,8 @@ from proj.dtgen.render_utils import (
     render_default_case,
     parens,
     commad,
+    ifblock,
+    elseblock,
 )
 import proj.dtgen.render_utils as render_utils
 import io
@@ -50,12 +52,7 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return []
 
 def source_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
-    if feature == Feature.JSON:
-        return [
-            IncludeSpec(path='fmt/format.h', system=False),
-            IncludeSpec(path='stdexcept', system=True),
-        ]
-    elif feature == Feature.FMT:
+    if feature == Feature.FMT:
         return [
             IncludeSpec(path='sstream', system=True),
             # IncludeSpec(path='utils/fmt.h', system=False),
@@ -72,6 +69,9 @@ def infer_header_includes(spec: VariantSpec) -> Sequence[IncludeSpec]:
         IncludeSpec(path='variant', system=True),
         IncludeSpec(path='type_traits', system=True),
         IncludeSpec(path='cstddef', system=True),
+        IncludeSpec(path='stdexcept', system=True),
+        IncludeSpec(path='optional', system=True),
+        IncludeSpec(path='fmt/format.h', system=True),
         *header_includes_for_features(spec=spec),
     ]))
 
@@ -176,6 +176,37 @@ def render_require_method_impls(spec: VariantSpec, f: TextIO) -> None:
             ):
                 with sline(f=f):
                     f.write(f'return std::get<{value.type_}>(this->raw_variant)')
+
+def render_try_require_method_decls(spec: VariantSpec, f: TextIO) -> None:
+    for value in spec.values:
+        if value.method_key is not None:
+            render_function_declaration(
+                name=f'try_require_{value.method_key}',
+                return_type=f'std::optional<{value.type_}>',
+                args=[],
+                is_const=True,
+                f=f
+            )
+
+def render_try_require_method_impls(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
+    for value in spec.values:
+        if value.method_key is not None:
+            with render_function_definition(
+                template_params=spec.template_params,
+                return_type=f'std::optional<{value.type_}>',
+                name=f'{typename}::try_require_{value.method_key}',
+                args=[],
+                is_const=True,
+                f=f,
+            ):
+                with ifblock(f'this->is_{value.method_key}()', f):
+                    with sline(f):
+                        f.write(f'return this->require_{value.method_key}()')
+                with elseblock(f):
+                    with sline(f):
+                        f.write('return std::nullopt')
 
 def render_has_method(spec: VariantSpec, f: TextIO) -> None:
     typevar = get_fresh_typevar(spec)
@@ -494,6 +525,7 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
                     render_binop_decl(spec=spec, op=op, f=f)
 
             render_require_method_decls(spec=spec, f=f)
+            render_try_require_method_decls(spec=spec, f=f)
             render_is_method_decls(spec=spec, f=f)
 
             with semicolon(f):
@@ -529,6 +561,7 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
                 render_binop_impl(spec=spec, op=op, f=f)
 
         render_require_method_impls(spec=spec, f=f)
+        render_try_require_method_impls(spec=spec, f=f)
         render_is_method_impls(spec=spec, f=f)
 
     if Feature.HASH in spec.features:

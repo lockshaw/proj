@@ -1,0 +1,22 @@
+namespace = "FlexFlow"
+name = "VariantHoldingOptional"
+features = [
+  "eq",
+]
+
+includes = [
+  "<optional>",
+  "<string>",
+]
+
+[[values]]
+type = "std::optional<int>"
+key = "num"
+
+[[values]]
+type = "int"
+key = "other"
+
+[[values]]
+type = "std::optional<std::string>"
+key = "str"

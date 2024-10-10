@@ -43,6 +43,18 @@ def angles(f: TextIO) -> Iterator[None]:
     yield
     f.write('>')
 
+@contextmanager
+def ifblock(cond: str, f: TextIO):
+    f.write(f'if ({cond}) ')
+    with braces(f):
+        yield
+
+@contextmanager
+def elseblock(f: TextIO):
+    f.write('else ')
+    with braces(f):
+        yield
+
 @dataclass(frozen=True, order=True)
 class IncludeSpec:
     path: str

@@ -122,6 +122,44 @@ TEST_SUITE(FF_TEST_SUITE) {
       }
     }
 
+    SUBCASE("try_require methods") {
+      SUBCASE("has empty list") {
+        MyIntList l = empty;
+
+        SUBCASE("try_require_empty") {
+          std::optional<MyListEmpty> result = l.try_require_empty();
+          std::optional<MyListEmpty> correct = MyListEmpty{};
+
+          CHECK(result == correct);
+        };
+
+        SUBCASE("try_require_cons") {
+          std::optional<MyIntListCons> result = l.try_require_cons();
+          std::optional<MyIntListCons> correct = std::nullopt;
+
+          CHECK(result == correct);
+        }
+      }
+
+      SUBCASE("has nonempty list") {
+        MyIntList l = cons(1, empty);
+
+        SUBCASE("try_require_empty") {
+          std::optional<MyListEmpty> result = l.try_require_empty();
+          std::optional<MyListEmpty> correct = std::nullopt;
+
+          CHECK(result == correct);
+        }
+
+        SUBCASE("try_require_cons") {
+          std::optional<MyIntListCons> result = l.try_require_cons();
+          std::optional<MyIntListCons> correct = MyIntListCons{1, empty};
+
+          CHECK(result == correct);
+        }
+      }
+    }
+
     SUBCASE("make nonempty list") {
       MyIntList l = cons(3, cons(2, cons(1, empty)));
     }
