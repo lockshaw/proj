@@ -166,7 +166,7 @@ def main_build(args: MainBuildArgs) -> None:
         ],
         env={
             **os.environ,
-            "CCACHE_BASEDIR": str(DIR.parent.parent.parent),
+            "CCACHE_BASEDIR": config.base,
             **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
         },
         stderr=sys.stdout,
@@ -209,7 +209,8 @@ def main_test(args: MainTestArgs) -> None:
         ],
         env={
             **os.environ,
-            "CCACHE_BASEDIR": str(DIR.parent.parent.parent),
+            "CCACHE_BASEDIR": config.base,
+            # "CCACHE_NOHASHDIR": "1",
             **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
         },
         stderr=sys.stdout,
