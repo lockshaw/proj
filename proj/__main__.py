@@ -183,6 +183,7 @@ class MainTestArgs:
     dtgen_force: bool
     dtgen_skip: bool
     browser: bool
+    skip_gpu_tests: bool
 
 def main_test(args: MainTestArgs) -> None:
     if not args.dtgen_skip:
@@ -199,13 +200,18 @@ def main_test(args: MainTestArgs) -> None:
         cwd = config.cov_dir
     else:
         cwd = config.build_dir
-    
+
+    # Currently hardcode GPU tests as 'kernels-tests'
+    gpu_test_targets = ["kernels-tests"]
+    cpu_test_targets = [target for target in config.test_targets if target not in gpu_test_targets]
+
+    # CPU tests
     subprocess_check_call(
         [
             "make",
             "-j",
             str(args.jobs),
-            *config.test_targets,
+            *cpu_test_targets,
         ],
         env={
             **os.environ,
@@ -216,7 +222,8 @@ def main_test(args: MainTestArgs) -> None:
         stderr=sys.stdout,
         cwd=cwd,
     )
-    target_regex = "^(" + "|".join(config.test_targets) + ")$"
+    print("============ Running CPU tests ============")
+    target_regex = "^(" + "|".join(cpu_test_targets) + ")$"
     subprocess_run(
         [
             "ctest",
@@ -230,6 +237,57 @@ def main_test(args: MainTestArgs) -> None:
         env=os.environ,
     )
     
+    # GPU tests
+    if args.skip_gpu_tests:
+        print("============ Skipping GPU tests ============")
+        print(f"skipped targets: {gpu_test_targets}")
+    else:
+        subprocess_check_call(
+            [
+                "make",
+                "-j",
+                str(args.jobs),
+                *gpu_test_targets,
+            ],
+            env={
+                **os.environ,
+                "CCACHE_BASEDIR": config.base,
+                # "CCACHE_NOHASHDIR": "1",
+                **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
+            },
+            stderr=sys.stdout,
+            cwd=cwd,
+        )
+        print("============ Running GPU tests ============")
+        target_files = {target: None for target in gpu_test_targets}
+        for root, dirs, files in os.walk(cwd):
+            for file_name in files:
+                if file_name in gpu_test_targets:
+                    target_files[file_name] = os.path.join(root, file_name)
+        for target, file_path in target_files.items():
+            if file_path:
+                subprocess.run(
+                    [
+                        "nix",
+                        "run",
+                        "--impure",
+                        "github:nix-community/nixGL",
+                        "--",
+                        file_path
+                    ],
+                    stderr=sys.stdout,
+                    cwd=cwd,
+                    env={
+                        **os.environ,
+                        "NIXPKGS_ALLOW_UNFREE": "1",
+                        "CCACHE_BASEDIR": config.base,
+                        **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
+                    },
+                )
+            else:
+                print(f"No matching file found for target '{target}'. Exiting.")
+                exit(1)
+
     if args.coverage:
         subprocess_run(
             [
@@ -446,6 +504,7 @@ def main() -> None:
     test_p.add_argument(
         "--browser", "-b", action="store_true", help="open coverage info in browser"
     )
+    test_p.add_argument("--skip-gpu-tests", action="store_true")
     add_verbosity_args(test_p)
 
     build_p = subparsers.add_parser("build")
