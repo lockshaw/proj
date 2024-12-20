@@ -205,13 +205,25 @@ def main_test(args: MainTestArgs) -> None:
     gpu_test_targets = ["kernels-tests"]
     cpu_test_targets = [target for target in config.test_targets if target not in gpu_test_targets]
 
-    # CPU tests
+    # check if GPU is available
+    gpu_available = False
+    try:
+        result = subprocess.run(['nvidia-smi'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode == 0:
+            gpu_available = True
+    except FileNotFoundError:
+        pass
+    gpu_available = gpu_available and not args.skip_gpu_tests
+    
+    # Build targets
+    build_targets = cpu_test_targets + gpu_test_targets if gpu_available else cpu_test_targets
+    print("============ Building targets ============")
     subprocess_check_call(
         [
             "make",
             "-j",
             str(args.jobs),
-            *cpu_test_targets,
+            *build_targets,
         ],
         env={
             **os.environ,
@@ -222,6 +234,15 @@ def main_test(args: MainTestArgs) -> None:
         stderr=sys.stdout,
         cwd=cwd,
     )
+    
+    if args.skip_gpu_tests:
+        print("\033[33mGPU tests are set to be skipped\033[0m")
+        print(f"skipped targets: {gpu_test_targets}")
+    elif not gpu_available:
+        print("\033[31mError: GPU driver not found or failed to load. Skipping GPU tests.\033[0m")
+        print(f"skipped targets: {gpu_test_targets}")
+
+    # CPU tests
     print("============ Running CPU tests ============")
     target_regex = "^(" + "|".join(cpu_test_targets) + ")$"
     subprocess_run(
@@ -238,55 +259,35 @@ def main_test(args: MainTestArgs) -> None:
     )
     
     # GPU tests
-    if args.skip_gpu_tests:
-        print("============ Skipping GPU tests ============")
-        print(f"skipped targets: {gpu_test_targets}")
-    else:
-        subprocess_check_call(
-            [
-                "make",
-                "-j",
-                str(args.jobs),
-                *gpu_test_targets,
-            ],
-            env={
-                **os.environ,
-                "CCACHE_BASEDIR": config.base,
-                # "CCACHE_NOHASHDIR": "1",
-                **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
-            },
-            stderr=sys.stdout,
-            cwd=cwd,
-        )
-        print("============ Running GPU tests ============")
-        target_files = {target: None for target in gpu_test_targets}
-        for root, dirs, files in os.walk(cwd):
-            for file_name in files:
-                if file_name in gpu_test_targets:
-                    target_files[file_name] = os.path.join(root, file_name)
-        for target, file_path in target_files.items():
-            if file_path:
-                subprocess.run(
-                    [
-                        "nix",
-                        "run",
-                        "--impure",
-                        "github:nix-community/nixGL",
-                        "--",
-                        file_path
-                    ],
-                    stderr=sys.stdout,
-                    cwd=cwd,
-                    env={
-                        **os.environ,
-                        "NIXPKGS_ALLOW_UNFREE": "1",
-                        "CCACHE_BASEDIR": config.base,
-                        **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
-                    },
-                )
-            else:
-                print(f"No matching file found for target '{target}'. Exiting.")
-                exit(1)
+    print("============ Running GPU tests ============")
+    target_files = {target: None for target in gpu_test_targets}
+    for root, dirs, files in os.walk(cwd):
+        for file_name in files:
+            if file_name in gpu_test_targets:
+                target_files[file_name] = os.path.join(root, file_name)
+    for target, file_path in target_files.items():
+        if file_path:
+            subprocess.run(
+                [
+                    "nix",
+                    "run",
+                    "--impure",
+                    "github:nix-community/nixGL",
+                    "--",
+                    file_path
+                ],
+                stderr=sys.stdout,
+                cwd=cwd,
+                env={
+                    **os.environ,
+                    "NIXPKGS_ALLOW_UNFREE": "1",
+                    "CCACHE_BASEDIR": config.base,
+                    **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
+                },
+            )
+        else:
+            print(f"No matching file found for target '{target}'. Exiting.")
+            exit(1)
 
     if args.coverage:
         subprocess_run(
