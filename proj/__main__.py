@@ -47,6 +47,10 @@ def xdg_open(path: Path):
         env=os.environ,
     )
 
+def fail_with_error(err: str, error_code: int = 1) -> None:
+    _l.error(err)
+    sys.exit(1)
+
 def subprocess_check_call(command, **kwargs):
     if kwargs.get("shell", False):
         pretty_cmd = " ".join(command)
@@ -185,6 +189,17 @@ class MainTestArgs:
     browser: bool
     skip_gpu_tests: bool
 
+def check_if_machine_supports_gpu() -> bool:
+    try:
+        result = subprocess_check_call(['nvidia-smi'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except FileNotFoundError:
+        _l.info('Could not find executable nvidia-smi in path')
+        return False
+    except Subprocess.CalledProcessError:
+        _l.info('nvidia-smi returned nonzero error code')
+        return False
+
 def main_test(args: MainTestArgs) -> None:
     if not args.dtgen_skip:
         main_dtgen(args=MainDtgenArgs(
@@ -205,19 +220,20 @@ def main_test(args: MainTestArgs) -> None:
     gpu_test_targets = ["kernels-tests"]
     cpu_test_targets = [target for target in config.test_targets if target not in gpu_test_targets]
 
-    # check if GPU is available
-    gpu_available = False
-    try:
-        result = subprocess.run(['nvidia-smi'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode == 0:
-            gpu_available = True
-    except FileNotFoundError:
-        pass
-    gpu_available = gpu_available and not args.skip_gpu_tests
+    gpu_available = check_if_machine_supports_gpu()
+    if (not gpu_available) and (not args.skip_gpu_tests):
+        fail_with_error(
+            'Cannot run gpu tests as no gpus are available on the current machine. '
+            'Pass --skip-gpu-tests to skip running tests that require a GPU.'
+        )
     
     # Build targets
-    test_targets = cpu_test_targets + gpu_test_targets if gpu_available else cpu_test_targets
-    print("============ Building tests ============")
+    if args.skip_gpu_tests:
+        _l.info('Skipping gpu tests targets: %s', gpu_test_targets)
+        test_targets = cpu_test_targets
+    else:
+        test_targets = cpu_test_targets + gpu_test_targets
+
     subprocess_check_call(
         [
             "make",
@@ -235,15 +251,7 @@ def main_test(args: MainTestArgs) -> None:
         cwd=cwd,
     )
     
-    if args.skip_gpu_tests:
-        print("\033[33mGPU tests are set to be skipped\033[0m")
-        print(f"skipped targets: {gpu_test_targets}")
-    elif not gpu_available:
-        print("\033[31mError: GPU driver not found or failed to load. Skipping GPU tests.\033[0m")
-        print(f"skipped targets: {gpu_test_targets}")
-
     # CPU tests
-    print("============ Running tests ============")
     target_regex = "^(" + "|".join(test_targets) + ")$"
     subprocess_run(
         [
@@ -289,7 +297,7 @@ def main_test(args: MainTestArgs) -> None:
             env=os.environ,
         )
         
-        # filter out dtg.h and .dtg.cc
+        # filter out .dtg.h, .dtg.cc, and test code
         subprocess_run(
             [
                 "lcov",
@@ -297,6 +305,7 @@ def main_test(args: MainTestArgs) -> None:
                 "main_coverage.info",
                 f"{config.base}/lib/*.dtg.h",
                 f"{config.base}/lib/*.dtg.cc",
+                f"{config.base}/lib/*/test/**",
                 "--output-file",
                 "main_coverage.info",
             ],
