@@ -44,6 +44,11 @@ def _test_project(name: str):
                           # the proj implementation code being tested
         dtgen_skip=False,
         browser=False,
+        skip_gpu_tests=True,
+        skip_build_gpu_tests=False,
+        skip_cpu_tests=False,
+        skip_build_cpu_tests=False,
+        targets=[],
     )
     main_test(args=test_args)
 

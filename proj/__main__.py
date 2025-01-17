@@ -4,6 +4,8 @@ from typing import (
     Sequence,
     Union,
     TextIO,
+    Optional,
+    Collection,
 )
 import subprocess
 import os
@@ -149,8 +151,18 @@ class MainBuildArgs:
     verbosity: int
     jobs: int
     dtgen_skip: bool
+    targets: Collection[str]
 
 def main_build(args: MainBuildArgs) -> None:
+    build_targets: List[str]
+    if len(args.targets) == 0:
+        build_targets = list(config.build_targets)
+    else:
+        build_targets = list(args.targets)
+
+    if len(build_targets) == 0:
+        fail_with_error('No build targets selected')
+
     if not args.dtgen_skip:
         main_dtgen(args=MainDtgenArgs(
             path=args.path,
@@ -166,7 +178,7 @@ def main_build(args: MainBuildArgs) -> None:
             "make",
             "-j",
             str(args.jobs),
-            *config.build_targets,
+            *build_targets,
         ],
         env={
             **os.environ,
@@ -188,6 +200,11 @@ class MainTestArgs:
     dtgen_skip: bool
     browser: bool
     skip_gpu_tests: bool
+    skip_build_gpu_tests: bool
+    skip_cpu_tests: bool
+    skip_build_cpu_tests: bool
+    targets: Collection[str]
+
 
 def check_if_machine_supports_gpu() -> bool:
     try:
@@ -210,6 +227,9 @@ def main_test(args: MainTestArgs) -> None:
             verbosity=args.verbosity,
         ))
 
+    skip_gpu_tests = args.skip_gpu_tests or args.skip_build_gpu_tests
+    skip_cpu_tests = args.skip_cpu_tests or args.skip_build_cpu_tests
+
     config = get_config(args.path)
     if args.coverage:
         cwd = config.cov_dir
@@ -217,29 +237,56 @@ def main_test(args: MainTestArgs) -> None:
         cwd = config.build_dir
 
     # Currently hardcode GPU tests as 'kernels-tests'
-    gpu_test_targets = ["kernels-tests"]
-    cpu_test_targets = [target for target in config.test_targets if target not in gpu_test_targets]
+    requested_test_targets: List[str]
+    if len(args.targets) == 0:
+        requested_test_targets = list(config.test_targets)
+    else:
+        requested_test_targets = [t + '-tests' for t in args.targets]
+
+    test_targets_requiring_gpu = ["kernels-tests"]
+
+    gpu_test_targets_to_build = [target for target in requested_test_targets if target in test_targets_requiring_gpu]
+    if args.skip_build_gpu_tests:
+        _l.info('Skipping building gpu test targest: %s', gpu_test_targets_to_build)
+        gpu_test_targets_to_build = []
+
+    cpu_test_targets_to_build = [target for target in requested_test_targets if target not in test_targets_requiring_gpu]
+    if args.skip_build_cpu_tests:
+        _l.info('Skipping building cpu test targest: %s', cpu_test_targets_to_build)
+        cpu_test_targets_to_build = []
+
+    test_targets_to_build = cpu_test_targets_to_build + gpu_test_targets_to_build
+
+    if args.skip_cpu_tests and len(cpu_test_targets_to_build) > 0:
+        _l.info('Skipping running cpu test targest: %s', cpu_test_targets_to_build)
+        cpu_test_targets_to_run = []
+    else:
+        cpu_test_targets_to_run = cpu_test_targets_to_build
+
+    if args.skip_gpu_tests and len(gpu_test_targets_to_build) > 0:
+        _l.info('Skipping running gpu test targets: %s', gpu_test_targets_to_build)
+        gpu_test_targets_to_run = []
+    else:
+        gpu_test_targets_to_run = gpu_test_targets_to_build
 
     gpu_available = check_if_machine_supports_gpu()
-    if (not gpu_available) and (not args.skip_gpu_tests):
+    if (not gpu_available) and (not skip_gpu_tests) and len(gpu_test_targets_to_run) > 0:
         fail_with_error(
             'Cannot run gpu tests as no gpus are available on the current machine. '
             'Pass --skip-gpu-tests to skip running tests that require a GPU.'
         )
     
-    # Build targets
-    if args.skip_gpu_tests:
-        _l.info('Skipping gpu tests targets: %s', gpu_test_targets)
-        test_targets = cpu_test_targets
-    else:
-        test_targets = cpu_test_targets + gpu_test_targets
+    test_targets_to_run = cpu_test_targets_to_run + gpu_test_targets_to_run
+
+    if len(test_targets_to_run) == 0:
+        fail_with_error('No test targets available')
 
     subprocess_check_call(
         [
             "make",
             "-j",
             str(args.jobs),
-            *test_targets,
+            *test_targets_to_build,
         ],
         env={
             **os.environ,
@@ -251,8 +298,7 @@ def main_test(args: MainTestArgs) -> None:
         cwd=cwd,
     )
     
-    # CPU tests
-    target_regex = "^(" + "|".join(test_targets) + ")$"
+    target_regex = "^(" + "|".join(test_targets_to_run) + ")$"
     subprocess_run(
         [
             "ctest",
@@ -485,6 +531,10 @@ def main() -> None:
         "--browser", "-b", action="store_true", help="open coverage info in browser"
     )
     test_p.add_argument("--skip-gpu-tests", action="store_true")
+    test_p.add_argument("--skip-build-gpu-tests", action="store_true")
+    test_p.add_argument("--skip-cpu-tests", action="store_true")
+    test_p.add_argument("--skip-build-cpu-tests", action="store_true")
+    test_p.add_argument('targets', nargs='*')
     add_verbosity_args(test_p)
 
     build_p = subparsers.add_parser("build")
@@ -493,6 +543,7 @@ def main() -> None:
     build_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     build_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     build_p.add_argument("--dtgen-skip", action="store_true")
+    build_p.add_argument('targets', nargs='*')
     add_verbosity_args(build_p)
 
     cmake_p = subparsers.add_parser("cmake")
