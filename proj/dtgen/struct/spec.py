@@ -60,6 +60,7 @@ class StructSpec:
     name: str
     fields: Sequence[FieldSpec]
     features: FrozenSet[Feature]
+    docstring: Optional[str]
 
     def json(self) -> Json:
         return {
@@ -72,6 +73,7 @@ class StructSpec:
             'name': self.name,
             'fields': [field.json() for field in self.fields],
             'features': [feature.json() for feature in sorted(self.features, key=lambda f: f.name)]
+            'docstring': self.docstring,
         }
 
 
@@ -112,6 +114,7 @@ def parse_struct_spec(raw: Mapping[str, Any]) -> StructSpec:
         name=raw['name'],
         fields=[parse_field_spec(field) for field in raw['fields']],
         features=frozenset([parse_feature(feature) for feature in raw['features']]),
+        docstring=raw.get('docstring', None),
     )
 
 def load_spec(path: Path) -> StructSpec:
