@@ -3,7 +3,9 @@ from proj.__main__ import (
     main_cmake,
     main_test,
     main_lint,
+    main_build,
     MainCmakeArgs,
+    MainBuildArgs,
     MainTestArgs,
     MainLintArgs,
 )
@@ -34,6 +36,15 @@ def _test_project(name: str):
         verbosity=logging.WARNING,
     )
     main_cmake(args=cmake_args)
+
+    build_args = MainBuildArgs(
+        path=testdir,
+        verbosity=logging.WARNING,
+        jobs=1,
+        dtgen_skip=False,
+        targets=[],
+    )
+    main_build(args=build_args)
 
     test_args = MainTestArgs(
         path=testdir,
@@ -128,6 +139,7 @@ def test_lint() -> None:
         fast=False,
         trace=False,
         dtgen_skip=False,
+        verbosity=logging.WARNING,
     )
     main_cmake(args=cmake_args)
 
@@ -135,5 +147,6 @@ def test_lint() -> None:
         path=testdir,
         files=[],
         profile_checks=False,
+        verbosity=logging.WARNING,
     )
     main_lint(args=lint_args)

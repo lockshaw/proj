@@ -1,1 +1,5 @@
 project_name = "wrapper"
+
+build_targets = [
+  "wrapper-tests",
+]

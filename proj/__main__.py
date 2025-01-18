@@ -6,6 +6,7 @@ from typing import (
     TextIO,
     Optional,
     Collection,
+    List,
 )
 import subprocess
 import os
@@ -154,6 +155,8 @@ class MainBuildArgs:
     targets: Collection[str]
 
 def main_build(args: MainBuildArgs) -> None:
+    config = get_config(args.path)
+
     build_targets: List[str]
     if len(args.targets) == 0:
         build_targets = list(config.build_targets)
@@ -172,7 +175,6 @@ def main_build(args: MainBuildArgs) -> None:
             verbosity=args.verbosity,
         ))
 
-    config = get_config(args.path)
     subprocess_check_call(
         [
             "make",
@@ -213,7 +215,7 @@ def check_if_machine_supports_gpu() -> bool:
     except FileNotFoundError:
         _l.info('Could not find executable nvidia-smi in path')
         return False
-    except Subprocess.CalledProcessError:
+    except subprocess.CalledProcessError:
         _l.info('nvidia-smi returned nonzero error code')
         return False
 
