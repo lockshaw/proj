@@ -1,5 +1,6 @@
 namespace = "FlexFlow"
 name = "IntOrBool"
+docstring = "An int or a bool"
 features = [
   "eq",
   "ord",
@@ -12,6 +13,7 @@ includes = []
 
 [[values]]
 type = "int"
+docstring = "Could be negative"
 
 [[values]]
 type = "bool"

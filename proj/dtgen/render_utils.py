@@ -113,6 +113,15 @@ def render_namespace_block(name: Optional[str], f: TextIO) -> Iterator[None]:
     else:
         yield
 
+def render_doxygen_docstring(contents: str) -> str:
+    return '\n'.join([
+        '/**',
+        *[
+            (' * ' + l) for l in contents.splitlines()
+        ],
+        ' */',
+    ])
+
 def render_template_abs(params: Sequence[str], f: TextIO) -> None:
     f.write(''.join([
         'template <',

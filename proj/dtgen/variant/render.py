@@ -28,6 +28,7 @@ from proj.dtgen.render_utils import (
     commad,
     ifblock,
     elseblock,
+    render_doxygen_docstring,
 )
 import proj.dtgen.render_utils as render_utils
 import io
@@ -494,6 +495,8 @@ ORD_OPS = ('<', '>', '<=', '>=')
 
 def render_decls(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
+        if spec.docstring is not None:
+            f.write('\n\n' + render_doxygen_docstring(spec.docstring))
         with render_struct_block(
             name=spec.name, 
             template_params=spec.template_params,
@@ -502,6 +505,8 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
             f.write(f'{spec.name}() = delete;\n')
             explicit_prefix = 'explicit' if spec.explicit_constructors else ''
             for value in lined(spec.values, f=f):
+                if value.docstring is not None:
+                    f.write('\n' + render_doxygen_docstring(value.docstring))
                 f.write(f'{explicit_prefix} {spec.name}({value.type_} const &);')
 
             render_is_part_of(spec=spec, f=f)

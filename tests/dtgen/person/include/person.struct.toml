@@ -1,5 +1,10 @@
 namespace = "FlexFlow"
 name = "Person"
+docstring = """\
+A person
+
+Just like you or me
+"""
 features = [
   "eq",
   "ord",
@@ -25,3 +30,4 @@ type = "std::string"
 name = "age"
 type = "int"
 json_key = "age_in_years"
+docstring = "The Person's age (in years)"

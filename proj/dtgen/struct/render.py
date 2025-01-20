@@ -22,6 +22,7 @@ from proj.dtgen.render_utils import (
     angles,
     commad,
     render_template_abs,
+    render_doxygen_docstring,
 )
 import proj.dtgen.render_utils as render_utils
 import io
@@ -80,6 +81,8 @@ def render_delete_default_constructor(spec: StructSpec, f: TextIO) -> None:
 
 def render_field_decls(spec: StructSpec, f: TextIO) -> None:
     for field in spec.fields:
+        if field.docstring is not None:
+            f.write('\n' + render_doxygen_docstring(field.docstring))
         if field.indirect:
             f.write('private:\n')
             f.write(f'std::shared_ptr<{field.type_}> {field.name}_ptr;\n')
@@ -443,6 +446,8 @@ def render_fwd_decls(spec: StructSpec, f: TextIO) -> None:
 def render_decls(spec: StructSpec, f: TextIO) -> None:
     # render_includes(infer_includes(spec), f)
     with render_namespace_block(spec.namespace, f):
+        if spec.docstring is not None:
+            f.write('\n\n' + render_doxygen_docstring(spec.docstring))
         with render_struct_block(spec, f):
             if len(spec.fields) > 0:
                 render_delete_default_constructor(spec, f)
