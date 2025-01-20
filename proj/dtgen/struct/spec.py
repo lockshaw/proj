@@ -31,6 +31,7 @@ class Feature(Enum):
 class FieldSpec:
     name: str
     type_: str
+    docstring: Optional[str]
     indirect: bool
     _json_key: Optional[str]
 
@@ -45,6 +46,7 @@ class FieldSpec:
         return {
             'name': self.name,
             'type_': self.type_,
+            'docstring': self.docstring,
             'indirect': self.indirect,
             'json_key': self.json_key,
         }
@@ -72,7 +74,7 @@ class StructSpec:
             'template_params': list(self.template_params),
             'name': self.name,
             'fields': [field.json() for field in self.fields],
-            'features': [feature.json() for feature in sorted(self.features, key=lambda f: f.name)]
+            'features': [feature.json() for feature in sorted(self.features, key=lambda f: f.name)],
             'docstring': self.docstring,
         }
 
@@ -99,6 +101,7 @@ def parse_field_spec(raw: Mapping[str, Any]) -> FieldSpec:
     return FieldSpec(
         name=raw['name'],
         type_=raw['type'],
+        docstring=raw.get('docstring', None),
         indirect=raw.get('indirect', False),
         _json_key=raw.get('json_key'),
     )

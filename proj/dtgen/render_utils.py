@@ -117,7 +117,7 @@ def render_doxygen_docstring(contents: str) -> str:
     return '\n'.join([
         '/**',
         *[
-            (' *' + l) for l in contents.splitlines()
+            (' * ' + l) for l in contents.splitlines()
         ],
         ' */',
     ])

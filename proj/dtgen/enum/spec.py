@@ -23,6 +23,7 @@ class Feature(Enum):
 @dataclass(frozen=True)
 class ValueSpec:
     name: str
+    docstring: Optional[str]
     _json_key: Optional[str]
 
     @property
@@ -35,6 +36,7 @@ class ValueSpec:
     def json(self) -> Json:
         return {
             'name': self.name,
+            'docstring': self.docstring,
             'json_key': self.json_key,
         }
 
@@ -44,6 +46,7 @@ class EnumSpec:
     name: str
     values: Sequence[ValueSpec]
     features: FrozenSet[Feature]
+    docstring: Optional[str]
 
     def json(self) -> Json:
         return {
@@ -51,6 +54,7 @@ class EnumSpec:
             'name': self.name,
             'values': [v.json() for v in self.values],
             'features': [feature.json() for feature in sorted(self.features, key=lambda f: f.name)],
+            'docstring': self.docstring,
         }
 
 def parse_feature(raw: str) -> Feature:
@@ -68,6 +72,7 @@ def parse_feature(raw: str) -> Feature:
 def parse_value_spec(raw: Mapping[str, Any]) -> ValueSpec:
     return ValueSpec(
         name=raw['name'],
+        docstring=raw.get('docstring', None),
         _json_key=raw.get('json_key'),
     )
 
@@ -77,6 +82,7 @@ def parse_enum_spec(raw: Mapping[str, Any]) -> EnumSpec:
         name=raw['name'],
         values=[parse_value_spec(value) for value in raw['values']],
         features=frozenset([parse_feature(feature) for feature in raw['features']]),
+        docstring=raw.get('docstring', None),
     )
 
 def load_spec(path: Path) -> EnumSpec:

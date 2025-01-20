@@ -29,6 +29,7 @@ class Feature(Enum):
 @dataclass(frozen=True)
 class ValueSpec:
     type_: str
+    docstring: Optional[str]
     _key: Optional[str]
     _json_key: Optional[str]
     _fmt_key: Optional[str]
@@ -36,6 +37,7 @@ class ValueSpec:
     def json(self) -> Json:
         return {
             'type_': self.type_,
+            'docstring': self.docstring,
             'key': self.key,
             'json_key': self.json_key,
             'fmt_key': self.fmt_key,
@@ -76,6 +78,7 @@ class VariantSpec:
     values: Sequence[ValueSpec]
     features: FrozenSet[Feature]
     explicit_constructors: bool
+    docstring: Optional[str]
 
     def json(self) -> Json:
         return {
@@ -87,6 +90,7 @@ class VariantSpec:
             'values': [value.json() for value in self.values],
             'features': [feature.json() for feature in self.features],
             'explicit_constructors': self.explicit_constructors,
+            'docstring': self.docstring,
         }
 
 def parse_feature(raw: str) -> Feature:
@@ -108,6 +112,7 @@ def parse_feature(raw: str) -> Feature:
 def parse_value_spec(raw: Mapping[str, Any]) -> ValueSpec:
     return ValueSpec(
         type_=raw['type'],
+        docstring=raw.get('docstring', None),
         _key=raw.get('key', None),
         _json_key=raw.get('json_key', None),
         _fmt_key=raw.get('fmt_key', None),
@@ -123,6 +128,7 @@ def parse_variant_spec(raw: Mapping[str, Any]) -> VariantSpec:
         name=raw['name'],
         values=[parse_value_spec(value) for value in raw['values']],
         features=frozenset([parse_feature(feature) for feature in raw['features']]),
+        docstring=raw.get('docstring', None),
     )
 
 def load_spec(path: Path) -> VariantSpec:

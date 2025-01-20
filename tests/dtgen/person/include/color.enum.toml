@@ -1,5 +1,10 @@
 namespace = "FlexFlow"
 name = "Color"
+docstring = """
+A color 
+
+(yes this is the worst docstring ever)
+"""
 features = [
   "hash",
   "fmt",
@@ -15,3 +20,4 @@ name = "BLUE"
 
 [[values]]
 name = "YELLOW"
+docstring = "No RGB for us"

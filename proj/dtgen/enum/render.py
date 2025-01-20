@@ -10,6 +10,7 @@ from proj.dtgen.render_utils import (
     render_namespace_block,
     commad,
     parens,
+    render_doxygen_docstring,
 )
 from contextlib import contextmanager
 from typing import (
@@ -157,8 +158,12 @@ def render_header(spec: EnumSpec, f: TextIO) -> None:
     f.write('\n')
 
     with render_namespace_block(spec.namespace, f):
+        if spec.docstring is not None:
+            f.write('\n\n' + render_doxygen_docstring(spec.docstring))
         with render_enum_block(spec.name, f):
             for value in commad(spec.values, f):
+                if value.docstring is not None:
+                    f.write('\n\n' + render_doxygen_docstring(value.docstring))
                 f.write(value.name)
         if Feature.FMT in spec.features:
             render_fmt_decl(spec.name, f)
