@@ -8,6 +8,7 @@ from proj.__main__ import (
     MainBuildArgs,
     MainTestArgs,
     MainLintArgs,
+    BuildType
 )
 # import subprocess
 from pathlib import Path
@@ -48,7 +49,7 @@ def _test_project(name: str):
 
     test_args = MainTestArgs(
         path=testdir,
-        coverage=False,
+        build_type=BuildType.NORMAL,
         verbosity=logging.WARNING,
         jobs=1,
         dtgen_force=True, # otherwise dtgen files won't get regenerated on changes to 

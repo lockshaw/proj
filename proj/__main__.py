@@ -1,3 +1,5 @@
+from enum import Enum, auto
+import glob
 from pathlib import Path
 from typing import (
     Any,
@@ -75,11 +77,8 @@ def subprocess_run(command, **kwargs):
         _l.info(f"+++ $ {pretty_cmd}")
         subprocess.check_call(command, **kwargs)
 
-def cmake(cmake_args, config, is_coverage):
-    if is_coverage:
-        cwd = config.cov_dir
-    else:
-        cwd = config.build_dir
+def cmake(cmake_args, config, build_type):
+    cwd = get_dir_for_build_type(config, build_type)
     subprocess_check_call(
         [
             "cmake",
@@ -100,6 +99,21 @@ class MainCmakeArgs:
     dtgen_skip: bool
     verbosity: int
 
+class BuildType(Enum):
+    normal = auto()
+    coverage = auto()
+    profile = auto()
+
+def get_dir_for_build_type(config: ProjectConfig, build_type: BuildType) -> Path:
+    if build_type == BuildType.COVERAGE:
+        return config.cov_dir
+    elif build_type == BuildType.PROFILE:
+        return config.prof_dir
+    elif build_type == BuildType.NORMAL:
+        return config.build_dir
+    else:
+        raise ValueError(f'{build_type} in function get_dir_for_build_type is not recognized')
+
 def main_cmake(args: MainCmakeArgs) -> None:
     if not args.dtgen_skip:
         main_dtgen(args=MainDtgenArgs(
@@ -118,11 +132,12 @@ def main_cmake(args: MainCmakeArgs) -> None:
             shutil.rmtree(config.cov_dir)
     config.build_dir.mkdir(exist_ok=True, parents=True)
     config.cov_dir.mkdir(exist_ok=True, parents=True)
+    config.prof_dir.mkdir(exist_ok=True, parents=True)
     cmake_args = [f"-D{k}={v}" for k, v in config.cmake_flags.items()]
     cmake_args += shlex.split(os.environ.get("CMAKE_FLAGS", ""))
     if args.trace:
         cmake_args += ["--trace", "--trace-expand", "--trace-redirect=trace.log"]
-    cmake(cmake_args, config, False)
+    cmake(cmake_args, config, BuildType.normal)
     COMPILE_COMMANDS_FNAME = "compile_commands.json"
     if config.fix_compile_commands:
         fix_compile_commands.fix_file(
@@ -142,9 +157,17 @@ def main_cmake(args: MainCmakeArgs) -> None:
             cwd=config.build_dir,
             env=os.environ,
         )
-        
-    cmake(cmake_args + ["-DFF_USE_CODE_COVERAGE=ON"], config, True)
-
+ 
+    cmake(cmake_args + ["-DFF_USE_CODE_COVERAGE=ON"], config, BuildType.coverage)
+    cmake(
+        cmake_args + [
+            "-DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} -pg", 
+            f"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={config.prof_dir}",
+            f"-DGMON_OUT_PREFIX={config.prof_dir}/gmon"
+        ], 
+        config, 
+        BuildType.PROFILE
+    )
 
 @dataclass(frozen=True)
 class MainBuildArgs:
@@ -195,7 +218,7 @@ def main_build(args: MainBuildArgs) -> None:
 @dataclass(frozen=True)
 class MainTestArgs:
     path: Path
-    coverage: bool
+    build_type: BuildType
     verbosity: int
     jobs: int
     dtgen_force: bool
@@ -233,10 +256,7 @@ def main_test(args: MainTestArgs) -> None:
     skip_cpu_tests = args.skip_cpu_tests or args.skip_build_cpu_tests
 
     config = get_config(args.path)
-    if args.coverage:
-        cwd = config.cov_dir
-    else:
-        cwd = config.build_dir
+    cwd = get_dir_for_build_type(config, args.build_type)
 
     # Currently hardcode GPU tests as 'kernels-tests'
     requested_test_targets: List[str]
@@ -249,18 +269,18 @@ def main_test(args: MainTestArgs) -> None:
 
     gpu_test_targets_to_build = [target for target in requested_test_targets if target in test_targets_requiring_gpu]
     if args.skip_build_gpu_tests:
-        _l.info('Skipping building gpu test targest: %s', gpu_test_targets_to_build)
+        _l.info('Skipping building gpu test targets: %s', gpu_test_targets_to_build)
         gpu_test_targets_to_build = []
 
     cpu_test_targets_to_build = [target for target in requested_test_targets if target not in test_targets_requiring_gpu]
     if args.skip_build_cpu_tests:
-        _l.info('Skipping building cpu test targest: %s', cpu_test_targets_to_build)
+        _l.info('Skipping building cpu test targets: %s', cpu_test_targets_to_build)
         cpu_test_targets_to_build = []
 
     test_targets_to_build = cpu_test_targets_to_build + gpu_test_targets_to_build
 
     if args.skip_cpu_tests and len(cpu_test_targets_to_build) > 0:
-        _l.info('Skipping running cpu test targest: %s', cpu_test_targets_to_build)
+        _l.info('Skipping running cpu test targets: %s', cpu_test_targets_to_build)
         cpu_test_targets_to_run = []
     else:
         cpu_test_targets_to_run = cpu_test_targets_to_build
@@ -314,23 +334,7 @@ def main_test(args: MainTestArgs) -> None:
         env=os.environ,
     )
     
-
-    if args.coverage:
-        subprocess_run(
-            [
-                "lcov",
-                "--capture",
-                "--directory",
-                ".",
-                "--output-file",
-                "main_coverage.info",
-            ],
-            stderr=sys.stdout,
-            cwd=cwd,
-            env=os.environ,
-        )
-        
-        # only keep the coverage info of the lib directory
+    if args.build_type == BuildType.COVERAGE:
         subprocess_run(
             [
                 "lcov", 
@@ -398,8 +402,19 @@ def main_test(args: MainTestArgs) -> None:
                 cwd=config.cov_dir,
                 env=os.environ,
             )
-    
 
+    if args.build_type == BuildType.PROFILE:
+        subprocess_run(
+            [
+                "gprof",
+                None, #TODO(@pietro) what goes here?
+                config.prof_dir / "gmon.out",
+            ],
+            stdout=open(config.prof_dir / "gprof_output.txt", "w"),
+            stderr=sys.stdout,
+            cwd=config.prof_dir,
+            env=os.environ,
+        )
 
 @dataclass(frozen=True)
 class MainLintArgs:
@@ -526,7 +541,7 @@ def main() -> None:
     test_p.set_defaults(func=main_test)
     test_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     test_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
-    test_p.add_argument("--coverage", "-c", action="store_true")   
+    test_p.add_argument("--build-type", type=BuildType, choices=list(BuildType), default=BuildType.normal)
     test_p.add_argument("--dtgen-force", action="store_true")   
     test_p.add_argument("--dtgen-skip", action="store_true")
     test_p.add_argument(
