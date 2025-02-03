@@ -1,5 +1,6 @@
 { buildPythonApplication
 , python3Packages
+, bencher-cli
 }:
 
 buildPythonApplication {
@@ -9,5 +10,6 @@ buildPythonApplication {
 
   propagatedBuildInputs = [
     python3Packages.typing-extensions
+    bencher-cli
   ];
 }

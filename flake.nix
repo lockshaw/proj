@@ -12,10 +12,51 @@
       };
 
       lib = pkgs.lib;
+
+      bencher = ({ stdenv
+        , lib
+        , fetchurl
+        , alsaLib
+        , openssl
+        , zlib
+        , pulseaudio
+        , autoPatchelfHook
+      }:
+
+      stdenv.mkDerivation rec {
+        pname = "bencher-cli";
+        version = "0.4.33";
+
+        system = "x86_64-linux";
+
+        src = fetchurl {
+          url = "https://github.com/bencherdev/bencher/releases/download/v${version}/bencher-v${version}-linux-x86-64";
+          hash = "sha256-3q2ZGSqbcMaUcNMGJN+IsEP/+RlYHnsmiWdJ2oV2qmw=";
+        };
+
+        nativeBuildInputs = [
+          autoPatchelfHook
+        ];
+
+        dontUnpack = true;
+
+        installPhase = ''
+        ls
+        runHook preInstall
+        install -m755 -D $src $out/bin/bencher
+        runHook postInstall
+        '';
+
+        meta = with lib; {
+          homepage = "https://bencher.dev/";
+          platforms = platforms.linux;
+        };
+      });
     in 
     {
       packages = rec {
-        proj = pkgs.python3Packages.callPackage ./proj.nix { };
+        proj = pkgs.python3Packages.callPackage ./proj.nix { inherit bencher-cli; };
+        bencher-cli = pkgs.callPackage bencher { };
 
         pytest-skip-slow = pkgs.python3Packages.buildPythonPackage rec {
           pname = "pytest-skip-slow";
@@ -35,6 +76,7 @@
             flit 
           ];
         };
+
 
 
         proj-nvim = pkgs.vimUtils.buildVimPlugin {

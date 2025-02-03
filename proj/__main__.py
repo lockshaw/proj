@@ -4,11 +4,10 @@ from typing import (
     Sequence,
     Union,
     TextIO,
-    Optional,
     Collection,
     List,
 )
-import subprocess
+from . import subprocess_trace as subprocess
 import os
 import shutil
 import multiprocessing
@@ -17,11 +16,13 @@ import sys
 from .config_file import (
     get_config,
     get_config_root,
+    get_target_test_name,
+    get_target_benchmark_name,
+    get_benchmark_path,
 )
 from .dtgen import run_dtgen
 from .format import run_formatter
 from .lint import run_linter
-from .dtgen.find_outdated import find_outdated
 import proj.fix_compile_commands as fix_compile_commands
 import logging
 from dataclasses import dataclass
@@ -29,6 +30,22 @@ from .verbosity import (
     add_verbosity_args,
     calculate_log_level,
 )
+from .gpu_handling import (
+    infer_build_run_plan,
+)
+from .coverage import (
+    postprocess_coverage_data,
+    view_coverage_data,
+)
+from .build import (
+    build_targets,
+)
+from .failure import fail_with_error
+from .benchmarks import (
+    call_benchmarks,
+    upload_to_bencher,
+)
+from enum import StrEnum
 
 _l = logging.getLogger(name='proj')
 
@@ -44,43 +61,18 @@ def main_root(args: MainRootArgs) -> None:
     print(config_root)
 
 def xdg_open(path: Path):
-    subprocess_check_call(
+    subprocess.check_call(
         ['xdg-open', str(path)],
         stderr=sys.stdout,
         env=os.environ,
     )
-
-def fail_with_error(err: str, error_code: int = 1) -> None:
-    _l.error(err)
-    sys.exit(1)
-
-def subprocess_check_call(command, **kwargs):
-    if kwargs.get("shell", False):
-        pretty_cmd = " ".join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
-        subprocess.check_call(pretty_cmd, **kwargs)
-    else:
-        pretty_cmd = shlex.join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
-        subprocess.check_call(command, **kwargs)
-
-
-def subprocess_run(command, **kwargs):
-    if kwargs.get("shell", False):
-        pretty_cmd = " ".join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
-        subprocess.check_call(pretty_cmd, **kwargs)
-    else:
-        pretty_cmd = shlex.join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
-        subprocess.check_call(command, **kwargs)
 
 def cmake(cmake_args, config, is_coverage):
     if is_coverage:
         cwd = config.cov_dir
     else:
         cwd = config.build_dir
-    subprocess_check_call(
+    subprocess.check_call(
         [
             "cmake",
             *cmake_args,
@@ -118,6 +110,7 @@ def main_cmake(args: MainCmakeArgs) -> None:
             shutil.rmtree(config.cov_dir)
     config.build_dir.mkdir(exist_ok=True, parents=True)
     config.cov_dir.mkdir(exist_ok=True, parents=True)
+    config.benchmark_dir.mkdir(exist_ok=True, parents=True)
     cmake_args = [f"-D{k}={v}" for k, v in config.cmake_flags.items()]
     cmake_args += shlex.split(os.environ.get("CMAKE_FLAGS", ""))
     if args.trace:
@@ -131,7 +124,7 @@ def main_cmake(args: MainCmakeArgs) -> None:
         )
 
     with (config.base / COMPILE_COMMANDS_FNAME).open("w") as f:
-        subprocess_check_call(
+        subprocess.check_call(
             [
                 "compdb",
                 "-p",
@@ -157,39 +150,75 @@ class MainBuildArgs:
 def main_build(args: MainBuildArgs) -> None:
     config = get_config(args.path)
 
-    build_targets: List[str]
+    targets: List[str]
     if len(args.targets) == 0:
-        build_targets = list(config.build_targets)
+        targets = list(config.build_targets)
     else:
-        build_targets = list(args.targets)
+        targets = list(args.targets)
 
-    if len(build_targets) == 0:
-        fail_with_error('No build targets selected')
-
-    if not args.dtgen_skip:
-        main_dtgen(args=MainDtgenArgs(
-            path=args.path,
-            files=[],
-            no_delete_outdated=False,
-            force=False,
-            verbosity=args.verbosity,
-        ))
-
-    subprocess_check_call(
-        [
-            "make",
-            "-j",
-            str(args.jobs),
-            *build_targets,
-        ],
-        env={
-            **os.environ,
-            "CCACHE_BASEDIR": config.base,
-            **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
-        },
-        stderr=sys.stdout,
+    build_targets(
+        config=config,
+        targets=targets,
+        dtgen_skip=args.dtgen_skip,
+        jobs=args.jobs,
+        verbosity=args.verbosity,
         cwd=config.build_dir,
     )
+
+@dataclass(frozen=True)
+class MainBenchmarkArgs:
+    path: Path
+    verbosity: int
+    jobs: int
+    dtgen_skip: bool
+    skip_gpu_benchmarks: bool
+    skip_build_gpu_benchmarks: bool
+    skip_cpu_benchmarks: bool
+    skip_build_cpu_benchmarks: bool
+    targets: Collection[str]
+    upload: bool
+
+def main_benchmark(args: MainBenchmarkArgs) -> None:
+    config = get_config(args.path)
+
+    requested_benchmark_targets: List[str]
+    if len(args.targets) == 0:
+        requested_benchmark_targets = list(config.benchmark_targets)
+    else:
+        requested_benchmark_targets = [get_target_benchmark_name(t) for t in args.targets]
+
+    benchmark_targets_requiring_gpu = [get_target_benchmark_name("kernels")]
+
+    build_run_plan = infer_build_run_plan(
+        requested_targets=requested_benchmark_targets,
+        target_requires_gpu=lambda t: t in benchmark_targets_requiring_gpu,
+        skip_run_gpu_targets=args.skip_gpu_benchmarks,
+        skip_build_gpu_targets=args.skip_build_gpu_benchmarks,
+        skip_run_cpu_targets=args.skip_cpu_benchmarks,
+        skip_build_cpu_targets=args.skip_build_cpu_benchmarks,
+    )
+
+    if build_run_plan.failed_gpu_check:
+        fail_with_error(
+            'Cannot run gpu benchmarks as no gpus are available on the current machine. '
+            'Pass --skip-gpu-benchmarks to skip running benchmarks that require a GPU.'
+        )
+
+    if len(build_run_plan.targets_to_run) == 0:
+        fail_with_error('No benchmark targets available to run')
+
+    build_targets(
+        config=config,
+        targets=build_run_plan.targets_to_build,
+        dtgen_skip=args.dtgen_skip,
+        jobs=args.jobs,
+        verbosity=args.verbosity,
+        cwd=config.benchmark_dir,
+    )
+
+    benchmark_result = call_benchmarks([get_benchmark_path(config, b) for b in build_run_plan.targets_to_run])
+    if args.upload:
+        upload_to_bencher(benchmark_result)
 
 
 @dataclass(frozen=True)
@@ -207,32 +236,9 @@ class MainTestArgs:
     skip_build_cpu_tests: bool
     targets: Collection[str]
 
-
-def check_if_machine_supports_gpu() -> bool:
-    try:
-        result = subprocess_check_call(['nvidia-smi'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
-    except FileNotFoundError:
-        _l.info('Could not find executable nvidia-smi in path')
-        return False
-    except subprocess.CalledProcessError:
-        _l.info('nvidia-smi returned nonzero error code')
-        return False
-
 def main_test(args: MainTestArgs) -> None:
-    if not args.dtgen_skip:
-        main_dtgen(args=MainDtgenArgs(
-            path=args.path,
-            files=[],
-            no_delete_outdated=False,
-            force=args.dtgen_force,
-            verbosity=args.verbosity,
-        ))
-
-    skip_gpu_tests = args.skip_gpu_tests or args.skip_build_gpu_tests
-    skip_cpu_tests = args.skip_cpu_tests or args.skip_build_cpu_tests
-
     config = get_config(args.path)
+
     if args.coverage:
         cwd = config.cov_dir
     else:
@@ -243,65 +249,39 @@ def main_test(args: MainTestArgs) -> None:
     if len(args.targets) == 0:
         requested_test_targets = list(config.test_targets)
     else:
-        requested_test_targets = [t + '-tests' for t in args.targets]
+        requested_test_targets = [get_target_test_name(t) for t in args.targets]
 
     test_targets_requiring_gpu = ["kernels-tests"]
 
-    gpu_test_targets_to_build = [target for target in requested_test_targets if target in test_targets_requiring_gpu]
-    if args.skip_build_gpu_tests:
-        _l.info('Skipping building gpu test targest: %s', gpu_test_targets_to_build)
-        gpu_test_targets_to_build = []
+    build_run_plan = infer_build_run_plan(
+        requested_targets=requested_test_targets,
+        target_requires_gpu=lambda t: t in test_targets_requiring_gpu,
+        skip_run_gpu_targets=args.skip_gpu_tests,
+        skip_build_gpu_targets=args.skip_build_gpu_tests,
+        skip_run_cpu_targets=args.skip_cpu_tests,
+        skip_build_cpu_targets=args.skip_build_cpu_tests,
+    )
 
-    cpu_test_targets_to_build = [target for target in requested_test_targets if target not in test_targets_requiring_gpu]
-    if args.skip_build_cpu_tests:
-        _l.info('Skipping building cpu test targest: %s', cpu_test_targets_to_build)
-        cpu_test_targets_to_build = []
-
-    test_targets_to_build = cpu_test_targets_to_build + gpu_test_targets_to_build
-
-    if args.skip_cpu_tests and len(cpu_test_targets_to_build) > 0:
-        _l.info('Skipping running cpu test targest: %s', cpu_test_targets_to_build)
-        cpu_test_targets_to_run = []
-    else:
-        cpu_test_targets_to_run = cpu_test_targets_to_build
-
-    if args.skip_gpu_tests and len(gpu_test_targets_to_build) > 0:
-        _l.info('Skipping running gpu test targets: %s', gpu_test_targets_to_build)
-        gpu_test_targets_to_run = []
-    else:
-        gpu_test_targets_to_run = gpu_test_targets_to_build
-
-    gpu_available = check_if_machine_supports_gpu()
-    if (not gpu_available) and (not skip_gpu_tests) and len(gpu_test_targets_to_run) > 0:
+    if build_run_plan.failed_gpu_check:
         fail_with_error(
             'Cannot run gpu tests as no gpus are available on the current machine. '
             'Pass --skip-gpu-tests to skip running tests that require a GPU.'
         )
     
-    test_targets_to_run = cpu_test_targets_to_run + gpu_test_targets_to_run
+    if len(build_run_plan.targets_to_run) == 0:
+        fail_with_error('No test targets available to run')
 
-    if len(test_targets_to_run) == 0:
-        fail_with_error('No test targets available')
-
-    subprocess_check_call(
-        [
-            "make",
-            "-j",
-            str(args.jobs),
-            *test_targets_to_build,
-        ],
-        env={
-            **os.environ,
-            "CCACHE_BASEDIR": config.base,
-            # "CCACHE_NOHASHDIR": "1",
-            **({"VERBOSE": "1"} if args.verbosity <= logging.DEBUG else {}),
-        },
-        stderr=sys.stdout,
+    build_targets(
+        config=config,
+        targets=build_run_plan.targets_to_build,
+        dtgen_skip=args.dtgen_skip,
+        jobs=args.jobs,
+        verbosity=args.verbosity,
         cwd=cwd,
     )
-    
-    target_regex = "^(" + "|".join(test_targets_to_run) + ")$"
-    subprocess_run(
+
+    target_regex = "^(" + "|".join(build_run_plan.targets_to_run) + ")$"
+    subprocess.run(
         [
             "ctest",
             "--progress",
@@ -314,92 +294,10 @@ def main_test(args: MainTestArgs) -> None:
         env=os.environ,
     )
     
-
     if args.coverage:
-        subprocess_run(
-            [
-                "lcov",
-                "--capture",
-                "--directory",
-                ".",
-                "--output-file",
-                "main_coverage.info",
-            ],
-            stderr=sys.stdout,
-            cwd=cwd,
-            env=os.environ,
-        )
-        
-        # only keep the coverage info of the lib directory
-        subprocess_run(
-            [
-                "lcov", 
-                "--extract",
-                "main_coverage.info",
-                f"{config.base}/lib/*",
-                "--output-file",
-                "main_coverage.info",
-            ],
-            stderr=sys.stdout,
-            cwd=cwd,
-            env=os.environ,
-        )
-        
-        # filter out .dtg.h, .dtg.cc, and test code
-        subprocess_run(
-            [
-                "lcov",
-                "--remove",
-                "main_coverage.info",
-                f"{config.base}/lib/*.dtg.h",
-                f"{config.base}/lib/*.dtg.cc",
-                f"{config.base}/lib/*/test/**",
-                "--output-file",
-                "main_coverage.info",
-            ],
-            stderr=sys.stdout,
-            cwd=cwd,
-            env=os.environ,
-        )
-        
-        if args.browser:
-            print("opening coverage info in browser")
-            subprocess_run(
-                [
-                    "genhtml",
-                    "main_coverage.info",
-                    "--output-directory",
-                    "code_coverage",
-                ],
-                stderr=sys.stdout,
-                cwd=config.build_dir,
-                env=os.environ,
-            )
-
-            # run xdg-open to open the browser
-            # not able to test it now as I am running on remote linux
-            subprocess_run(
-                [
-                    "xdg-open",
-                    "code_coverage/index.html",
-                ],
-                stderr=sys.stdout,
-                cwd=config.cov_dir,
-                env=os.environ,
-            )
-        else:
-            subprocess_run(
-                [
-                    "lcov",
-                    "--list",
-                    "main_coverage.info",
-                ],
-                stderr=sys.stdout,
-                cwd=config.cov_dir,
-                env=os.environ,
-            )
+        postprocess_coverage_data(config=config)
+        view_coverage_data(config=config, browser=args.browser)
     
-
 
 @dataclass(frozen=True)
 class MainLintArgs:
@@ -458,13 +356,8 @@ def main_dtgen(args: MainDtgenArgs) -> None:
         config=config,
         files=files,
         force=args.force,
+        delete_outdated=not args.no_delete_outdated,
     )
-    for outdated in find_outdated(root, config):
-        if args.no_delete_outdated:
-            _l.warning(f'Possible out-of-date file at {outdated}')
-        else:
-            _l.info(f'Removing out-of-date file at {outdated}')
-            outdated.unlink()
 
 @dataclass(frozen=True)
 class MainDoxygenArgs:
@@ -492,7 +385,7 @@ def main_doxygen(args: MainDoxygenArgs) -> None:
         stdout = subprocess.DEVNULL
 
     config.doxygen_dir.mkdir(exist_ok=True, parents=True)
-    subprocess_check_call(
+    subprocess.check_call(
         ['doxygen', 'docs/doxygen/Doxyfile'],
         env=env,
         stdout=stdout,
@@ -503,6 +396,12 @@ def main_doxygen(args: MainDoxygenArgs) -> None:
     if args.browser:
         xdg_open(config.doxygen_dir / 'html/index.html') 
 
+
+class BuildMode(StrEnum):
+    RELEASE = 'release'
+    DEBUG = 'debug'
+    BENCHMARK = 'benchmark'
+    COVERAGE = 'coverage'
 
 def main() -> None:
     import argparse
@@ -547,6 +446,19 @@ def main() -> None:
     build_p.add_argument("--dtgen-skip", action="store_true")
     build_p.add_argument('targets', nargs='*')
     add_verbosity_args(build_p)
+
+    benchmark_p = subparsers.add_parser('benchmark')
+    set_main_signature(benchmark_p, main_benchmark, MainBenchmarkArgs)
+    benchmark_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    benchmark_p.add_argument('jobs', '-j', type=int, default=multiprocessing.cpu_count())
+    benchmark_p.add_argument('--dtgen-skip', action='store_true')
+    benchmark_p.add_argument("--skip-gpu-benchmarks", action="store_true")
+    benchmark_p.add_argument("--skip-build-gpu-benchmarks", action="store_true")
+    benchmark_p.add_argument("--skip-cpu-benchmarks", action="store_true")
+    benchmark_p.add_argument("--skip-build-cpu-benchmarks", action="store_true")
+    benchmark_p.add_argument('--upload', action='store_true')
+    benchmark_p.add_argument('targets', nargs='*')
+    add_verbosity_args(benchmark_p)
 
     cmake_p = subparsers.add_parser("cmake")
     set_main_signature(cmake_p, main_cmake, MainCmakeArgs)

@@ -17,6 +17,7 @@ class ProjectConfig:
     base: Path
     _build_targets: Optional[Tuple[str,...]] = None
     _test_targets: Optional[Tuple[str,...]] = None
+    _benchmark_targets: Optional[Tuple[str,...]] = None
     _ifndef_name: Optional[str] = None
     _namespace_name: Optional[str] = None
     _testsuite_macro: Optional[str] = None
@@ -36,6 +37,10 @@ class ProjectConfig:
         return self.base / 'build/codecov'
 
     @property
+    def benchmark_dir(self) -> Path:
+        return self.base / 'build/benchmark'
+
+    @property
     def doxygen_dir(self) -> Path:
         return self.base / 'build/doxygen'
 
@@ -49,9 +54,16 @@ class ProjectConfig:
     @property
     def test_targets(self) -> Tuple[str, ...]:
         if self._test_targets is None:
-            return tuple([f'{self.project_name}-tests'])
+            return tuple([get_target_test_name(self.project_name)])
         else:
             return self._test_targets
+
+    @property
+    def benchmark_targets(self) -> Tuple[str, ...]:
+        if self._benchmark_targets is None:
+            return tuple([get_target_benchmark_name(self.project_name)])
+        else:
+            return self._benchmark_targets
 
     @property
     def ifndef_name(self) -> str:
@@ -157,6 +169,7 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
         base=config_root,
         _build_targets=raw.get('build_targets'),
         _test_targets=raw.get('test_targets'),
+        _benchmark_targets=raw.get('benchmark_targets'),
         _testsuite_macro=raw.get('testsuite_macro'),
         _ifndef_name=raw.get('ifndef_name'),
         _namespace_name=raw.get('namespace_name'),
@@ -326,3 +339,19 @@ def get_source_path(p: Path) -> Path:
     assert src_dir.is_dir()
 
     return src_dir / with_suffix_appended(get_subrelpath(p), '.cc')
+
+def get_target_test_name(target: str) -> str:
+    return target + '-tests'
+
+def get_target_benchmark_name(target: str) -> str:
+    return target + '-benchmarks'
+
+def get_benchmark_target_name(benchmark: str) -> str:
+    assert benchmark.endswith('-benchmarks')
+    return benchmark[:-len('-benchmarks')]
+
+def get_benchmark_path(config: ProjectConfig, benchmark: str) -> Path:
+    return Path(config.benchmark_dir) / 'lib' / get_benchmark_target_name(benchmark) / 'benchmark' / benchmark
+
+def get_binary_path(config: ProjectConfig, target: str) -> Path:
+    return Path(config.build_dir) / 'bin' / target / target

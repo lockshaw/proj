@@ -43,6 +43,7 @@ from .variant.render import (
 from proj.hash import get_file_hash
 import json
 import logging
+from .find_outdated import find_outdated
 
 _l = logging.getLogger(__name__)
 
@@ -202,7 +203,7 @@ def generate_files(root: Path, config: ProjectConfig, spec_path: Path, force: bo
     if generate_source(spec=spec, spec_path=spec_path, root=root, out=source_path, force=force):
         yield source_path
 
-def run_dtgen(root: Path, config: ProjectConfig, force: bool, files: Optional[Sequence[PathLike[str]]] = None) -> None:
+def run_dtgen(root: Path, config: ProjectConfig, force: bool, files: Optional[Sequence[PathLike[str]]] = None, delete_outdated: bool = True) -> None:
     if files is None:
         files = list(find_files(root))
     _l.info('Running dtgen on following files:')
@@ -212,3 +213,10 @@ def run_dtgen(root: Path, config: ProjectConfig, force: bool, files: Optional[Se
         generated = list(generate_files(root=root, config=config, spec_path=Path(spec_path), force=force))
         if len(generated) > 0:
             run_formatter(root, config, generated)
+
+    for outdated in find_outdated(root, config):
+        if delete_outdated:
+            _l.info(f'Removing out-of-date file at {outdated}')
+            outdated.unlink()
+        else:
+            _l.warning(f'Possible out-of-date file at {outdated}')
