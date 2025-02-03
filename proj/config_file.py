@@ -378,7 +378,4 @@ def get_benchmark_target_name(benchmark: str) -> str:
     return benchmark[:-len('-benchmarks')]
 
 def get_benchmark_path(config: ProjectConfig, benchmark: str) -> Path:
-    return Path(config.benchmark_dir) / 'lib' / get_benchmark_target_name(benchmark) / 'benchmark' / benchmark
-
-def get_binary_path(config: ProjectConfig, target: str) -> Path:
-    return Path(config.build_dir) / 'bin' / target / target
+    return Path(config.release_build_dir) / 'lib' / get_benchmark_target_name(benchmark) / 'benchmark' / benchmark
