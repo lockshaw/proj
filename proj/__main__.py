@@ -44,7 +44,6 @@ from .benchmarks import (
 )
 from .cmake import (
     cmake_all,
-    BuildMode,
 )
 import argparse
 
@@ -171,12 +170,59 @@ def main_benchmark(args: MainBenchmarkArgs) -> None:
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=config.benchmark_build_dir,
+        cwd=config.release_build_dir,
     )
 
     benchmark_result = call_benchmarks([get_benchmark_path(config, b) for b in build_run_plan.targets_to_run])
     if args.upload:
         upload_to_bencher(benchmark_result)
+
+@dataclass(frozen=True)
+class MainRunArgs:
+    path: Path
+    verbosity: int
+    jobs: int
+    target: str
+    debug_mode: bool
+    target_run_args: Sequence[str]
+
+def main_run(args: MainRunArgs) -> None:
+    config = get_config(args.path)
+
+    run_targets_requiring_gpu: List[str] = []
+
+    build_run_plan = infer_build_run_plan(
+        requested_targets=[args.target],
+        target_requires_gpu=lambda t: t in run_targets_requiring_gpu,
+        skip_run_gpu_targets=False,
+        skip_build_gpu_targets=False,
+        skip_run_cpu_targets=False,
+        skip_build_cpu_targets=False,
+    )
+
+    if build_run_plan.failed_gpu_check:
+        fail_with_error(
+            f'Cannot run target {args.target} as no gpus are available on the current machine.'
+        )
+
+    if args.debug_mode:
+        build_dir = config.debug_build_dir
+    else:
+        build_dir = config.release_build_dir
+
+    build_targets(
+        config=config,
+        targets=build_run_plan.targets_to_build,
+        dtgen_skip=False,
+        jobs=args.jobs,
+        verbosity=args.verbosity,
+        cwd=build_dir,
+    )
+
+    binary_path = build_dir / 'bin' / args.target
+    assert binary_path.is_file()
+
+    subprocess.check_call([binary_path, *args.target_run_args])
 
 
 @dataclass(frozen=True)
@@ -365,7 +411,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     def set_main_signature(parser, func, args_type):
         def _f(args: argparse.Namespace, func=func, args_type=args_type):
-            func(args_type(**{k: v for k, v in vars(args).items() if k != 'func'}))
+            func(args_type(**{k.replace('-', '_'): v for k, v in vars(args).items() if k != 'func'}))
         parser.set_defaults(func=_f)
 
     root_p = subparsers.add_parser("root")
@@ -414,6 +460,16 @@ def make_parser() -> argparse.ArgumentParser:
     benchmark_p.add_argument('--upload', action='store_true')
     benchmark_p.add_argument('targets', nargs='*')
     add_verbosity_args(benchmark_p)
+
+    run_p = subparsers.add_parser('run')
+    set_main_signature(run_p, main_run, MainRunArgs)
+    run_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    run_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
+    run_p.add_argument('target', type=str)
+    run_p.add_argument('--debug-mode', action='store_true')
+    run_p.add_argument('target-run-args', nargs='*')
+    add_verbosity_args(run_p)
+    
 
     cmake_p = subparsers.add_parser("cmake")
     set_main_signature(cmake_p, main_cmake, MainCmakeArgs)

@@ -43,10 +43,6 @@ class ProjectConfig:
         return self.base / 'build/codecov'
 
     @property
-    def benchmark_build_dir(self) -> Path:
-        return self.base / 'build/benchmark'
-
-    @property
     def doxygen_dir(self) -> Path:
         return self.base / 'build/doxygen'
 
@@ -135,18 +131,6 @@ class ProjectConfig:
             **extra, 
             'CMAKE_BUILD_TYPE': 'Debug',
             'FF_USE_CODE_COVERAGE': 'ON',
-        }
-
-    @property
-    def benchmark_cmake_flags(self) -> Mapping[str, str]:
-        if self._benchmark_cmake_flags_extra is None:
-            extra: Mapping[str, str] = {}
-        else:
-            extra = self._benchmark_cmake_flags_extra
-        return {
-            **self.base_cmake_flags,
-            **extra, 
-            'CMAKE_BUILD_TYPE': 'Release',
         }
 
     @property

@@ -36,7 +36,6 @@ def render_args(arg_map: Mapping[str, str], trace: bool) -> List[str]:
 class BuildMode(StrEnum):
     RELEASE = 'release'
     DEBUG = 'debug'
-    BENCHMARK = 'benchmark'
     COVERAGE = 'coverage'
 
 def get_arg_map(config: ProjectConfig, mode: BuildMode) -> Mapping[str, str]:
@@ -44,8 +43,6 @@ def get_arg_map(config: ProjectConfig, mode: BuildMode) -> Mapping[str, str]:
         return config.release_cmake_flags
     elif mode == BuildMode.DEBUG:
         return config.debug_cmake_flags
-    elif mode == BuildMode.BENCHMARK:
-        return config.benchmark_cmake_flags
     else:
         assert mode == BuildMode.COVERAGE
         return config.coverage_cmake_flags
@@ -55,8 +52,6 @@ def get_build_dir(config: ProjectConfig, mode: BuildMode) -> Path:
         return config.release_build_dir
     elif mode == BuildMode.DEBUG:
         return config.debug_build_dir
-    elif mode == BuildMode.BENCHMARK:
-        return config.benchmark_build_dir
     else:
         assert mode == BuildMode.COVERAGE
         return config.coverage_build_dir
