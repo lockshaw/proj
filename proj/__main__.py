@@ -219,7 +219,7 @@ def main_run(args: MainRunArgs) -> None:
         cwd=build_dir,
     )
 
-    binary_path = build_dir / 'bin' / args.target
+    binary_path = build_dir / 'bin' / args.target / args.target
     assert binary_path.is_file()
 
     subprocess.check_call([binary_path, *args.target_run_args])
