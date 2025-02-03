@@ -222,7 +222,8 @@ def main_run(args: MainRunArgs) -> None:
     binary_path = build_dir / 'bin' / args.target / args.target
     assert binary_path.is_file()
 
-    subprocess.check_call([str(binary_path), *args.target_run_args])
+    result = subprocess.run([str(binary_path), *args.target_run_args])
+    sys.exit(result.returncode)
 
 
 @dataclass(frozen=True)

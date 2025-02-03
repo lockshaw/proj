@@ -82,8 +82,8 @@ def run(command, **kwargs):
     if kwargs.get("shell", False):
         pretty_cmd = " ".join(command)
         _l.info(f"+++ $ {pretty_cmd}")
-        subprocess.check_call(pretty_cmd, **kwargs)
+        return subprocess.run(pretty_cmd, **kwargs)
     else:
         pretty_cmd = shlex.join(command)
         _l.info(f"+++ $ {pretty_cmd}")
-        subprocess.check_call(command, **kwargs)
+        return subprocess.run(command, **kwargs)
