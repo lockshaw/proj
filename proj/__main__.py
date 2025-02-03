@@ -46,6 +46,7 @@ from .cmake import (
     cmake_all,
     BuildMode,
 )
+import argparse
 
 _l = logging.getLogger(name='proj')
 
@@ -358,9 +359,7 @@ def main_doxygen(args: MainDoxygenArgs) -> None:
         xdg_open(config.doxygen_dir / 'html/index.html') 
 
 
-def main() -> None:
-    import argparse
-
+def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
     subparsers = p.add_subparsers()
 
@@ -406,7 +405,7 @@ def main() -> None:
     benchmark_p = subparsers.add_parser('benchmark')
     set_main_signature(benchmark_p, main_benchmark, MainBenchmarkArgs)
     benchmark_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
-    benchmark_p.add_argument('jobs', '-j', type=int, default=multiprocessing.cpu_count())
+    benchmark_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
     benchmark_p.add_argument('--dtgen-skip', action='store_true')
     benchmark_p.add_argument("--skip-gpu-benchmarks", action="store_true")
     benchmark_p.add_argument("--skip-build-gpu-benchmarks", action="store_true")
@@ -453,6 +452,10 @@ def main() -> None:
     )
     add_verbosity_args(doxygen_p)
 
+    return p
+
+def main() -> None:
+    p = make_parser()
     args = p.parse_args()
 
     logging.basicConfig(
