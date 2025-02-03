@@ -9,9 +9,7 @@ from typing import (
 )
 from . import subprocess_trace as subprocess
 import os
-import shutil
 import multiprocessing
-import shlex
 import sys
 from .config_file import (
     get_config,
@@ -23,7 +21,6 @@ from .config_file import (
 from .dtgen import run_dtgen
 from .format import run_formatter
 from .lint import run_linter
-import proj.fix_compile_commands as fix_compile_commands
 import logging
 from dataclasses import dataclass
 from .verbosity import (
@@ -45,7 +42,10 @@ from .benchmarks import (
     call_benchmarks,
     upload_to_bencher,
 )
-from enum import StrEnum
+from .cmake import (
+    cmake_all,
+    BuildMode,
+)
 
 _l = logging.getLogger(name='proj')
 
@@ -67,23 +67,6 @@ def xdg_open(path: Path):
         env=os.environ,
     )
 
-def cmake(cmake_args, config, is_coverage):
-    if is_coverage:
-        cwd = config.cov_dir
-    else:
-        cwd = config.build_dir
-    subprocess.check_call(
-        [
-            "cmake",
-            *cmake_args,
-            "../..",
-        ],
-        stderr=sys.stdout,
-        cwd=cwd,
-        env=os.environ,
-        shell=config.cmake_require_shell,
-    )
-
 @dataclass(frozen=True)
 class MainCmakeArgs:
     path: Path
@@ -93,51 +76,16 @@ class MainCmakeArgs:
     verbosity: int
 
 def main_cmake(args: MainCmakeArgs) -> None:
-    if not args.dtgen_skip:
-        main_dtgen(args=MainDtgenArgs(
-            path=args.path,
-            files=[],
-            no_delete_outdated=False,
-            force=False,
-            verbosity=args.verbosity,
-        ))
-
     config = get_config(args.path)
-    if not args.fast:
-        if config.build_dir.exists():
-            shutil.rmtree(config.build_dir)
-        if config.cov_dir.exists():
-            shutil.rmtree(config.cov_dir)
-    config.build_dir.mkdir(exist_ok=True, parents=True)
-    config.cov_dir.mkdir(exist_ok=True, parents=True)
-    config.benchmark_dir.mkdir(exist_ok=True, parents=True)
-    cmake_args = [f"-D{k}={v}" for k, v in config.cmake_flags.items()]
-    cmake_args += shlex.split(os.environ.get("CMAKE_FLAGS", ""))
-    if args.trace:
-        cmake_args += ["--trace", "--trace-expand", "--trace-redirect=trace.log"]
-    cmake(cmake_args, config, False)
-    COMPILE_COMMANDS_FNAME = "compile_commands.json"
-    if config.fix_compile_commands:
-        fix_compile_commands.fix_file(
-            compile_commands=config.build_dir / COMPILE_COMMANDS_FNAME,
-            base_dir=config.base,
+
+    if not args.dtgen_skip:
+        run_dtgen(
+            root=config.base,
+            config=config,
+            force=False,
         )
 
-    with (config.base / COMPILE_COMMANDS_FNAME).open("w") as f:
-        subprocess.check_call(
-            [
-                "compdb",
-                "-p",
-                ".",
-                "list",
-            ],
-            stdout=f,
-            cwd=config.build_dir,
-            env=os.environ,
-        )
-        
-    cmake(cmake_args + ["-DFF_USE_CODE_COVERAGE=ON"], config, True)
-
+    cmake_all(config=config, fast=args.fast, trace=args.trace)
 
 @dataclass(frozen=True)
 class MainBuildArgs:
@@ -146,9 +94,18 @@ class MainBuildArgs:
     jobs: int
     dtgen_skip: bool
     targets: Collection[str]
+    release: bool
 
 def main_build(args: MainBuildArgs) -> None:
     config = get_config(args.path)
+
+    if args.release:
+        build_dir = config.release_build_dir
+    else:
+        build_dir = config.debug_build_dir
+    
+    if not build_dir.exists():
+        cmake_all(config=config, fast=False, trace=False)
 
     targets: List[str]
     if len(args.targets) == 0:
@@ -162,7 +119,7 @@ def main_build(args: MainBuildArgs) -> None:
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=config.build_dir,
+        cwd=build_dir,
     )
 
 @dataclass(frozen=True)
@@ -213,7 +170,7 @@ def main_benchmark(args: MainBenchmarkArgs) -> None:
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=config.benchmark_dir,
+        cwd=config.benchmark_build_dir,
     )
 
     benchmark_result = call_benchmarks([get_benchmark_path(config, b) for b in build_run_plan.targets_to_run])
@@ -240,9 +197,13 @@ def main_test(args: MainTestArgs) -> None:
     config = get_config(args.path)
 
     if args.coverage:
-        cwd = config.cov_dir
+        build_dir = config.coverage_build_dir
     else:
-        cwd = config.build_dir
+        build_dir = config.debug_build_dir
+
+    if not build_dir.exists():
+        cmake_all(config=config, fast=False, trace=False)
+
 
     # Currently hardcode GPU tests as 'kernels-tests'
     requested_test_targets: List[str]
@@ -277,7 +238,7 @@ def main_test(args: MainTestArgs) -> None:
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=cwd,
+        cwd=build_dir,
     )
 
     target_regex = "^(" + "|".join(build_run_plan.targets_to_run) + ")$"
@@ -290,7 +251,7 @@ def main_test(args: MainTestArgs) -> None:
             target_regex,
         ],
         stderr=sys.stdout,
-        cwd=cwd,
+        cwd=build_dir,
         env=os.environ,
     )
     
@@ -397,12 +358,6 @@ def main_doxygen(args: MainDoxygenArgs) -> None:
         xdg_open(config.doxygen_dir / 'html/index.html') 
 
 
-class BuildMode(StrEnum):
-    RELEASE = 'release'
-    DEBUG = 'debug'
-    BENCHMARK = 'benchmark'
-    COVERAGE = 'coverage'
-
 def main() -> None:
     import argparse
 
@@ -444,6 +399,7 @@ def main() -> None:
     build_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     build_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     build_p.add_argument("--dtgen-skip", action="store_true")
+    build_p.add_argument("--release", action="store_true")
     build_p.add_argument('targets', nargs='*')
     add_verbosity_args(build_p)
 

@@ -43,6 +43,7 @@ def _test_project(name: str):
         jobs=1,
         dtgen_skip=False,
         targets=[],
+        release=False,
     )
     main_build(args=build_args)
 

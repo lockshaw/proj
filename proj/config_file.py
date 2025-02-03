@@ -22,6 +22,8 @@ class ProjectConfig:
     _namespace_name: Optional[str] = None
     _testsuite_macro: Optional[str] = None
     _cmake_flags_extra: Optional[Mapping[str, str]] = None
+    _coverage_cmake_flags_extra: Optional[Mapping[str, str]] = None
+    _benchmark_cmake_flags_extra: Optional[Mapping[str, str]] = None
     _cmake_require_shell: Optional[bool] = None
     _inherit_up: Optional[bool] = None
     _header_extension: Optional[str] = None
@@ -29,15 +31,19 @@ class ProjectConfig:
     _test_header_path: Optional[Path] = None
 
     @property
-    def build_dir(self) -> Path:
+    def debug_build_dir(self) -> Path:
         return self.base / 'build/normal'
     
     @property
-    def cov_dir(self) -> Path:
+    def release_build_dir(self) -> Path:
+        return self.base / 'build/release'
+
+    @property
+    def coverage_build_dir(self) -> Path:
         return self.base / 'build/codecov'
 
     @property
-    def benchmark_dir(self) -> Path:
+    def benchmark_build_dir(self) -> Path:
         return self.base / 'build/benchmark'
 
     @property
@@ -93,17 +99,54 @@ class ProjectConfig:
             return self._testsuite_macro
 
     @property
-    def cmake_flags(self) -> Mapping[str, str]:
+    def base_cmake_flags(self) -> Mapping[str, str]:
         if self._cmake_flags_extra is None:
             extra: Mapping[str, str] = {}
         else:
             extra = self._cmake_flags_extra
         return {
             **extra,
-            'CMAKE_CXX_FLAGS': '-ftemplate-backtrace-limit=0',
+            'CMAKE_CXX_COMPILER_LAUNCHER': 'ccache',
+        }
+
+    @property
+    def debug_cmake_flags(self) -> Mapping[str, str]:
+        return {
+            **self.base_cmake_flags,
             'CMAKE_BUILD_TYPE': 'Debug',
             'CMAKE_EXPORT_COMPILE_COMMANDS': 'ON',
-            'CMAKE_CXX_COMPILER_LAUNCHER': 'ccache',
+        }
+
+    @property
+    def release_cmake_flags(self) -> Mapping[str, str]:
+        return {
+            **self.base_cmake_flags,
+            'CMAKE_BUILD_TYPE': 'Release',
+        }
+
+    @property
+    def coverage_cmake_flags(self) -> Mapping[str, str]:
+        if self._coverage_cmake_flags_extra is None:
+            extra: Mapping[str, str] = {}
+        else:
+            extra = self._coverage_cmake_flags_extra
+        return {
+            **self.base_cmake_flags,
+            **extra, 
+            'CMAKE_BUILD_TYPE': 'Debug',
+            'FF_USE_CODE_COVERAGE': 'ON',
+        }
+
+    @property
+    def benchmark_cmake_flags(self) -> Mapping[str, str]:
+        if self._benchmark_cmake_flags_extra is None:
+            extra: Mapping[str, str] = {}
+        else:
+            extra = self._benchmark_cmake_flags_extra
+        return {
+            **self.base_cmake_flags,
+            **extra, 
+            'CMAKE_BUILD_TYPE': 'Release',
         }
 
     @property
