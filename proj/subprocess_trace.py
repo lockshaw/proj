@@ -9,6 +9,13 @@ from subprocess import (
 )
 import sys
 import io
+from typing import (
+    overload, 
+    Literal, 
+    Optional,
+    Tuple,
+)
+
 
 _l = logging.getLogger(__name__)
 
@@ -33,8 +40,15 @@ def check_output(command, **kwargs):
         _l.info(f"+++ $ {pretty_cmd}")
         return subprocess.checkout_output(command, **kwargs)
 
+@overload
+def tee_output(command, stdout, stderr, text: Literal[False], **kwargs) -> Tuple[str, str]:
+    ...
 
-def tee_output(command, **kwargs):
+@overload
+def tee_output(command, stdout, stderr, text: Literal[True], **kwargs) -> Tuple[str, str]:
+    ...
+
+def tee_output(command, stdout=None, stderr=None, text: bool=False, **kwargs):
     if kwargs.get("shell", False):
         pretty_cmd = " ".join(command)
         _l.info(f"+++ $ {pretty_cmd}")
@@ -42,39 +56,54 @@ def tee_output(command, **kwargs):
         pretty_cmd = shlex.join(command)
         _l.info(f"+++ $ {pretty_cmd}")
 
-    proc = subprocess.Popen(command, stdout=PIPE, stderr=PIPE)
-    if kwargs.get('text', False):
-        stderr = io.TextIO()
-        stdout = io.TextIO()
+    assert isinstance(command, str) == kwargs.get('shell', False)
+
+    proc = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, bufsize=0, text=text, **kwargs)
+    if text:
+        if stdout is None:
+            stdout = sys.stdout
+        if stderr is None:
+            stderr = sys.stderr
+        stderrs = (io.StringIO(), stderr)
+        stdouts = (io.StringIO(), stdout)
     else:
-        stderr = io.BytesIO()
-        stdout = io.BytesIO()
+        if stdout is None:
+            stdout = sys.stdout.buffer
+        if stderr is None:
+            stderr = sys.stderr.buffer
+        stderrs = (io.BytesIO(), stderr)
+        stdouts = (io.BytesIO(), stdout)
+
+    def write_both(output, contents):
+        output[0].write(contents)
+        output[1].write(contents)
+
     returncode = None
     while True:
         returncode = proc.poll()
         if returncode is None:
-            line = proc.stderr.read()
-            if line:
-                sys.stderr.write(line)
-                stderr.write(line)
-            line = proc.stdout.readline()
-            if line:
-                sys.stdout.write(line)
-                stdout.write(line)
+            assert proc.stderr is not None
+            assert proc.stdout is not None
+            write_both(stderrs, proc.stderr.read())
+            write_both(stdouts, proc.stdout.read())
         else:
             (remaining_stdout, remaining_stderr) = proc.communicate()
-            print(remaining_stderr, file=sys.stderr, flush=True)
-            print(remaining_stdout, file=sys.stdout, flush=True)
+            write_both(stderrs, remaining_stderr)
+            write_both(stdouts, remaining_stdout)
+            break
+    stderrs[0].flush()
+    stderrs[1].flush()
+    stdouts[0].flush()
+    stdouts[1].flush()
     if returncode == 0:
-        return stdout
+        return (stdouts[0].getvalue(), stderrs[0].getvalue())
     else:
         assert returncode > 0
         raise CalledProcessError(
             returncode=returncode,
             cmd=command,
-            output=stdout.getvalue(),
-            stdout=stdout.getvalue(),
-            stderr=stderr.getvalue(),
+            output=stdouts[0].getvalue(),
+            stderr=stderrs[1].getvalue(),
         )
 
 

@@ -20,7 +20,6 @@ from proj.config_file import (
 from proj.dtgen.find_outdated import (
     find_outdated,
 )
-import proj.lint as lint
 import logging
 
 DIR = Path(__file__).absolute().parent
