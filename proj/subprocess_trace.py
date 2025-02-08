@@ -42,7 +42,7 @@ def check_output(command, **kwargs):
     else:
         pretty_cmd = shlex.join(command)
         _l.info(f"+++ $ {pretty_cmd}")
-        return subprocess.checkout_output(command, **kwargs)
+        return subprocess.check_output(command, **kwargs)
 
 @overload
 def tee_output(

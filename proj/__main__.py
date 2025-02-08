@@ -41,6 +41,7 @@ from .failure import fail_with_error
 from .benchmarks import (
     call_benchmarks,
     upload_to_bencher,
+    pretty_print_benchmark,
 )
 from .cmake import (
     cmake_all,
@@ -174,6 +175,7 @@ def main_benchmark(args: MainBenchmarkArgs) -> None:
     )
 
     benchmark_result = call_benchmarks([get_benchmark_path(config, b) for b in build_run_plan.targets_to_run])
+    pretty_print_benchmark(benchmark_result, f=sys.stdout)
     if args.upload:
         upload_to_bencher(benchmark_result)
 
