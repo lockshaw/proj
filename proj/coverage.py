@@ -57,7 +57,7 @@ def postprocess_coverage_data(config):
     
 
 def view_coverage_data(config: ProjectConfig, browser: bool) -> None:
-    cwd = config.cov_dir
+    cwd = config.coverage_build_dir
 
     if browser:
         _l.info("opening coverage info in browser")

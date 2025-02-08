@@ -12,8 +12,12 @@ import io
 from typing import (
     overload, 
     Literal, 
-    Optional,
+    Iterable,
     Tuple,
+    Union,
+    IO,
+    Optional,
+    Any,
 )
 
 
@@ -41,14 +45,28 @@ def check_output(command, **kwargs):
         return subprocess.checkout_output(command, **kwargs)
 
 @overload
-def tee_output(command, stdout, stderr, text: Literal[False], **kwargs) -> Tuple[str, str]:
+def tee_output(
+    command: Union[str, Iterable[str]], 
+    *,
+    stdout: Optional[IO[bytes]] = None, 
+    stderr: Optional[IO[bytes]] = None,
+    text: Literal[False] = False, 
+    **kwargs,
+) -> Tuple[bytes, bytes]:
     ...
 
 @overload
-def tee_output(command, stdout, stderr, text: Literal[True], **kwargs) -> Tuple[str, str]:
+def tee_output(
+    command: Union[str, Iterable[str]], 
+    *,
+    stdout: Optional[IO[str]] = None, 
+    stderr: Optional[IO[str]] = None, 
+    text: Literal[True], 
+    **kwargs,
+) -> Tuple[str, str]:
     ...
 
-def tee_output(command, stdout=None, stderr=None, text: bool=False, **kwargs):
+def tee_output(command, *, stdout=None, stderr=None, text: bool=False, **kwargs):
     if kwargs.get("shell", False):
         pretty_cmd = " ".join(command)
         _l.info(f"+++ $ {pretty_cmd}")
@@ -59,6 +77,8 @@ def tee_output(command, stdout=None, stderr=None, text: bool=False, **kwargs):
     assert isinstance(command, str) == kwargs.get('shell', False)
 
     proc = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, bufsize=0, text=text, **kwargs)
+    stderrs: Any
+    stdouts: Any
     if text:
         if stdout is None:
             stdout = sys.stdout

@@ -81,8 +81,8 @@ def call_benchmarks(benchmarks: Sequence[Path]) -> BenchmarkResult:
     return merge_benchmark_results(results)
 
 def call_benchmark(benchmark: Path) -> BenchmarkResult:
-    output = subprocess.tee_output([str(benchmark)])
-    return BenchmarkResult.from_json(json.loads(output))
+    (stdout, _) = subprocess.tee_output([str(benchmark)])
+    return BenchmarkResult.from_json(json.loads(stdout))
 
 def upload_to_bencher(result: BenchmarkResult) -> None:
     with NamedTemporaryFile('r+') as f:
