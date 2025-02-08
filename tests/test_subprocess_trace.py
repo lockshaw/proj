@@ -61,3 +61,29 @@ def test_tee_output_bytes_output():
 
     assert stdout1_val == b'okay world\n'
     assert stderr1_val == b'error world\n'
+
+def test_tee_output_real_stderr_stdout():
+    (stdout_val, stderr_val) = tee_output('echo "error world" 1>&2 && echo "okay world"', shell=True)
+
+    assert stdout_val == b'okay world\n'
+    assert stderr_val == b'error world\n'
+
+def test_tee_output_real_stderr_stdout_command_fails():
+    try:
+        tee_output('echo "error world" 1>&2 && echo "okay world" && false', shell=True)
+        assert False
+    except CalledProcessError as e:
+        stdout_val = e.stdout
+        stderr_val = e.stderr
+        assert stdout_val == b'okay world\n'
+        assert stderr_val == b'error world\n'
+
+def test_tee_output_real_stderr_stdout_command_fails_text_mode():
+    try:
+        tee_output('echo "error world" 1>&2 && echo "okay world" && false', shell=True, text=True)
+        assert False
+    except CalledProcessError as e:
+        stdout_val = e.stdout
+        stderr_val = e.stderr
+        assert stdout_val == 'okay world\n'
+        assert stderr_val == 'error world\n'

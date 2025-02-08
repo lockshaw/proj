@@ -123,7 +123,7 @@ def tee_output(command, *, stdout=None, stderr=None, text: bool=False, **kwargs)
             returncode=returncode,
             cmd=command,
             output=stdouts[0].getvalue(),
-            stderr=stderrs[1].getvalue(),
+            stderr=stderrs[0].getvalue(),
         )
 
 
