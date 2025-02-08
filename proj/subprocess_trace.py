@@ -127,6 +127,46 @@ def tee_output(command, *, stdout=None, stderr=None, text: bool=False, **kwargs)
         )
 
 
+def hook_stdout(command, *, stdout_hook, **kwargs):
+    if kwargs.get("shell", False):
+        pretty_cmd = " ".join(command)
+        _l.info(f"+++ $ {pretty_cmd}")
+    else:
+        pretty_cmd = shlex.join(command)
+        _l.info(f"+++ $ {pretty_cmd}")
+
+    assert isinstance(command, str) == kwargs.get('shell', False)
+
+    proc = subprocess.Popen(command, stdout=PIPE, text=True, bufsize=1, **kwargs)
+
+    output = ''
+
+    def process(s: str) -> None:
+        nonlocal output
+        if len(s) > 0:
+            output += s
+            stdout_hook(s)
+
+    while True:
+        returncode = proc.poll()
+        if returncode is None:
+            assert proc.stdout is not None
+            process(proc.stdout.readline())
+        else:
+            (remaining_stdout, _) = proc.communicate()
+            process(remaining_stdout)
+            break
+    if returncode == 0:
+        return output
+    else:
+        assert returncode > 0
+        raise CalledProcessError(
+            returncode=returncode,
+            cmd=command,
+            output=stdouts[0].getvalue(),
+            stderr=stderrs[0].getvalue(),
+        )
+
 def run(command, **kwargs):
     if kwargs.get("shell", False):
         pretty_cmd = " ".join(command)

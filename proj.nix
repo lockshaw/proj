@@ -10,6 +10,7 @@ buildPythonApplication {
 
   propagatedBuildInputs = [
     python3Packages.typing-extensions
+    python3Packages.enlighten
     bencher-cli
   ];
 }

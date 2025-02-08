@@ -18,6 +18,8 @@ from datetime import datetime
 import statistics
 from tempfile import NamedTemporaryFile
 import logging
+import enlighten
+import re
 
 _l = logging.getLogger(__name__)
 
@@ -219,12 +221,40 @@ def pretty_print_benchmark(benchmark: BenchmarkResult, f: IO[str]) -> None:
 
     line(render_table(columns=columns, data=table_data, sep=sep))
 
-def call_benchmarks(benchmarks: Sequence[Path]) -> BenchmarkResult:
-    results = [call_benchmark(b) for b in sorted(benchmarks)]
+def list_benchmarks(benchmark_binaries: Sequence[Path]) -> List[str]:
+    return sum((get_benchmark_list_for_binary(bin) for bin in benchmark_binaries), [])
+
+def get_benchmark_list_for_binary(bin: Path) -> List[str]:
+    stdout = subprocess.check_output([str(bin), '--benchmark_list_tests=true'], text=True)
+    return [line for line in stdout.splitlines()]
+
+def call_benchmarks(benchmark_binaries: Sequence[Path]) -> BenchmarkResult:
+    benchmark_binaries = list(sorted(benchmark_binaries))
+    all_benchmarks = list_benchmarks(benchmark_binaries)
+
+    manager = enlighten.get_manager()
+    pbar = manager.counter(total=len(all_benchmarks), desc='Benchmarks')
+
+    results = [call_benchmark(bin, pbar) for bin in benchmark_binaries]
     return merge_benchmark_results(results)
 
-def call_benchmark(benchmark: Path) -> BenchmarkResult:
-    stdout = subprocess.check_output([str(benchmark), '--benchmark_format=json'])
+NAME_RE = re.compile(r'"name": "(?P<testname>[^"]+)"')
+def call_benchmark(benchmark: Path, pbar) -> BenchmarkResult:
+    functions = get_benchmark_list_for_binary(benchmark)
+    pbar.update(incr=0, force=True)
+    def hook(line: str) -> None:
+        match = NAME_RE.search(line)
+        if match is None:
+            return
+        testname = match.group('testname')
+        assert testname == functions[0], (testname, functions[0])
+        functions.pop(0)
+        if len(functions) > 0:
+            print(f'Running {functions[0]}')
+        pbar.update()
+
+    print(f'Running {functions[0]}')
+    stdout = subprocess.hook_stdout([str(benchmark), '--benchmark_format=json'], stdout_hook=hook)
     return BenchmarkResult.from_json(json.loads(stdout))
 
 def upload_to_bencher(result: BenchmarkResult) -> None:
