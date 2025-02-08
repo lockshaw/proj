@@ -81,7 +81,7 @@ def call_benchmarks(benchmarks: Sequence[Path]) -> BenchmarkResult:
     return merge_benchmark_results(results)
 
 def call_benchmark(benchmark: Path) -> BenchmarkResult:
-    (stdout, _) = subprocess.tee_output([str(benchmark)])
+    (stdout, _) = subprocess.tee_output([str(benchmark), '--benchmark_format', 'json'])
     return BenchmarkResult.from_json(json.loads(stdout))
 
 def upload_to_bencher(result: BenchmarkResult) -> None:
