@@ -121,7 +121,7 @@ class ProjectConfig:
     def release_cmake_flags(self) -> Mapping[str, str]:
         return {
             **self.base_cmake_flags,
-            'CMAKE_BUILD_TYPE': 'Release',
+            'CMAKE_BUILD_TYPE': 'RelWithDebInfo',
         }
 
     @property
