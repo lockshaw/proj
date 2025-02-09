@@ -15,6 +15,8 @@ import proj.toml as toml
 class ProjectConfig:
     project_name: str
     base: Path
+    _bin_targets: Optional[Tuple[str,...]] = None
+    _lib_targets: Optional[Tuple[str,...]] = None
     _build_targets: Optional[Tuple[str,...]] = None
     _test_targets: Optional[Tuple[str,...]] = None
     _benchmark_targets: Optional[Tuple[str,...]] = None
@@ -49,6 +51,20 @@ class ProjectConfig:
     @property
     def doxygen_dir(self) -> Path:
         return self.base / 'build/doxygen'
+
+    @property
+    def bin_targets(self) -> Tuple[str, ...]:
+        if self._bin_targets is None:
+            return tuple()
+        else:
+            return self._bin_targets
+
+    @property
+    def lib_targets(self) -> Tuple[str, ...]:
+        if self._lib_targets is None:
+            return tuple([self.project_name])
+        else:
+            return self._lib_targets
 
     @property
     def build_targets(self) -> Tuple[str, ...]:
@@ -198,6 +214,8 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
     return ProjectConfig(
         project_name=raw['project_name'],
         base=config_root,
+        _lib_targets=raw.get('lib_targets'),
+        _bin_targets=raw.get('bin_targets'),
         _build_targets=raw.get('build_targets'),
         _test_targets=raw.get('test_targets'),
         _benchmark_targets=raw.get('benchmark_targets'),
@@ -370,16 +388,3 @@ def get_source_path(p: Path) -> Path:
     assert src_dir.is_dir()
 
     return src_dir / with_suffix_appended(get_subrelpath(p), '.cc')
-
-def get_target_test_name(target: str) -> str:
-    return target + '-tests'
-
-def get_target_benchmark_name(target: str) -> str:
-    return target + '-benchmarks'
-
-def get_benchmark_target_name(benchmark: str) -> str:
-    assert benchmark.endswith('-benchmarks')
-    return benchmark[:-len('-benchmarks')]
-
-def get_benchmark_path(config: ProjectConfig, benchmark: str) -> Path:
-    return Path(config.release_build_dir) / 'lib' / get_benchmark_target_name(benchmark) / 'benchmark' / benchmark

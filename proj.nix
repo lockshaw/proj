@@ -1,6 +1,8 @@
 { buildPythonApplication
 , python3Packages
 , bencher-cli
+, pkgs
+, hotspot
 }:
 
 buildPythonApplication {
@@ -12,5 +14,6 @@ buildPythonApplication {
     python3Packages.typing-extensions
     python3Packages.enlighten
     bencher-cli
+    pkgs.linuxPackages_latest.perf
   ];
 }

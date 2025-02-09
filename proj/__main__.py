@@ -14,9 +14,6 @@ import sys
 from .config_file import (
     get_config,
     get_config_root,
-    get_target_test_name,
-    get_target_benchmark_name,
-    get_benchmark_path,
 )
 from .dtgen import run_dtgen
 from .format import run_formatter
@@ -47,6 +44,14 @@ from .cmake import (
     cmake_all,
 )
 import argparse
+from .targets import (
+    parse_target,
+    LibTarget,
+    BinTarget,
+    RunTarget,
+    BuildTarget,
+)
+from .profile import profile_target
 
 _l = logging.getLogger(name='proj')
 
@@ -227,6 +232,64 @@ def main_run(args: MainRunArgs) -> None:
 
     result = subprocess.run([str(binary_path), *args.target_run_args])
     sys.exit(result.returncode)
+
+@dataclass(frozen=True)
+class MainProfileArgs:
+    path: Path
+    verbosity: int
+    jobs: int
+    target: str
+    tests: bool
+    benchmarks: bool
+    target_run_args: Sequence[str]
+
+def main_profile(args: MainProfileArgs) -> None:
+    config = get_config(args.path)
+
+    target = parse_target(config, args.target)
+
+    run_target: RunTarget
+    if isinstance(target, LibTarget):
+        assert not (args.tests and args.benchmarks)
+        assert (args.tests or args.benchmarks)
+        if args.tests:
+            run_target = target.tests_run_target
+        else: 
+            assert args.benchmarks
+            run_target = target.benchmark_run_target
+    else:
+        assert isinstance(target, BinTarget)
+        assert not args.tests
+        assert not args.benchmarks
+        run_target = target.bin_run_target
+
+    # profile_targets_requiring_gpu: List[str] = ['kernels']
+
+    # build_run_plan = infer_build_run_plan(
+    #     requested_targets=[args.target],
+    #     target_requires_gpu=lambda t: t in profile_targets_requiring_gpu,
+    #     skip_run_gpu_targets=False,
+    #     skip_build_gpu_targets=False,
+    #     skip_run_cpu_targets=False,
+    #     skip_build_cpu_targets=False,
+    # )
+    #
+    # if build_run_plan.failed_gpu_check:
+    #     fail_with_error(
+    #         f'Cannot run target {args.target} as no gpus are available on the current machine.'
+    #     )
+
+    build_targets(
+        config=config,
+        targets=[run_target.build_target],
+        dtgen_skip=False,
+        jobs=args.jobs,
+        verbosity=args.verbosity,
+        cwd=config.release_build_dir,
+    )
+
+    profile_file = profile_target(config.release_build_dir, run_target)
+    print(profile_file)
 
 
 @dataclass(frozen=True)
@@ -475,6 +538,16 @@ def make_parser() -> argparse.ArgumentParser:
     run_p.add_argument('target-run-args', nargs='*')
     add_verbosity_args(run_p)
     
+    profile_p = subparsers.add_parser('profile')
+    set_main_signature(profile_p, main_profile, MainProfileArgs)
+    profile_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    profile_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
+    profile_p.add_argument('--tests', action='store_true')
+    profile_p.add_argument('--benchmarks', action='store_true')
+    profile_p.add_argument('target', type=str)
+    profile_p.add_argument('target-run-args', nargs='*')
+    add_verbosity_args(profile_p)
+
     cmake_p = subparsers.add_parser("cmake")
     set_main_signature(cmake_p, main_cmake, MainCmakeArgs)
     cmake_p.add_argument("--path", "-p", type=Path, default=Path.cwd())

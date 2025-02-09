@@ -1,5 +1,8 @@
 from .config_file import ProjectConfig
-from typing import Iterable
+from typing import (
+    Iterable,
+    Union,
+)
 from . import subprocess_trace as subprocess
 import logging
 import sys
@@ -7,16 +10,19 @@ import os
 from pathlib import Path
 from .failure import fail_with_error
 from .dtgen import run_dtgen
+from .targets import (
+    BuildTarget,
+)
 
 def build_targets(
     config: ProjectConfig,
-    targets: Iterable[str],
+    targets: Iterable[BuildTarget],
     dtgen_skip: bool,
     jobs: int,
     verbosity: int,
     cwd: Path,
 ) -> None:
-    _targets = list(sorted(set(targets)))
+    _targets = list(sorted(set([t.name for t in targets])))
     if len(_targets) == 0:
         fail_with_error('No build targets selected')
 
