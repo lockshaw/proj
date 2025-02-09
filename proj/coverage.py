@@ -3,6 +3,7 @@ import sys
 import os
 import logging
 from .config_file import ProjectConfig
+from .browser import open_in_browser
 
 _l = logging.getLogger(__name__)
 
@@ -73,17 +74,7 @@ def view_coverage_data(config: ProjectConfig, browser: bool) -> None:
             env=os.environ,
         )
 
-        # run xdg-open to open the browser
-        # not able to test it now as I am running on remote linux
-        subprocess.run(
-            [
-                "xdg-open",
-                "code_coverage/index.html",
-            ],
-            stderr=sys.stdout,
-            cwd=cwd,
-            env=os.environ,
-        )
+        open_in_browser('code_coverage/index.html', cwd=cwd)
     else:
         subprocess.run(
             [

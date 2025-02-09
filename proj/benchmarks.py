@@ -20,11 +20,13 @@ from tempfile import NamedTemporaryFile
 import logging
 import enlighten
 import re
+from .browser import open_in_browser
+from .config_file import ProjectConfig
 
 _l = logging.getLogger(__name__)
 
 def require_float(x: Any) -> float:
-    assert isinstance(x, float)
+    assert isinstance(x, float), x
     return x
 
 @dataclass(frozen=True)
@@ -47,6 +49,14 @@ class BenchmarkCache:
             size=json['size'],
             num_sharing=json['num_sharing'],
         )
+
+    def to_json(self) -> Dict[str, Json]:
+        return {
+            'type': self.type_,
+            'level': self.level,
+            'size': self.size,
+            'num_sharing': self.num_sharing,
+        }
 
 @dataclass(frozen=True)
 class BenchmarkContext:
@@ -90,7 +100,10 @@ class BenchmarkContext:
         return {
             'date': self.date.isoformat(),
             'mhz_per_cpu': self.mhz_per_cpu,
-            'load_avg': self.load_avg,
+            'load_avg': list(self.load_avg),
+            'num_cpus': self.num_cpus,
+            'caches': [c.to_json() for c in self.caches],
+            'executable': self.executable,
             **self.rest,
         }
 
@@ -233,9 +246,8 @@ def call_benchmarks(benchmark_binaries: Sequence[Path]) -> BenchmarkResult:
     all_benchmarks = list_benchmarks(benchmark_binaries)
 
     manager = enlighten.get_manager()
-    pbar = manager.counter(total=len(all_benchmarks), desc='Benchmarks')
-
-    results = [call_benchmark(bin, pbar) for bin in benchmark_binaries]
+    with manager.counter(total=len(all_benchmarks), desc='Benchmarks') as pbar:
+        results = [call_benchmark(bin, pbar) for bin in benchmark_binaries]
     return merge_benchmark_results(results)
 
 NAME_RE = re.compile(r'"name": "(?P<testname>[^"]+)"')
@@ -257,16 +269,27 @@ def call_benchmark(benchmark: Path, pbar) -> BenchmarkResult:
     stdout = subprocess.hook_stdout([str(benchmark), '--benchmark_format=json'], stdout_hook=hook)
     return BenchmarkResult.from_json(json.loads(stdout))
 
-def upload_to_bencher(result: BenchmarkResult) -> None:
+def upload_to_bencher(config: ProjectConfig, result: BenchmarkResult, browser: bool) -> None:
     with NamedTemporaryFile('r+') as f:
         json.dump(result.to_json(), f)
         f.flush()
         try:
-            subprocess.check_call([
-                'bencher', '--project', 'flexflow-train', '--adapter', 'cpp_google', '--file', f.name,
-            ])
+            if browser:
+                format = 'html'
+                stdout = subprocess.PIPE
+            else:
+                format = 'human'
+                stdout = None
+            cmd_result = subprocess.run([
+                'bencher', 'run', '--project', 'flexflow-train', '--adapter', 'cpp_google', '--file', f.name, '--quiet', '--format', format
+            ], check=True, stdout=stdout)
         except subprocess.CalledProcessError:
             _l.exception('Failed to upload to bencher. Are you sure you configured BENCHER_API_TOKEN correctly')
+        if browser:
+            config.benchmark_html_dir.mkdir(exist_ok=True, parents=True)
+            with (config.benchmark_html_dir / 'index.html').open('wb') as f:
+                f.write(cmd_result.stdout)
+            open_in_browser(config.benchmark_html_dir / 'index.html')
 
 T = TypeVar('T')
 def require_all_same(x: Sequence[T]) -> T:

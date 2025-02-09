@@ -135,6 +135,7 @@ class MainBenchmarkArgs:
     skip_build_cpu_benchmarks: bool
     targets: Collection[str]
     upload: bool
+    browser: bool
 
 def main_benchmark(args: MainBenchmarkArgs) -> None:
     config = get_config(args.path)
@@ -177,7 +178,7 @@ def main_benchmark(args: MainBenchmarkArgs) -> None:
     benchmark_result = call_benchmarks([get_benchmark_path(config, b) for b in build_run_plan.targets_to_run])
     pretty_print_benchmark(benchmark_result, f=sys.stdout)
     if args.upload:
-        upload_to_bencher(benchmark_result)
+        upload_to_bencher(config, benchmark_result, browser=args.browser)
 
 @dataclass(frozen=True)
 class MainRunArgs:
@@ -461,6 +462,7 @@ def make_parser() -> argparse.ArgumentParser:
     benchmark_p.add_argument("--skip-cpu-benchmarks", action="store_true")
     benchmark_p.add_argument("--skip-build-cpu-benchmarks", action="store_true")
     benchmark_p.add_argument('--upload', action='store_true')
+    benchmark_p.add_argument('--browser', action='store_true')
     benchmark_p.add_argument('targets', nargs='*')
     add_verbosity_args(benchmark_p)
 
@@ -473,7 +475,6 @@ def make_parser() -> argparse.ArgumentParser:
     run_p.add_argument('target-run-args', nargs='*')
     add_verbosity_args(run_p)
     
-
     cmake_p = subparsers.add_parser("cmake")
     set_main_signature(cmake_p, main_cmake, MainCmakeArgs)
     cmake_p.add_argument("--path", "-p", type=Path, default=Path.cwd())

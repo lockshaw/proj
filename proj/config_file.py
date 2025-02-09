@@ -43,6 +43,10 @@ class ProjectConfig:
         return self.base / 'build/codecov'
 
     @property
+    def benchmark_html_dir(self) -> Path:
+        return self.release_build_dir / 'bencher'
+
+    @property
     def doxygen_dir(self) -> Path:
         return self.base / 'build/doxygen'
 

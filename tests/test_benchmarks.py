@@ -145,6 +145,13 @@ def test_render_table():
 
     assert result == correct
 
+def test_benchmark_json_serialization():
+    correct = json.loads(COMPILER_BENCHMARK_JSON)
+    benchmark = BenchmarkResult.from_json(correct)
+    result = benchmark.to_json()
+
+    assert result == correct
+
 def test_pretty_print_benchmark():
     j = json.loads(COMPILER_BENCHMARK_JSON)
     benchmark = BenchmarkResult.from_json(j)
