@@ -59,6 +59,7 @@ def _test_project(name: str):
         skip_build_gpu_tests=False,
         skip_cpu_tests=False,
         skip_build_cpu_tests=False,
+        debug=False,
         targets=[],
     )
     main_test(args=test_args)

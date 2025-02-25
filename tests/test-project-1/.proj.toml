@@ -1,0 +1,16 @@
+project_name = "test-project-1"
+testsuite_macro = "TP_TEST_SUITE"
+namespace_name = "TestProject"
+header_extension = ".h"
+
+build_targets = [
+  "lib1",
+  "lib2",
+  "bin1",
+  "bin2",
+]
+
+test_targets = [
+  "lib1-tests",
+  "lib2-tests",
+]

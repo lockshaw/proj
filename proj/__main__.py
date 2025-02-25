@@ -45,17 +45,22 @@ from .cmake import (
 )
 import argparse
 from .targets import (
-    parse_target,
     LibTarget,
-    BinTarget,
-    RunTarget,
+    TestSuiteTarget,
+    BenchmarkSuiteTarget,
     BuildTarget,
+    RunTarget,
 )
 from .profile import profile_target
+from .testing import (
+    run_tests,
+)
 
 _l = logging.getLogger(name='proj')
 
 DIR = Path(__file__).resolve().parent
+
+KERNELS_LIB = LibTarget.from_str('kernels')
 
 @dataclass(frozen=True)
 class MainRootArgs:
@@ -81,7 +86,7 @@ class MainCmakeArgs:
     dtgen_skip: bool
     verbosity: int
 
-def main_cmake(args: MainCmakeArgs) -> None:
+def main_cmake(args: MainCmakeArgs) -> int:
     config = get_config(args.path)
 
     if not args.dtgen_skip:
@@ -92,6 +97,7 @@ def main_cmake(args: MainCmakeArgs) -> None:
         )
 
     cmake_all(config=config, fast=args.fast, trace=args.trace)
+    return 0
 
 @dataclass(frozen=True)
 class MainBuildArgs:
@@ -99,10 +105,10 @@ class MainBuildArgs:
     verbosity: int
     jobs: int
     dtgen_skip: bool
-    targets: Collection[str]
+    targets: Collection[BuildTarget]
     release: bool
 
-def main_build(args: MainBuildArgs) -> None:
+def main_build(args: MainBuildArgs) -> int:
     config = get_config(args.path)
 
     if args.release:
@@ -113,7 +119,7 @@ def main_build(args: MainBuildArgs) -> None:
     if not build_dir.exists():
         cmake_all(config=config, fast=False, trace=False)
 
-    targets: List[str]
+    targets: List[BuildTarget]
     if len(args.targets) == 0:
         targets = list(config.build_targets)
     else:
@@ -127,6 +133,7 @@ def main_build(args: MainBuildArgs) -> None:
         verbosity=args.verbosity,
         cwd=build_dir,
     )
+    return 0
 
 @dataclass(frozen=True)
 class MainBenchmarkArgs:
@@ -138,20 +145,20 @@ class MainBenchmarkArgs:
     skip_build_gpu_benchmarks: bool
     skip_cpu_benchmarks: bool
     skip_build_cpu_benchmarks: bool
-    targets: Collection[str]
+    targets: Collection[LibTarget]
     upload: bool
     browser: bool
 
-def main_benchmark(args: MainBenchmarkArgs) -> None:
+def main_benchmark(args: MainBenchmarkArgs) -> int:
     config = get_config(args.path)
 
-    requested_benchmark_targets: List[str]
+    requested_benchmark_targets: List[BenchmarkSuiteTarget]
     if len(args.targets) == 0:
         requested_benchmark_targets = list(config.benchmark_targets)
     else:
-        requested_benchmark_targets = [get_target_benchmark_name(t) for t in args.targets]
+        requested_benchmark_targets = [t.benchmark_target for t in args.targets]
 
-    benchmark_targets_requiring_gpu = [get_target_benchmark_name("kernels")]
+    benchmark_targets_requiring_gpu = [KERNELS_LIB.benchmark_target]
 
     build_run_plan = infer_build_run_plan(
         requested_targets=requested_benchmark_targets,
@@ -173,31 +180,36 @@ def main_benchmark(args: MainBenchmarkArgs) -> None:
 
     build_targets(
         config=config,
-        targets=build_run_plan.targets_to_build,
+        targets=build_run_plan.build_targets,
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
         cwd=config.release_build_dir,
     )
 
-    benchmark_result = call_benchmarks([get_benchmark_path(config, b) for b in build_run_plan.targets_to_run])
+    benchmark_result = call_benchmarks(build_run_plan.targets_to_run, config.release_build_dir)
     pretty_print_benchmark(benchmark_result, f=sys.stdout)
     if args.upload:
         upload_to_bencher(config, benchmark_result, browser=args.browser)
+
+    return 0
 
 @dataclass(frozen=True)
 class MainRunArgs:
     path: Path
     verbosity: int
     jobs: int
-    target: str
-    debug_mode: bool
+    target: RunTarget
+    debug_build: bool
     target_run_args: Sequence[str]
 
-def main_run(args: MainRunArgs) -> None:
+def main_run(args: MainRunArgs) -> int:
     config = get_config(args.path)
 
-    run_targets_requiring_gpu: List[str] = []
+    run_targets_requiring_gpu: List[RunTarget] = [
+        KERNELS_LIB.test_target.run_target,
+        KERNELS_LIB.benchmark_target.run_target,
+    ]
 
     build_run_plan = infer_build_run_plan(
         requested_targets=[args.target],
@@ -213,83 +225,71 @@ def main_run(args: MainRunArgs) -> None:
             f'Cannot run target {args.target} as no gpus are available on the current machine.'
         )
 
-    if args.debug_mode:
+    if args.debug_build:
         build_dir = config.debug_build_dir
     else:
         build_dir = config.release_build_dir
 
     build_targets(
         config=config,
-        targets=build_run_plan.targets_to_build,
+        targets=build_run_plan.build_targets,
         dtgen_skip=False,
         jobs=args.jobs,
         verbosity=args.verbosity,
         cwd=build_dir,
     )
 
-    binary_path = build_dir / 'bin' / args.target / args.target
+    binary_path = build_dir / args.target.executable_path
     assert binary_path.is_file()
 
     result = subprocess.run([str(binary_path), *args.target_run_args])
-    sys.exit(result.returncode)
+    print(result)
+    return result.returncode
 
 @dataclass(frozen=True)
 class MainProfileArgs:
     path: Path
     verbosity: int
     jobs: int
-    target: str
-    tests: bool
-    benchmarks: bool
+    target: RunTarget
     target_run_args: Sequence[str]
 
-def main_profile(args: MainProfileArgs) -> None:
+def main_profile(args: MainProfileArgs) -> int:
     config = get_config(args.path)
 
-    target = parse_target(config, args.target)
+    profile_targets_requiring_gpu: List[RunTarget] = [
+        KERNELS_LIB.benchmark_target.run_target,
+        KERNELS_LIB.test_target.run_target,
+    ]
 
-    run_target: RunTarget
-    if isinstance(target, LibTarget):
-        assert not (args.tests and args.benchmarks)
-        assert (args.tests or args.benchmarks)
-        if args.tests:
-            run_target = target.tests_run_target
-        else: 
-            assert args.benchmarks
-            run_target = target.benchmark_run_target
-    else:
-        assert isinstance(target, BinTarget)
-        assert not args.tests
-        assert not args.benchmarks
-        run_target = target.bin_run_target
+    build_run_plan = infer_build_run_plan(
+        requested_targets=[args.target],
+        target_requires_gpu=lambda t: t in profile_targets_requiring_gpu,
+        skip_run_gpu_targets=False,
+        skip_build_gpu_targets=False,
+        skip_run_cpu_targets=False,
+        skip_build_cpu_targets=False,
+    )
 
-    # profile_targets_requiring_gpu: List[str] = ['kernels']
-
-    # build_run_plan = infer_build_run_plan(
-    #     requested_targets=[args.target],
-    #     target_requires_gpu=lambda t: t in profile_targets_requiring_gpu,
-    #     skip_run_gpu_targets=False,
-    #     skip_build_gpu_targets=False,
-    #     skip_run_cpu_targets=False,
-    #     skip_build_cpu_targets=False,
-    # )
-    #
-    # if build_run_plan.failed_gpu_check:
-    #     fail_with_error(
-    #         f'Cannot run target {args.target} as no gpus are available on the current machine.'
-    #     )
+    if build_run_plan.failed_gpu_check:
+        fail_with_error(
+            f'Cannot run target {args.target} as no gpus are available on the current machine.'
+        )
 
     build_targets(
         config=config,
-        targets=[run_target.build_target],
+        targets=build_run_plan.build_targets,
         dtgen_skip=False,
         jobs=args.jobs,
         verbosity=args.verbosity,
         cwd=config.release_build_dir,
     )
 
-    profile_file = profile_target(config.release_build_dir, run_target)
+    assert len(build_run_plan.run_targets) == 1
+    profile_file = profile_target(config.release_build_dir, build_run_plan.run_targets[0])
     print(profile_file)
+
+    return 0
 
 
 @dataclass(frozen=True)
@@ -301,11 +301,12 @@ class MainTestArgs:
     dtgen_force: bool
     dtgen_skip: bool
     browser: bool
+    debug: bool
     skip_gpu_tests: bool
     skip_build_gpu_tests: bool
     skip_cpu_tests: bool
     skip_build_cpu_tests: bool
-    targets: Collection[str]
+    targets: Collection[LibTarget]
 
 def main_test(args: MainTestArgs) -> None:
     config = get_config(args.path)
@@ -320,13 +321,13 @@ def main_test(args: MainTestArgs) -> None:
 
 
     # Currently hardcode GPU tests as 'kernels-tests'
-    requested_test_targets: List[str]
+    requested_test_targets: List[TestSuiteTarget]
     if len(args.targets) == 0:
         requested_test_targets = list(config.test_targets)
     else:
-        requested_test_targets = [get_target_test_name(t) for t in args.targets]
+        requested_test_targets = [t.test_target for t in args.targets]
 
-    test_targets_requiring_gpu = ["kernels-tests"]
+    test_targets_requiring_gpu = [KERNELS_LIB.test_target]
 
     build_run_plan = infer_build_run_plan(
         requested_targets=requested_test_targets,
@@ -348,30 +349,20 @@ def main_test(args: MainTestArgs) -> None:
 
     build_targets(
         config=config,
-        targets=build_run_plan.targets_to_build,
+        targets=build_run_plan.build_targets,
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
         cwd=build_dir,
     )
 
-    target_regex = "^(" + "|".join(build_run_plan.targets_to_run) + ")$"
-    subprocess.run(
-        [
-            "ctest",
-            "--progress",
-            "--output-on-failure",
-            "-L",
-            target_regex,
-        ],
-        stderr=sys.stdout,
-        cwd=build_dir,
-        env=os.environ,
-    )
+    run_tests(build_run_plan.run_targets, build_dir, debug=args.debug)
     
     if args.coverage:
         postprocess_coverage_data(config=config)
         view_coverage_data(config=config, browser=args.browser)
+
+    return 0
     
 
 @dataclass(frozen=True)
@@ -478,7 +469,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     def set_main_signature(parser, func, args_type):
         def _f(args: argparse.Namespace, func=func, args_type=args_type):
-            func(args_type(**{k.replace('-', '_'): v for k, v in vars(args).items() if k != 'func'}))
+            return func(args_type(**{k.replace('-', '_'): v for k, v in vars(args).items() if k != 'func'}))
         parser.set_defaults(func=_f)
 
     root_p = subparsers.add_parser("root")
@@ -502,7 +493,8 @@ def make_parser() -> argparse.ArgumentParser:
     test_p.add_argument("--skip-build-gpu-tests", action="store_true")
     test_p.add_argument("--skip-cpu-tests", action="store_true")
     test_p.add_argument("--skip-build-cpu-tests", action="store_true")
-    test_p.add_argument('targets', nargs='*')
+    test_p.add_argument("--debug", action="store_true")
+    test_p.add_argument('targets', nargs='*', type=LibTarget.from_str)
     add_verbosity_args(test_p)
 
     build_p = subparsers.add_parser("build")
@@ -512,7 +504,7 @@ def make_parser() -> argparse.ArgumentParser:
     build_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     build_p.add_argument("--dtgen-skip", action="store_true")
     build_p.add_argument("--release", action="store_true")
-    build_p.add_argument('targets', nargs='*')
+    build_p.add_argument('targets', nargs='*', type=BuildTarget.from_str)
     add_verbosity_args(build_p)
 
     benchmark_p = subparsers.add_parser('benchmark')
@@ -526,15 +518,15 @@ def make_parser() -> argparse.ArgumentParser:
     benchmark_p.add_argument("--skip-build-cpu-benchmarks", action="store_true")
     benchmark_p.add_argument('--upload', action='store_true')
     benchmark_p.add_argument('--browser', action='store_true')
-    benchmark_p.add_argument('targets', nargs='*')
+    benchmark_p.add_argument('targets', nargs='*', type=LibTarget.from_str)
     add_verbosity_args(benchmark_p)
 
     run_p = subparsers.add_parser('run')
     set_main_signature(run_p, main_run, MainRunArgs)
     run_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     run_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
-    run_p.add_argument('target', type=str)
-    run_p.add_argument('--debug-mode', action='store_true')
+    run_p.add_argument('target', type=RunTarget.from_str)
+    run_p.add_argument('--debug-build', action='store_true')
     run_p.add_argument('target-run-args', nargs='*')
     add_verbosity_args(run_p)
     
@@ -542,9 +534,7 @@ def make_parser() -> argparse.ArgumentParser:
     set_main_signature(profile_p, main_profile, MainProfileArgs)
     profile_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     profile_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
-    profile_p.add_argument('--tests', action='store_true')
-    profile_p.add_argument('--benchmarks', action='store_true')
-    profile_p.add_argument('target', type=str)
+    profile_p.add_argument('target', type=RunTarget.from_str)
     profile_p.add_argument('target-run-args', nargs='*')
     add_verbosity_args(profile_p)
 
@@ -587,20 +577,22 @@ def make_parser() -> argparse.ArgumentParser:
 
     return p
 
-def main() -> None:
+def main(argv: Sequence[str]) -> int:
     p = make_parser()
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
     logging.basicConfig(
         level=calculate_log_level(args),
     )
 
     if hasattr(args, "func") and args.func is not None:
-        args.func(args)
+        result = args.func(args)
+        assert isinstance(result, int), result
+        return result
     else:
         p.print_help()
-        exit(1)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

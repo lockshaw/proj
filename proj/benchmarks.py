@@ -1,5 +1,4 @@
 from . import subprocess_trace as subprocess
-from pathlib import Path
 import json
 from .json import Json
 from typing import (
@@ -18,10 +17,15 @@ from datetime import datetime
 import statistics
 from tempfile import NamedTemporaryFile
 import logging
-import enlighten
+import enlighten # type: ignore
 import re
 from .browser import open_in_browser
 from .config_file import ProjectConfig
+from .targets import (
+    BenchmarkSuiteTarget,
+    BenchmarkCaseTarget,
+)
+from pathlib import Path
 
 _l = logging.getLogger(__name__)
 
@@ -234,39 +238,40 @@ def pretty_print_benchmark(benchmark: BenchmarkResult, f: IO[str]) -> None:
 
     line(render_table(columns=columns, data=table_data, sep=sep))
 
-def list_benchmarks(benchmark_binaries: Sequence[Path]) -> List[str]:
-    return sum((get_benchmark_list_for_binary(bin) for bin in benchmark_binaries), [])
+def list_benchmarks(benchmark_binaries: Sequence[BenchmarkSuiteTarget], build_dir: Path) -> List[BenchmarkCaseTarget]:
+    return sum((get_benchmark_list_for_binary(bin, build_dir) for bin in benchmark_binaries), [])
 
-def get_benchmark_list_for_binary(bin: Path) -> List[str]:
-    stdout = subprocess.check_output([str(bin), '--benchmark_list_tests=true'], text=True)
-    return [line for line in stdout.splitlines()]
+def get_benchmark_list_for_binary(bin: BenchmarkSuiteTarget, build_dir: Path) -> List[BenchmarkCaseTarget]:
+    stdout = subprocess.check_output([str(build_dir / bin.run_target.executable_path), '--benchmark_list_tests=true'], text=True)
+    return [bin.get_benchmark_case(line) for line in stdout.splitlines()]
 
-def call_benchmarks(benchmark_binaries: Sequence[Path]) -> BenchmarkResult:
+def call_benchmarks(benchmark_binaries: Sequence[BenchmarkSuiteTarget], build_dir: Path) -> BenchmarkResult:
+    _l.debug('Calling benchmark suites %s', benchmark_binaries)
     benchmark_binaries = list(sorted(benchmark_binaries))
-    all_benchmarks = list_benchmarks(benchmark_binaries)
+    all_benchmarks = list_benchmarks(benchmark_binaries, build_dir)
 
     manager = enlighten.get_manager()
     with manager.counter(total=len(all_benchmarks), desc='Benchmarks') as pbar:
-        results = [call_benchmark(bin, pbar) for bin in benchmark_binaries]
+        results = [call_benchmark(bin, pbar, build_dir) for bin in benchmark_binaries]
     return merge_benchmark_results(results)
 
 NAME_RE = re.compile(r'"name": "(?P<testname>[^"]+)"')
-def call_benchmark(benchmark: Path, pbar) -> BenchmarkResult:
-    functions = get_benchmark_list_for_binary(benchmark)
+def call_benchmark(benchmark: BenchmarkSuiteTarget, pbar, build_dir: Path) -> BenchmarkResult:
+    functions = get_benchmark_list_for_binary(benchmark, build_dir)
     pbar.update(incr=0, force=True)
     def hook(line: str) -> None:
         match = NAME_RE.search(line)
         if match is None:
             return
         testname = match.group('testname')
-        assert testname == functions[0], (testname, functions[0])
+        assert benchmark.get_benchmark_case(testname) == functions[0], (testname, functions[0])
         functions.pop(0)
         if len(functions) > 0:
             print(f'Running {functions[0]}')
         pbar.update()
 
     print(f'Running {functions[0]}')
-    stdout = subprocess.hook_stdout([str(benchmark), '--benchmark_format=json'], stdout_hook=hook)
+    stdout = subprocess.hook_stdout([str(build_dir / benchmark.run_target.executable_path), '--benchmark_format=json'], stdout_hook=hook)
     return BenchmarkResult.from_json(json.loads(stdout))
 
 def upload_to_bencher(config: ProjectConfig, result: BenchmarkResult, browser: bool) -> None:

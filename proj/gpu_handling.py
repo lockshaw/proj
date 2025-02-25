@@ -1,10 +1,18 @@
 from . import subprocess_trace as subprocess
 import logging
 from typing import (
-    Collection,
+    Sequence,
     Callable,
+    TypeVar,
+    Generic,
+    Protocol,
+    Tuple,
 )
 from dataclasses import dataclass
+from .targets import (
+    BuildTarget,
+    RunTarget,
+)
 
 _l = logging.getLogger(__name__)
 
@@ -19,21 +27,40 @@ def check_if_machine_supports_gpu() -> bool:
         _l.info('nvidia-smi returned nonzero error code')
         return False
 
+class BuildableRunnable(Protocol):
+    @property
+    def build_target(self) -> BuildTarget:
+        ...
+
+    @property
+    def run_target(self) -> RunTarget:
+        ...
+
+BR = TypeVar('BR', bound=BuildableRunnable)
+
 @dataclass(frozen=True)
-class BuildRunPlan:
-    targets_to_build: Collection[str]
-    targets_to_run: Collection[str]
+class BuildRunPlan(Generic[BR]):
+    targets_to_build: Sequence[BR]
+    targets_to_run: Sequence[BR]
     failed_gpu_check: bool
 
+    @property
+    def build_targets(self) -> Tuple[BuildTarget, ...]:
+        return tuple(t.build_target for t in self.targets_to_build)
+
+    @property
+    def run_targets(self) -> Tuple[RunTarget, ...]:
+        return tuple(t.run_target for t in self.targets_to_run)
+
 def infer_build_run_plan(
-    requested_targets: Collection[str],
-    target_requires_gpu: Callable[[str], bool],
+    requested_targets: Sequence[BR],
+    target_requires_gpu: Callable[[BR], bool],
     skip_run_gpu_targets: bool,
     skip_build_gpu_targets: bool,
     skip_run_cpu_targets: bool,
     skip_build_cpu_targets: bool,
-) -> BuildRunPlan:
-    def not_target_requires_gpu(target: str) -> bool:
+) -> BuildRunPlan[BR]:
+    def not_target_requires_gpu(target: BR) -> bool:
         return not target_requires_gpu(target)
 
     gpu_targets_to_build = list(filter(target_requires_gpu, requested_targets))
@@ -66,7 +93,7 @@ def infer_build_run_plan(
     failed_gpu_check = (not gpu_available) and len(gpu_targets_to_run) > 0
 
     return BuildRunPlan(
-        targets_to_build=targets_to_build,
-        targets_to_run=targets_to_run,
+        targets_to_build=[t for t in targets_to_build],
+        targets_to_run=[t for t in targets_to_run],
         failed_gpu_check=failed_gpu_check,
     )

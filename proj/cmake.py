@@ -2,6 +2,7 @@ from typing import (
     Mapping,
     List,
     Iterable,
+    Iterator,
 )
 import os
 import shlex
@@ -12,6 +13,8 @@ import sys
 import shutil
 from .config_file import ProjectConfig
 from . import fix_compile_commands
+import re
+from proj.targets import BuildTarget
 
 def run_cmake(cmake_args: Iterable[str], require_shell: bool, cwd: Path) -> None:
     subprocess.check_call(
@@ -25,6 +28,29 @@ def run_cmake(cmake_args: Iterable[str], require_shell: bool, cwd: Path) -> None
         env=os.environ,
         shell=require_shell,
     )
+
+TARGET = re.compile(r"^\.\.\. (?P<target>.*)$")
+
+def get_target_names_list(build_dir: Path) -> Iterator[str]:
+    lines = subprocess.check_output(
+        ['cmake', '--build', '.', '--target', 'help'],
+        stderr=sys.stderr,
+        text=True,
+        cwd=build_dir,
+        env=os.environ,
+    ).splitlines()
+
+    for line in lines:
+        match = TARGET.fullmatch(line)
+        if match is not None:
+            yield match.group('target')
+
+def get_targets_list(build_dir: Path) -> Iterator[BuildTarget]:
+    for target_name in get_target_names_list(build_dir):
+        parsed = BuildTarget.try_from_cmake_name(target_name)
+        if parsed is not None:
+            yield parsed
+
 
 def render_args(arg_map: Mapping[str, str], trace: bool) -> List[str]:
     cmake_args = [f"-D{k}={v}" for k, v in arg_map.items()]

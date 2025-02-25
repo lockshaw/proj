@@ -58,6 +58,19 @@
         proj = pkgs.python3Packages.callPackage ./proj.nix { inherit bencher-cli; };
         bencher-cli = pkgs.callPackage bencher { };
 
+        doctest = pkgs.doctest.overrideAttrs ( old: rec {
+          version = "2.4.9";
+          src = pkgs.fetchFromGitHub {
+            owner = "doctest";
+            repo = "doctest";
+            rev = "v${version}";
+            sha256 = "sha256-ugmkeX2PN4xzxAZpWgswl4zd2u125Q/ADSKzqTfnd94=";
+          };
+          patches = [
+            ./.flake/patches/doctest-template-test.patch
+          ];
+        });
+
         pytest-skip-slow = pkgs.python3Packages.buildPythonPackage rec {
           pname = "pytest-skip-slow";
           version = "0.0.5";
@@ -106,11 +119,12 @@
 
         buildInputs = builtins.concatLists [
           (with pkgs; [
-            doctest
             cmake
             ccache
             nlohmann_json
             fmt
+            cmake
+            gbenchmark
           ])
           (with pkgs.python3Packages; [
             ipython
@@ -125,6 +139,7 @@
           (with self.packages.${system}; [
             rapidcheckFull
             pytest-skip-slow
+            doctest
           ])
         ];
       };

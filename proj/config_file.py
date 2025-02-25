@@ -10,6 +10,13 @@ import string
 import re
 import io
 import proj.toml as toml
+from .targets import (
+    BuildTarget,
+    BenchmarkSuiteTarget,
+    LibTarget,
+    TestSuiteTarget,
+    BinTarget,
+)
 
 @dataclass(frozen=True)
 class ProjectConfig:
@@ -17,7 +24,6 @@ class ProjectConfig:
     base: Path
     _bin_targets: Optional[Tuple[str,...]] = None
     _lib_targets: Optional[Tuple[str,...]] = None
-    _build_targets: Optional[Tuple[str,...]] = None
     _test_targets: Optional[Tuple[str,...]] = None
     _benchmark_targets: Optional[Tuple[str,...]] = None
     _ifndef_name: Optional[str] = None
@@ -42,7 +48,7 @@ class ProjectConfig:
 
     @property
     def coverage_build_dir(self) -> Path:
-        return self.base / 'build/codecov'
+        return self.base / 'build/coverage'
 
     @property
     def benchmark_html_dir(self) -> Path:
@@ -53,39 +59,39 @@ class ProjectConfig:
         return self.base / 'build/doxygen'
 
     @property
-    def bin_targets(self) -> Tuple[str, ...]:
+    def bin_targets(self) -> Tuple[BinTarget, ...]:
         if self._bin_targets is None:
             return tuple()
         else:
-            return self._bin_targets
+            return tuple(map(BinTarget, self._bin_targets))
 
     @property
-    def lib_targets(self) -> Tuple[str, ...]:
+    def lib_targets(self) -> Tuple[LibTarget, ...]:
         if self._lib_targets is None:
-            return tuple([self.project_name])
+            return tuple([LibTarget(self.project_name)])
         else:
-            return self._lib_targets
+            return tuple(map(LibTarget, self._lib_targets))
 
     @property
-    def build_targets(self) -> Tuple[str, ...]:
-        if self._build_targets is None:
-            return tuple([self.project_name])
-        else:
-            return self._build_targets
+    def build_targets(self) -> Tuple[BuildTarget, ...]:
+        return (
+            *sum((t.all_build_targets for t in self.lib_targets), tuple()),
+            *tuple(t.build_target for t in self.bin_targets),
+        )
 
     @property
-    def test_targets(self) -> Tuple[str, ...]:
+    def test_targets(self) -> Tuple[TestSuiteTarget, ...]:
         if self._test_targets is None:
-            return tuple([get_target_test_name(self.project_name)])
+            return tuple([LibTarget(self.project_name).test_target])
         else:
-            return self._test_targets
+            return tuple(t.test_target for t in self.lib_targets)
 
     @property
-    def benchmark_targets(self) -> Tuple[str, ...]:
+    def benchmark_targets(self) -> Tuple[BenchmarkSuiteTarget, ...]:
         if self._benchmark_targets is None:
-            return tuple([get_target_benchmark_name(self.project_name)])
+            return tuple([LibTarget(self.project_name).benchmark_target])
         else:
-            return self._benchmark_targets
+            return tuple(t.benchmark_target for t in self.lib_targets)
 
     @property
     def ifndef_name(self) -> str:
@@ -214,11 +220,8 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
     return ProjectConfig(
         project_name=raw['project_name'],
         base=config_root,
-        _lib_targets=raw.get('lib_targets'),
-        _bin_targets=raw.get('bin_targets'),
-        _build_targets=raw.get('build_targets'),
-        _test_targets=raw.get('test_targets'),
-        _benchmark_targets=raw.get('benchmark_targets'),
+        _lib_targets=raw.get('lib'),
+        _bin_targets=raw.get('bin'),
         _testsuite_macro=raw.get('testsuite_macro'),
         _ifndef_name=raw.get('ifndef_name'),
         _namespace_name=raw.get('namespace_name'),

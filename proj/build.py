@@ -1,7 +1,6 @@
 from .config_file import ProjectConfig
 from typing import (
     Iterable,
-    Union,
 )
 from . import subprocess_trace as subprocess
 import logging
@@ -14,6 +13,8 @@ from .targets import (
     BuildTarget,
 )
 
+_l = logging.getLogger(__name__)
+
 def build_targets(
     config: ProjectConfig,
     targets: Iterable[BuildTarget],
@@ -23,6 +24,7 @@ def build_targets(
     cwd: Path,
 ) -> None:
     _targets = list(sorted(set([t.name for t in targets])))
+    _l.info('Building targets: %s', _targets)
     if len(_targets) == 0:
         fail_with_error('No build targets selected')
 
