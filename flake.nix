@@ -90,8 +90,6 @@
           ];
         };
 
-
-
         proj-nvim = pkgs.vimUtils.buildVimPlugin {
           name = "proj-nvim";
           src = ./vim;
@@ -127,6 +125,7 @@
             gbenchmark
           ])
           (with pkgs.python3Packages; [
+            pip
             ipython
             mypy
             python-lsp-server

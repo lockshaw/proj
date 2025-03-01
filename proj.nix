@@ -5,6 +5,10 @@
 , hotspot
 , valgrind
 , pytestCheckHook
+, typing-extensions
+, enlighten
+, immutables
+, setuptools
 }:
 
 buildPythonApplication {
@@ -12,10 +16,7 @@ buildPythonApplication {
   version = "0.0.1";
   src = ./.;
 
-  propagatedBuildInputs = [
-    python3Packages.typing-extensions
-    python3Packages.enlighten
-    python3Packages.immutables
+  buildInputs = [
     bencher-cli
     hotspot
     valgrind
@@ -23,6 +24,16 @@ buildPythonApplication {
     # for perf the kernel version doesn't matter as it's entirely in perl
     # see https://discourse.nixos.org/t/which-perf-package/22399
     pkgs.linuxPackages_latest.perf 
+  ];
+
+  dependencies = [
+    typing-extensions
+    enlighten
+    immutables
+  ];
+
+  build-system = [
+    setuptools
   ];
 
   nativeCheckInputs = [
