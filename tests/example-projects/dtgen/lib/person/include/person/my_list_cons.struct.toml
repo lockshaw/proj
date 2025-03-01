@@ -1,0 +1,30 @@
+namespace = "FlexFlow"
+name = "MyListCons"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "fmt",
+]
+
+fwd_decls = [
+  "template <typename T> struct MyList",
+]
+
+post_includes = [
+  "person/my_list.dtg.hh",
+]
+
+template_params = [
+  "T",
+]
+
+[[fields]]
+name = "head"
+type = "T"
+
+[[fields]]
+name = "tail"
+type = "::FlexFlow::MyList<T>"
+indirect = true

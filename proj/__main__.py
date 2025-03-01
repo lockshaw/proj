@@ -48,8 +48,12 @@ from .targets import (
     LibTarget,
     TestSuiteTarget,
     BenchmarkSuiteTarget,
+    BenchmarkCaseTarget,
     BuildTarget,
     RunTarget,
+    TestCaseTarget,
+    parse_generic_test_target,
+    parse_generic_benchmark_target,
 )
 from .profile import profile_target
 from .testing import (
@@ -121,7 +125,7 @@ def main_build(args: MainBuildArgs) -> int:
 
     targets: List[BuildTarget]
     if len(args.targets) == 0:
-        targets = list(config.build_targets)
+        targets = list(config.default_build_targets)
     else:
         targets = list(args.targets)
 
@@ -145,18 +149,20 @@ class MainBenchmarkArgs:
     skip_build_gpu_benchmarks: bool
     skip_cpu_benchmarks: bool
     skip_build_cpu_benchmarks: bool
-    targets: Collection[LibTarget]
+    targets: Collection[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]]
     upload: bool
     browser: bool
 
 def main_benchmark(args: MainBenchmarkArgs) -> int:
+    _l.debug('Running main_benchmark for args: %s', args)
     config = get_config(args.path)
 
-    requested_benchmark_targets: List[BenchmarkSuiteTarget]
+    requested_benchmark_targets: List[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]]
     if len(args.targets) == 0:
-        requested_benchmark_targets = list(config.benchmark_targets)
+        requested_benchmark_targets = list(config.default_benchmark_targets)
     else:
-        requested_benchmark_targets = [t.benchmark_target for t in args.targets]
+        requested_benchmark_targets = list(args.targets)
+    _l.debug('Determined requested benchmark targets to be: %s', requested_benchmark_targets)
 
     benchmark_targets_requiring_gpu = [KERNELS_LIB.benchmark_target]
 
@@ -168,6 +174,7 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
         skip_run_cpu_targets=args.skip_cpu_benchmarks,
         skip_build_cpu_targets=args.skip_build_cpu_benchmarks,
     )
+    _l.debug('Inferred build/run plan: %s', build_run_plan)
 
     if build_run_plan.failed_gpu_check:
         fail_with_error(
@@ -306,9 +313,9 @@ class MainTestArgs:
     skip_build_gpu_tests: bool
     skip_cpu_tests: bool
     skip_build_cpu_tests: bool
-    targets: Collection[LibTarget]
+    targets: Collection[Union[TestSuiteTarget, TestCaseTarget]]
 
-def main_test(args: MainTestArgs) -> None:
+def main_test(args: MainTestArgs) -> int:
     config = get_config(args.path)
 
     if args.coverage:
@@ -321,11 +328,11 @@ def main_test(args: MainTestArgs) -> None:
 
 
     # Currently hardcode GPU tests as 'kernels-tests'
-    requested_test_targets: List[TestSuiteTarget]
+    requested_test_targets: List[Union[TestSuiteTarget, TestCaseTarget]]
     if len(args.targets) == 0:
-        requested_test_targets = list(config.test_targets)
+        requested_test_targets = list(config.default_test_targets)
     else:
-        requested_test_targets = [t.test_target for t in args.targets]
+        requested_test_targets = list(args.targets)
 
     test_targets_requiring_gpu = [KERNELS_LIB.test_target]
 
@@ -494,7 +501,7 @@ def make_parser() -> argparse.ArgumentParser:
     test_p.add_argument("--skip-cpu-tests", action="store_true")
     test_p.add_argument("--skip-build-cpu-tests", action="store_true")
     test_p.add_argument("--debug", action="store_true")
-    test_p.add_argument('targets', nargs='*', type=LibTarget.from_str)
+    test_p.add_argument('targets', nargs='*', type=parse_generic_test_target)
     add_verbosity_args(test_p)
 
     build_p = subparsers.add_parser("build")
@@ -518,7 +525,7 @@ def make_parser() -> argparse.ArgumentParser:
     benchmark_p.add_argument("--skip-build-cpu-benchmarks", action="store_true")
     benchmark_p.add_argument('--upload', action='store_true')
     benchmark_p.add_argument('--browser', action='store_true')
-    benchmark_p.add_argument('targets', nargs='*', type=LibTarget.from_str)
+    benchmark_p.add_argument('targets', nargs='*', type=parse_generic_benchmark_target)
     add_verbosity_args(benchmark_p)
 
     run_p = subparsers.add_parser('run')

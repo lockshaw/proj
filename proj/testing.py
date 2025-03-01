@@ -1,11 +1,10 @@
 from typing import (
     Sequence,
-    List,
+    Iterator,
 )
 from .targets import (
     RunTarget,
     TestSuiteTarget,
-    RunTargetType,
     TestCaseTarget,
 )
 from . import subprocess_trace as subprocess
@@ -17,7 +16,7 @@ import logging
 
 _l = logging.getLogger(__name__)
 
-def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -> List[TestCaseTarget]:
+def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -> Iterator[TestCaseTarget]:
     target_regex = "^(" + "|".join([t.lib_name for t in targets]) + ")$"
     output = subprocess.check_output(
         [

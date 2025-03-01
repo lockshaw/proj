@@ -238,14 +238,16 @@ def pretty_print_benchmark(benchmark: BenchmarkResult, f: IO[str]) -> None:
 
     line(render_table(columns=columns, data=table_data, sep=sep))
 
-def list_benchmarks(benchmark_binaries: Sequence[BenchmarkSuiteTarget], build_dir: Path) -> List[BenchmarkCaseTarget]:
+def list_benchmarks(benchmark_binaries: Sequence[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]], build_dir: Path) -> List[BenchmarkCaseTarget]:
     return sum((get_benchmark_list_for_binary(bin, build_dir) for bin in benchmark_binaries), [])
 
-def get_benchmark_list_for_binary(bin: BenchmarkSuiteTarget, build_dir: Path) -> List[BenchmarkCaseTarget]:
+def get_benchmark_list_for_binary(bin: Union[BenchmarkSuiteTarget, BenchmarkCaseTarget], build_dir: Path) -> List[BenchmarkCaseTarget]:
+    if isinstance(bin, BenchmarkCaseTarget):
+        return [bin]
     stdout = subprocess.check_output([str(build_dir / bin.run_target.executable_path), '--benchmark_list_tests=true'], text=True)
     return [bin.get_benchmark_case(line) for line in stdout.splitlines()]
 
-def call_benchmarks(benchmark_binaries: Sequence[BenchmarkSuiteTarget], build_dir: Path) -> BenchmarkResult:
+def call_benchmarks(benchmark_binaries: Sequence[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]], build_dir: Path) -> BenchmarkResult:
     _l.debug('Calling benchmark suites %s', benchmark_binaries)
     benchmark_binaries = list(sorted(benchmark_binaries))
     all_benchmarks = list_benchmarks(benchmark_binaries, build_dir)
@@ -255,8 +257,33 @@ def call_benchmarks(benchmark_binaries: Sequence[BenchmarkSuiteTarget], build_di
         results = [call_benchmark(bin, pbar, build_dir) for bin in benchmark_binaries]
     return merge_benchmark_results(results)
 
+def call_benchmark(benchmark: Union[BenchmarkCaseTarget, BenchmarkSuiteTarget], pbar, build_dir: Path) -> BenchmarkResult:
+    if isinstance(benchmark, BenchmarkCaseTarget):
+        return call_benchmark_case(benchmark, pbar, build_dir)
+    else:
+        assert isinstance(benchmark, BenchmarkSuiteTarget)
+        return call_benchmark_suite(benchmark, pbar, build_dir)
+
+def call_benchmark_case(benchmark: BenchmarkCaseTarget, pbar, build_dir: Path) -> BenchmarkResult:
+    pbar.update(incr=0, force=True)
+    functions = [benchmark]
+
+    def hook(line: str) -> None:
+        match = NAME_RE.search(line)
+        if match is None:
+            return
+        testname = match.group('testname')
+        assert testname == benchmark.case_name, (testname, benchmark.case_name)
+        functions.pop(0)
+        if len(functions) > 0:
+            print(f'Running {functions[0]}')
+        pbar.update()
+
+    stdout = subprocess.hook_stdout([str(benchmark.run_target.executable_path), *benchmark.run_target.args], stdout_hook=hook)
+    return BenchmarkResult.from_json(json.loads(stdout))
+
 NAME_RE = re.compile(r'"name": "(?P<testname>[^"]+)"')
-def call_benchmark(benchmark: BenchmarkSuiteTarget, pbar, build_dir: Path) -> BenchmarkResult:
+def call_benchmark_suite(benchmark: BenchmarkSuiteTarget, pbar, build_dir: Path) -> BenchmarkResult:
     functions = get_benchmark_list_for_binary(benchmark, build_dir)
     pbar.update(incr=0, force=True)
     def hook(line: str) -> None:

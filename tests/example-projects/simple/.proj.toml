@@ -1,0 +1,36 @@
+project_name = "test-project-1"
+testsuite_macro = "TP_TEST_SUITE"
+namespace_name = "TestProject"
+header_extension = ".h"
+
+[targets.bin1]
+type = "bin"
+
+[targets.bin2]
+type = "bin"
+
+[targets.lib1]
+type = "lib"
+tests = true
+benchmarks = true
+
+[targets.lib2]
+type = "lib"
+tests = true
+benchmarks = false
+
+# default_build_targets = [
+#   "bin1",
+#   "bin2",
+#   "lib1",
+#   "lib2",
+# ]
+
+# default_test_targets = [
+#   "lib1",
+#   "lib2",
+# ]
+
+# default_benchmark_targets = [
+#   "lib2",
+# ]

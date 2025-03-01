@@ -1,0 +1,6 @@
+project_name = "person"
+
+[targets.person]
+type = "lib"
+tests = true
+benchmarks = false

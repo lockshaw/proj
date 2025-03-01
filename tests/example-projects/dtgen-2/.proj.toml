@@ -1,0 +1,6 @@
+project_name = "wrapper"
+
+[targets.wrapper]
+type = "lib"
+tests = true
+benchmarks = false

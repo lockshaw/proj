@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import (
     Tuple,
     Optional,
+    Union,
 )
 from enum import (
     Enum,
@@ -188,6 +189,15 @@ class TestCaseTarget:
             args=tuple(['--test-case=test_case_name']),
         )
 
+def parse_generic_test_target(s: str) -> Union[TestSuiteTarget, TestCaseTarget]:
+    pieces = s.split(':')
+    if len(pieces) == 1:
+        return LibTarget(pieces[0]).test_target
+    elif len(pieces) == 2:
+        return LibTarget(pieces[0]).test_target.get_test_case(pieces[1])
+    else:
+        raise ValueError(f'Failed to parse {s=}')
+
 @dataclass(frozen=True, order=True)
 class BenchmarkSuiteTarget:
     lib_name: str
@@ -230,6 +240,15 @@ class BenchmarkCaseTarget:
         return dataclasses.replace(suite_run_target, 
             args=tuple([f'--benchmark_filter=^{re.escape(self.case_name)}$']),
         )
+
+def parse_generic_benchmark_target(s: str) -> Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]:
+    pieces = s.split(':')
+    if len(pieces) == 1:
+        return LibTarget(pieces[0]).benchmark_target
+    elif len(pieces) == 2:
+        return LibTarget(pieces[0]).benchmark_target.get_benchmark_case(pieces[1])
+    else:
+        raise ValueError(f'Failed to parse {s=}')
 
 @dataclass(frozen=True, order=True)
 class LibTarget:

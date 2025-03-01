@@ -1,0 +1,26 @@
+namespace = "FlexFlow"
+name = "MyList"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "fmt",
+]
+
+template_params = [
+  "T",
+]
+
+includes = [
+  "person/my_list_cons.dtg.hh",
+  "person/my_list_empty.dtg.hh",
+]
+
+[[values]]
+type = "::FlexFlow::MyListCons<T>"
+key = "cons"
+
+[[values]]
+type = "::FlexFlow::MyListEmpty"
+key = "empty"

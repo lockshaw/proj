@@ -5,6 +5,11 @@ from typing import (
     Mapping,
     Tuple,
     Iterator,
+    Union,
+    Dict,
+    TypeVar,
+    Callable,
+    List,
 )
 import string
 import re
@@ -12,20 +17,36 @@ import io
 import proj.toml as toml
 from .targets import (
     BuildTarget,
-    BenchmarkSuiteTarget,
+    TestCaseTarget,
     LibTarget,
     TestSuiteTarget,
+    BenchmarkSuiteTarget,
+    BenchmarkCaseTarget,
     BinTarget,
+    parse_generic_test_target,
+    parse_generic_benchmark_target,
 )
+import logging
+
+_l = logging.getLogger(__name__)
+
+@dataclass(frozen=True, order=True)
+class LibConfig:
+    has_test_suite: bool
+    has_benchmark_suite: bool
+
+@dataclass(frozen=True, order=True)
+class BinConfig:
+    pass
 
 @dataclass(frozen=True)
 class ProjectConfig:
     project_name: str
     base: Path
-    _bin_targets: Optional[Tuple[str,...]] = None
-    _lib_targets: Optional[Tuple[str,...]] = None
-    _test_targets: Optional[Tuple[str,...]] = None
-    _benchmark_targets: Optional[Tuple[str,...]] = None
+    _targets: Mapping[str, Union[LibConfig, BinConfig]]
+    _default_build_targets: Optional[Tuple[str, ...]] = None
+    _default_test_targets: Optional[Tuple[str, ...]] = None
+    _default_benchmark_targets: Optional[Tuple[str, ...]] = None
     _ifndef_name: Optional[str] = None
     _namespace_name: Optional[str] = None
     _testsuite_macro: Optional[str] = None
@@ -33,7 +54,6 @@ class ProjectConfig:
     _coverage_cmake_flags_extra: Optional[Mapping[str, str]] = None
     _benchmark_cmake_flags_extra: Optional[Mapping[str, str]] = None
     _cmake_require_shell: Optional[bool] = None
-    _inherit_up: Optional[bool] = None
     _header_extension: Optional[str] = None
     _fix_compile_commands: Optional[bool] = None
     _test_header_path: Optional[Path] = None
@@ -60,38 +80,45 @@ class ProjectConfig:
 
     @property
     def bin_targets(self) -> Tuple[BinTarget, ...]:
-        if self._bin_targets is None:
-            return tuple()
-        else:
-            return tuple(map(BinTarget, self._bin_targets))
+        return tuple([
+            BinTarget(target_name) 
+            for target_name, target_config 
+            in sorted(self._targets.items()) 
+            if isinstance(target_config, BinConfig)
+        ])
 
     @property
-    def lib_targets(self) -> Tuple[LibTarget, ...]:
-        if self._lib_targets is None:
-            return tuple([LibTarget(self.project_name)])
-        else:
-            return tuple(map(LibTarget, self._lib_targets))
+    def lib_targets(self) -> Mapping[LibTarget, LibConfig]:
+        return {
+            LibTarget(target_name): target_config 
+            for target_name, target_config 
+            in sorted(self._targets.items())
+            if isinstance(target_config, LibConfig)
+        }
 
     @property
-    def build_targets(self) -> Tuple[BuildTarget, ...]:
-        return (
-            *sum((t.all_build_targets for t in self.lib_targets), tuple()),
-            *tuple(t.build_target for t in self.bin_targets),
-        )
+    def default_build_targets(self) -> Tuple[BuildTarget, ...]:
+        if self._default_build_targets is None: 
+            return tuple([
+                *[lib.build_target for lib in sorted(self.lib_targets)],
+                *[bin.build_target for bin in sorted(self.bin_targets)],
+            ])
+        else:
+            return tuple(BuildTarget.from_str(s) for s in self._default_build_targets)
 
     @property
-    def test_targets(self) -> Tuple[TestSuiteTarget, ...]:
-        if self._test_targets is None:
-            return tuple([LibTarget(self.project_name).test_target])
+    def default_test_targets(self) -> Tuple[Union[TestSuiteTarget, TestCaseTarget], ...]:
+        if self._default_test_targets is None:
+            return tuple([lib.test_target for lib in sorted(self.lib_targets)])
         else:
-            return tuple(t.test_target for t in self.lib_targets)
+            return tuple(parse_generic_test_target(s) for s in self._default_test_targets)
 
     @property
-    def benchmark_targets(self) -> Tuple[BenchmarkSuiteTarget, ...]:
-        if self._benchmark_targets is None:
-            return tuple([LibTarget(self.project_name).benchmark_target])
+    def default_benchmark_targets(self) -> Tuple[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget], ...]:
+        if self._default_benchmark_targets is None:
+            return tuple([lib.benchmark_target for lib in sorted(self.lib_targets)])
         else:
-            return tuple(t.benchmark_target for t in self.lib_targets)
+            return tuple(parse_generic_benchmark_target(s) for s in self._default_benchmark_targets)
 
     @property
     def ifndef_name(self) -> str:
@@ -167,13 +194,6 @@ class ProjectConfig:
             return self._cmake_require_shell
 
     @property
-    def inherit_up(self) -> bool:
-        if self._inherit_up is None:
-            return False
-        else:
-            return self._inherit_up
-
-    @property
     def header_extension(self) -> str:
         if self._header_extension is None:
             return '.hh'
@@ -210,6 +230,72 @@ def find_config_root(d: Path) -> Optional[Path]:
 
     return None
 
+def _load_target_config(m: Mapping[str, object]) -> Union[LibConfig, BinConfig]:
+    target_type = m["type"]
+
+    if target_type == "lib":
+        assert set(m.keys()) == {'type', 'tests', 'benchmarks'}
+        has_test_suite = m["tests"]
+        assert isinstance(has_test_suite, bool)
+        has_benchmark_suite = m["benchmarks"]
+        assert isinstance(has_benchmark_suite, bool)
+        return LibConfig(
+            has_test_suite=has_test_suite,
+            has_benchmark_suite=has_benchmark_suite,
+        )
+    elif target_type == "bin":
+        return BinConfig()
+    else:
+        raise ValueError
+
+def require_str(x: object) -> str:
+    assert isinstance(x, str)
+    return x
+
+def require_bool(x: object) -> bool:
+    assert isinstance(x, bool)
+    return x
+
+T = TypeVar('T')
+def require_list_of(x: object, check_element: Callable[[object], T]) -> List[T]:
+    assert isinstance(x, list)
+    return [check_element(e) for e in x]
+
+K = TypeVar('K')
+V = TypeVar('V')
+def require_dict_of(x: object, check_key: Callable[[object], K], check_value: Callable[[object], V]) -> Dict[K, V]:
+    assert isinstance(x, dict)
+
+    return {
+        check_key(k): check_value(v) for k, v in x.items()
+    }
+
+def _load_targets(m: object) -> Dict[str, Union[LibConfig, BinConfig]]:
+    assert isinstance(m, dict)
+
+    return {
+        target_name: _load_target_config(target_config)
+        for target_name, target_config
+        in m.items()
+    }
+
+T1 = TypeVar('T1')
+T2 = TypeVar('T2')
+def optional_map(x: Optional[T1], f: Callable[[T1], T2]) -> Optional[T2]:
+    if x is None:
+        return x
+    else:
+        return f(x)
+
+def load_str_tuple(x: object) -> Optional[Tuple[str, ...]]:
+    return optional_map(optional_map(x, lambda l: require_list_of(l, require_str)), lambda ll: tuple(ll))
+
+def load_path(x: object) -> Optional[Path]:
+    return optional_map(optional_map(x, require_str), lambda s: Path(s))
+
+def load_cmake_flags(x: object) -> Optional[Dict[str, str]]:
+    return optional_map(x, lambda y: require_dict_of(y, require_str, require_str))
+
 def _load_config(d: Path) -> Optional[ProjectConfig]:
     config_root = find_config_root(d)
     if config_root is None:
@@ -217,20 +303,31 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
 
     with (config_root / '.proj.toml').open('r') as f:
         raw = toml.loads(f.read())
+
+    return _load_parsed_config(config_root, raw)
+
+def _load_parsed_config(config_root: Path, raw: object) -> ProjectConfig:
+    _l.debug('Loading parsed config: %s', raw)
+    assert isinstance(raw, dict)
+
     return ProjectConfig(
-        project_name=raw['project_name'],
+        project_name=require_str(raw['project_name']),
         base=config_root,
-        _lib_targets=raw.get('lib'),
-        _bin_targets=raw.get('bin'),
-        _testsuite_macro=raw.get('testsuite_macro'),
-        _ifndef_name=raw.get('ifndef_name'),
-        _namespace_name=raw.get('namespace_name'),
-        _cmake_flags_extra=raw.get('cmake_flags_extra'),
-        _cmake_require_shell=raw.get('cmake_require_shell'),
-        _header_extension=raw.get('header_extension'),
-        _fix_compile_commands=raw.get('fix_compile_commands'),
-        _test_header_path=raw.get('test_header_path'),
+        _targets=_load_targets(raw['targets']),
+        _default_build_targets=load_str_tuple(raw.get('default_bin_targets')),
+        _default_test_targets=load_str_tuple(raw.get('default_test_targets')),
+        _default_benchmark_targets=load_str_tuple(raw.get('default_benchmark_targets')),
+        _testsuite_macro=optional_map(raw.get('testsuite_macro'), require_str),
+        _ifndef_name=optional_map(raw.get('ifndef_name'), require_str),
+        _namespace_name=optional_map(raw.get('namespace_name'), require_str),
+        _cmake_flags_extra=load_cmake_flags(raw.get('cmake_flags_extra')),
+        _cmake_require_shell=optional_map(raw.get('cmake_require_shell'), require_bool),
+        _header_extension=optional_map(raw.get('header_extension'), require_str),
+        _fix_compile_commands=optional_map(raw.get('fix_compile_commands'), require_bool),
+        _test_header_path=load_path(raw.get('test_header_path')),
     )
+
+
 
 def get_config_root(d: Path) -> Path:
     config_root = find_config_root(d)
