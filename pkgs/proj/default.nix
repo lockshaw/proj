@@ -6,6 +6,8 @@
 , setuptools
 , pytest-skip-slow
 , pytest
+, valgrind
+, kcachegrind
 , callPackage
 }:
 
@@ -20,6 +22,8 @@ buildPythonApplication {
     typing-extensions
     enlighten
     immutables
+    valgrind
+    kcachegrind
   ];
 
   build-system = [
