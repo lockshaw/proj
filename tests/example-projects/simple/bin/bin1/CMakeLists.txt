@@ -4,5 +4,5 @@ tp_add_executable(
   SRC_PATTERNS
     src/*.cc
   DEPS
-    lib1-lib
+    lib1
 )

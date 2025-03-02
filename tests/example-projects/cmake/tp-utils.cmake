@@ -56,7 +56,7 @@ function(tp_add_library)
       ${ARGN}
   )
 
-  set(FULL_TP_LIBRARY_NAME "${TP_LIBRARY_NAME}-lib")
+  set(FULL_TP_LIBRARY_NAME "${TP_LIBRARY_NAME}")
   
   project(${FULL_TP_LIBRARY_NAME})
   file(GLOB_RECURSE SRC
@@ -118,7 +118,7 @@ function(tp_add_test_executable)
   target_link_libraries(
     ${FULL_TP_TEST_EXEC_NAME}
     ${TP_TEST_EXEC_DEPS}
-    ${TP_TEST_EXEC_NAME}-lib
+    ${TP_TEST_EXEC_NAME}
     doctest
     )
 
@@ -163,7 +163,7 @@ function(tp_add_benchmark_executable)
   target_link_libraries(
     ${FULL_TP_BENCHMARK_EXEC_NAME}
     ${TP_BENCHMARK_EXEC_DEPS}
-    ${TP_BENCHMARK_EXEC_NAME}-lib
+    ${TP_BENCHMARK_EXEC_NAME}
     gbenchmark
     gbenchmark-main)
 
@@ -185,7 +185,7 @@ function(tp_add_executable)
       ${ARGN}
   )
 
-  set(FULL_TP_EXEC_NAME "${TP_EXEC_NAME}-bin")
+  set(FULL_TP_EXEC_NAME "${TP_EXEC_NAME}")
 
   project(${FULL_TP_EXEC_NAME})
   file(GLOB_RECURSE SRC

@@ -5,12 +5,18 @@ from typing import (
     Tuple,
     Optional,
     Union,
+    Container,
 )
 from enum import (
     Enum,
     auto,
 )
 import re
+
+@dataclass(frozen=True, order=True)
+class ConfiguredNames:
+    bin_names: Container[str]
+    lib_names: Container[str]
 
 class BuildTargetType(Enum):
     LIB = auto()
@@ -25,24 +31,26 @@ class BuildTarget:
     artifact_path: Path
 
     @staticmethod
-    def from_cmake_name(cmake_name: str) -> 'BuildTarget':
-        result = BuildTarget.try_from_cmake_name(cmake_name)
+    def from_cmake_name(names: ConfiguredNames, cmake_name: str) -> 'BuildTarget':
+        result = BuildTarget.try_from_cmake_name(names, cmake_name)
         if result is None:
             raise ValueError(f'Failed to parse {cmake_name=}')
         else:
             return result
 
     @staticmethod
-    def try_from_cmake_name(s: str) -> Optional['BuildTarget']:
-        if s.endswith('-bin'):
-            return BinTarget(s[:-len('-bin')]).build_target
-        elif s.endswith('-lib'):
-            return LibTarget(s[:-len('-lib')]).build_target
+    def try_from_cmake_name(names: ConfiguredNames, s: str) -> Optional['BuildTarget']:
+        if s in names.bin_names:
+            return BinTarget(s).build_target
+        elif s in names.lib_names:
+            return LibTarget(s).build_target
         elif s.endswith('-tests'):
             lib_name = s[:-len('-tests')]
+            assert lib_name in names.lib_names
             return LibTarget(lib_name).test_target.build_target
         elif s.endswith('-benchmarks'):
             lib_name = s[:-len('-benchmarks')]
+            assert lib_name in names.lib_names
             return LibTarget(lib_name).benchmark_target.build_target
         else:
             return None
@@ -123,7 +131,7 @@ class BinTarget:
 
     @property
     def full_bin_name(self) -> str:
-        return self.bin_name + '-bin'
+        return self.bin_name
 
     @property
     def bin_path(self) -> Path:
@@ -256,7 +264,7 @@ class LibTarget:
 
     @property
     def full_lib_name(self) -> str:
-        return self.lib_name + '-lib'
+        return self.lib_name
 
     @property
     def test_target(self) -> TestSuiteTarget:

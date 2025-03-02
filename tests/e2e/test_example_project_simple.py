@@ -74,10 +74,10 @@ def test_get_cmake_target_names_list() -> None:
         config = get_config(d)
 
         required = [
-            'lib1-lib',
-            'lib2-lib',
-            'bin1-bin',
-            'bin2-bin',
+            'lib1',
+            'lib2',
+            'bin1',
+            'bin2',
             'lib1-tests',
             'lib2-tests',
             'lib1-benchmarks',
@@ -127,13 +127,15 @@ def test_get_cmake_targets_list() -> None:
             for target in required_not:
                 assert target not in target_list
 
-        debug_target_list = list(get_targets_list(config.debug_build_dir))
+        names = config.configured_names
+
+        debug_target_list = list(get_targets_list(names, config.debug_build_dir))
         check_target_list(debug_target_list)
 
-        release_target_list = list(get_targets_list(config.release_build_dir))
+        release_target_list = list(get_targets_list(names, config.release_build_dir))
         check_target_list(release_target_list)
 
-        coverage_target_list = list(get_targets_list(config.coverage_build_dir))
+        coverage_target_list = list(get_targets_list(names, config.coverage_build_dir))
         check_target_list(coverage_target_list)
 
 @pytest.mark.e2e

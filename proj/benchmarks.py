@@ -319,7 +319,7 @@ def upload_to_bencher(config: ProjectConfig, result: BenchmarkResult, browser: b
             _l.exception('Failed to upload to bencher. Are you sure you configured BENCHER_API_TOKEN correctly')
         if browser:
             config.benchmark_html_dir.mkdir(exist_ok=True, parents=True)
-            with (config.benchmark_html_dir / 'index.html').open('wb') as f:
+            with (config.benchmark_html_dir / 'index.html').open('wb') as f: # type: ignore
                 f.write(cmd_result.stdout)
             open_in_browser(config.benchmark_html_dir / 'index.html')
 

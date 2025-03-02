@@ -14,7 +14,10 @@ import shutil
 from .config_file import ProjectConfig
 from . import fix_compile_commands
 import re
-from proj.targets import BuildTarget
+from proj.targets import (
+    BuildTarget,
+    ConfiguredNames,
+)
 import logging
 
 _l = logging.getLogger(__name__)
@@ -50,9 +53,9 @@ def get_target_names_list(build_dir: Path) -> Iterator[str]:
         if match is not None:
             yield match.group('target')
 
-def get_targets_list(build_dir: Path) -> Iterator[BuildTarget]:
+def get_targets_list(names: ConfiguredNames, build_dir: Path) -> Iterator[BuildTarget]:
     for target_name in get_target_names_list(build_dir):
-        parsed = BuildTarget.try_from_cmake_name(target_name)
+        parsed = BuildTarget.try_from_cmake_name(names, target_name)
         if parsed is not None:
             yield parsed
 

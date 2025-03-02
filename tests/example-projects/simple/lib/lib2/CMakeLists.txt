@@ -8,7 +8,7 @@ tp_add_library(
   PRIVATE_INCLUDE
     src/
   DEPS
-    lib1-lib
+    lib1
 )
 
 add_subdirectory(test)

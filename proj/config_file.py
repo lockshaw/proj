@@ -23,6 +23,7 @@ from .targets import (
     BenchmarkSuiteTarget,
     BenchmarkCaseTarget,
     BinTarget,
+    ConfiguredNames,
     parse_generic_test_target,
     parse_generic_benchmark_target,
 )
@@ -79,22 +80,40 @@ class ProjectConfig:
         return self.base / 'build/doxygen'
 
     @property
-    def bin_targets(self) -> Tuple[BinTarget, ...]:
+    def bin_names(self) -> Tuple[str, ...]:
         return tuple([
-            BinTarget(target_name) 
+            target_name 
             for target_name, target_config 
             in sorted(self._targets.items()) 
             if isinstance(target_config, BinConfig)
         ])
 
     @property
-    def lib_targets(self) -> Mapping[LibTarget, LibConfig]:
+    def bin_targets(self) -> Tuple[BinTarget, ...]:
+        return tuple(BinTarget(n) for n in self.bin_names)
+
+    @property
+    def lib_names(self) -> Mapping[str, LibConfig]:
         return {
-            LibTarget(target_name): target_config 
+            target_name: target_config 
             for target_name, target_config 
             in sorted(self._targets.items())
             if isinstance(target_config, LibConfig)
         }
+
+    @property
+    def lib_targets(self) -> Mapping[LibTarget, LibConfig]:
+        return {
+            LibTarget(k): v for k, v in self.lib_names.items()
+        }
+
+    @property
+    def configured_names(self) -> ConfiguredNames:
+        return ConfiguredNames(
+            bin_names=set(self.bin_names),
+            lib_names=set(self.lib_names.keys()),
+        )
+
 
     @property
     def default_build_targets(self) -> Tuple[BuildTarget, ...]:
