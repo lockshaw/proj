@@ -1,4 +1,8 @@
 {
+  nixConfig = {
+    bash-prompt-prefix = "(proj) ";
+  };
+
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-23.11";
     flake-utils.url = "github:numtide/flake-utils";
@@ -12,93 +16,19 @@
       };
 
       lib = pkgs.lib;
-
-      bencher = ({ stdenv
-        , lib
-        , fetchurl
-        , alsaLib
-        , openssl
-        , zlib
-        , pulseaudio
-        , autoPatchelfHook
-      }:
-
-      stdenv.mkDerivation rec {
-        pname = "bencher-cli";
-        version = "0.4.33";
-
-        system = "x86_64-linux";
-
-        src = fetchurl {
-          url = "https://github.com/bencherdev/bencher/releases/download/v${version}/bencher-v${version}-linux-x86-64";
-          hash = "sha256-3q2ZGSqbcMaUcNMGJN+IsEP/+RlYHnsmiWdJ2oV2qmw=";
-        };
-
-        nativeBuildInputs = [
-          autoPatchelfHook
-        ];
-
-        dontUnpack = true;
-
-        installPhase = ''
-        ls
-        runHook preInstall
-        install -m755 -D $src $out/bin/bencher
-        runHook postInstall
-        '';
-
-        meta = with lib; {
-          homepage = "https://bencher.dev/";
-          platforms = platforms.linux;
-        };
-      });
     in 
-    {
+    rec {
       packages = rec {
-        proj = pkgs.python3Packages.callPackage ./proj.nix { inherit bencher-cli; };
-        bencher-cli = pkgs.callPackage bencher { };
-
-        doctest = pkgs.doctest.overrideAttrs ( old: rec {
-          version = "2.4.9";
-          src = pkgs.fetchFromGitHub {
-            owner = "doctest";
-            repo = "doctest";
-            rev = "v${version}";
-            sha256 = "sha256-ugmkeX2PN4xzxAZpWgswl4zd2u125Q/ADSKzqTfnd94=";
-          };
-          patches = [
-            ./.flake/patches/doctest-template-test.patch
-          ];
-        });
-
-        pytest-skip-slow = pkgs.python3Packages.buildPythonPackage rec {
-          pname = "pytest-skip-slow";
-          version = "0.0.5";
-          pyproject = true;
-
-          src = pkgs.python3Packages.fetchPypi {
-            inherit pname version;
-            sha256 = "sha256-ZV6lx0jHKUfg0wIzTn+o75mSkleiorySj2MN21oWHYg=";
-          };
-
-          nativeBuildInputs = [
-            pkgs.python3Packages.flit-core
-          ];
-
-          build-system = with pkgs.python3Packages; [
-            flit 
-          ];
+        proj = pkgs.python3Packages.callPackage ./pkgs/proj { 
+          inherit pytest-skip-slow;
+          callPackage = path: args: pkgs.callPackage path (packages // args);
         };
+        bencher-cli = pkgs.callPackage ./pkgs/bencher.nix { };
+        ff-clang-format = pkgs.callPackage ./pkgs/ff-clang-format.nix { };
+        doctest = pkgs.callPackage ./pkgs/doctest { };
+        pytest-skip-slow = pkgs.python3Packages.callPackage ./pkgs/pytest-skip-slow.nix { };
+        proj-nvim = pkgs.callPackage ./pkgs/proj-nvim.nix { inherit proj; };
 
-        proj-nvim = pkgs.vimUtils.buildVimPlugin {
-          name = "proj-nvim";
-          src = ./vim;
-          buildInputs = [ self.packages.${system}.proj ];
-
-          postPatch = ''
-            substituteInPlace UltiSnips/cpp.snippets --replace "%PROJPATH%" "${proj}/${pkgs.python3.sitePackages}"
-          '';
-        };
         rapidcheckFull = pkgs.symlinkJoin {
           name = "rapidcheckFull";
           paths = (with pkgs; [ rapidcheck.out rapidcheck.dev ]);
@@ -107,40 +37,71 @@
         default = proj;
       };
 
-      apps.default = {
-        type = "app";
-        program = "${self.packages.${system}.proj}/bin/proj";
+      checks = {
+        default = pkgs.runCommand "default" {} ''
+          ${self.packages.${system}.proj}/bin/proj -h
+          touch $out
+        '';
+
+        e2e = self.packages.${system}.proj.passthru.tests.e2e;
       };
 
-      devShells.default = pkgs.mkShell {
-        inputsFrom = [ self.packages.${system}.proj ];
+      apps = {
+        default = {
+          type = "app";
+          program = "${self.packages.${system}.proj}/bin/proj";
+        };
+        # ci = pkgs.symlinkJoin {
+        #   name = my-name;
+        #   paths = builtins.concatList [         
+        #     (pkgs.writeShellScriptBin "ci" "pytest")
+        #     self.packages.${system}.proj.propagatedBuildInputs
+        #   ];
+        #   buildInputs = [ pkgs.makeWrapper ];
+        #   postBuild = "wrapProgram $out/bin/${my-name} --prefix PATH : $out/bin";
+        #
+        # };
+        # }
+      };
 
-        buildInputs = builtins.concatLists [
-          (with pkgs; [
-            cmake
-            ccache
-            nlohmann_json
-            fmt
-            cmake
-            gbenchmark
-          ])
-          (with pkgs.python3Packages; [
-            pip
-            ipython
-            mypy
-            python-lsp-server
-            pylsp-mypy
-            python-lsp-ruff
-            black
-            toml
-            pytest
-          ])
-          (with self.packages.${system}; [
-            rapidcheckFull
-            pytest-skip-slow
-            doctest
-          ])
-        ];
+      devShells = {
+        ci = pkgs.mkShell {
+          inputsFrom = [ self.packages.${system}.proj ];
+        };
+
+        default = pkgs.mkShell {
+          inputsFrom = [ 
+            self.packages.${system}.proj 
+            self.checks.${system}.e2e
+          ];
+
+          buildInputs = builtins.concatLists [
+            (with pkgs; [
+              cmake
+              ccache
+              nlohmann_json
+              fmt
+              cmake
+              gbenchmark
+            ])
+            (with pkgs.python3Packages; [
+              pip
+              ipython
+              mypy
+              python-lsp-server
+              pylsp-mypy
+              python-lsp-ruff
+              black
+              toml
+              pytest
+            ])
+            (with self.packages.${system}; [
+              rapidcheckFull
+              pytest-skip-slow
+              doctest
+            ])
+          ];
+        };
       };
     }
   );

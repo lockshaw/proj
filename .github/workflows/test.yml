@@ -21,16 +21,7 @@ jobs:
       - uses: cachix/cachix-action@v14
         with:
           name: ff
-          skipPush: true
-          # authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: setup nix develop shell
-        uses: nicknovitski/nix-develop@v1.1.0
-        env:
-          NIXPKGS_ALLOW_UNFREE: 1
-        with:
-          arguments: ".#default --accept-flake-config"
-
-      - name: Run pytest
-        run: |
-          pytest
+      - name: Run flake checks
+        run: nix flake check

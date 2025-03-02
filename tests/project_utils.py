@@ -8,15 +8,24 @@ from proj.__main__ import (
     MainCmakeArgs,
     main_cmake,
 )
-from tempfile import TemporaryDirectory
+import tempfile
 
 MAX_VERBOSITY = 100
 
 TEST_PROJECTS_DIR = Path(__file__).parent / 'example-projects'
 
 @contextmanager
+def TemporaryDirectory(delete: bool = True) -> Iterator[str]:
+    if delete:
+        with tempfile.TemporaryDirectory() as d:
+            yield d
+    else:
+        d = tempfile.mkdtemp()
+        yield d
+
+@contextmanager
 def project_instance(project_name: str) -> Iterator[Path]:
-    with TemporaryDirectory() as d:
+    with TemporaryDirectory(delete=False) as d:
         dst = Path(d) / project_name
         shutil.copytree(src=TEST_PROJECTS_DIR / project_name, dst=dst)
         yield dst

@@ -398,7 +398,12 @@ def get_sublib_root(p: Path):
         src_dir = p / 'src'
         include_dir = p / 'include'
 
-        if src_dir.is_dir() and include_dir.is_dir():
+        src_exists = src_dir.is_dir()
+        include_exists = include_dir.is_dir()
+
+        _l.debug('get_sublib_root checking %s for %s is dir (%s) and %s is dir (%s)', p, src_dir, src_exists, include_dir, include_exists)
+
+        if src_exists and include_exists:
             return p
 
         if p == p.parent:

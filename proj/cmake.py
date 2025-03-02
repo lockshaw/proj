@@ -15,8 +15,13 @@ from .config_file import ProjectConfig
 from . import fix_compile_commands
 import re
 from proj.targets import BuildTarget
+import logging
+
+_l = logging.getLogger(__name__)
 
 def run_cmake(cmake_args: Iterable[str], require_shell: bool, cwd: Path) -> None:
+    cmake_args = list(cmake_args)
+    _l.debug('Running cmake command: %s', cmake_args)
     subprocess.check_call(
         [
             "cmake",

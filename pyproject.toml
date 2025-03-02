@@ -1,3 +1,9 @@
 [tool.ruff.lint]
 select = ["E", "F"]
 ignore = ["E741", "E501"]
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e",
+    "no_sandbox",
+]

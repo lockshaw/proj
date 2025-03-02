@@ -55,7 +55,11 @@ from .targets import (
     parse_generic_test_target,
     parse_generic_benchmark_target,
 )
-from .profile import profile_target
+from .profile import (
+    profile_target,
+    ProfilingTool,
+    visualize_profile,
+)
 from .testing import (
     run_tests,
 )
@@ -258,6 +262,9 @@ class MainProfileArgs:
     path: Path
     verbosity: int
     jobs: int
+    dry_run: bool
+    gui: bool
+    tool: ProfilingTool
     target: RunTarget
     target_run_args: Sequence[str]
 
@@ -293,8 +300,11 @@ def main_profile(args: MainProfileArgs) -> int:
     )
 
     assert len(build_run_plan.run_targets) == 1
-    profile_file = profile_target(config.release_build_dir, build_run_plan.run_targets[0])
-    print(profile_file)
+    profile_file = profile_target(config.release_build_dir, build_run_plan.run_targets[0], dry_run=args.dry_run, tool=args.tool)
+    if args.gui:
+        visualize_profile(profile_file, tool=args.tool)
+    else:
+        print(profile_file)
 
     return 0
 
@@ -541,6 +551,9 @@ def make_parser() -> argparse.ArgumentParser:
     set_main_signature(profile_p, main_profile, MainProfileArgs)
     profile_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     profile_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
+    profile_p.add_argument('--dry-run', action='store_true')
+    profile_p.add_argument('--tool', choices=list(sorted(ProfilingTool)), default=ProfilingTool.CALLGRIND)
+    profile_p.add_argument('-g', '--gui', action='store_true')
     profile_p.add_argument('target', type=RunTarget.from_str)
     profile_p.add_argument('target-run-args', nargs='*')
     add_verbosity_args(profile_p)
@@ -600,6 +613,8 @@ def main(argv: Sequence[str]) -> int:
         p.print_help()
         return 1
 
+def entrypoint() -> None:
+    sys.exit(main(sys.argv[1:]))
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    entrypoint()
