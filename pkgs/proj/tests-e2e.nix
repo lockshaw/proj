@@ -53,7 +53,7 @@ stdenv.mkDerivation {
   buildPhase = ''
     export HOME="$(mktemp -d)"
 
-    pytest -s -vvvv --log-level DEBUG -m e2e --slow
+    pytest -s -vvvv --log-level DEBUG -m 'e2e and not no_sandbox' --slow
     touch $out
   '';
 }
