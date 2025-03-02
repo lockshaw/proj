@@ -332,6 +332,7 @@ def test_profile_benchmark_case_callgrind() -> None:
             'lib1:benchmarks:example_benchmark/75/32'
         ]))
 
+        assert 'example_benchmark/25/16' not in result.stdout
         assert Path(result.stdout.splitlines()[-1]).is_file()
 
 @pytest.mark.e2e

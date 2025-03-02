@@ -37,6 +37,7 @@ def profile_target_with_perf(build_dir: Path, target: RunTarget, output_file: Pa
         str(output_file),
         '--',
         str(build_dir / target.executable_path)
+        *target.args,
     ])
 
     if not dry_run:
@@ -47,7 +48,8 @@ def profile_target_with_callgrind(build_dir: Path, target: RunTarget, output_fil
         'valgrind', 
         '--tool=callgrind',
         f'--callgrind-out-file={output_file}',
-        str(build_dir / target.executable_path)
+        str(build_dir / target.executable_path),
+        *target.args,
     ])
 
     assert output_file.is_file()
