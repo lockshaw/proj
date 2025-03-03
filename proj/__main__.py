@@ -400,7 +400,7 @@ class MainCheckArgs:
 def main_check(args: MainCheckArgs) -> int:
     config = get_config(args.path)
 
-    run_check(config, args.check)
+    run_check(config, args.check, verbosity=args.verbosity)
 
     return STATUS_OK
 

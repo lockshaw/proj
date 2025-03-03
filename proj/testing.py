@@ -48,6 +48,7 @@ def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -
         ).get_test_case(test['name'])
 
 def run_tests(targets: Sequence[RunTarget], build_dir: Path, debug: bool) -> None:
+    _l.info('Running test targets %s', targets)
     target_regex = "^(" + "|".join([t.name for t in targets]) + ")$"
     subprocess.run(
         [

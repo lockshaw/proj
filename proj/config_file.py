@@ -122,19 +122,27 @@ class ProjectConfig:
 
 
     @property
+    def all_build_targets(self) -> Tuple[BuildTarget, ...]:
+        return tuple([
+            *[lib.build_target for lib in sorted(self.lib_targets)],
+            *[bin.build_target for bin in sorted(self.bin_targets)],
+        ])
+
+    @property
     def default_build_targets(self) -> Tuple[BuildTarget, ...]:
         if self._default_build_targets is None: 
-            return tuple([
-                *[lib.build_target for lib in sorted(self.lib_targets)],
-                *[bin.build_target for bin in sorted(self.bin_targets)],
-            ])
+            return self.all_build_targets
         else:
             return tuple(BuildTarget.from_str(s) for s in self._default_build_targets)
 
     @property
+    def all_test_targets(self) -> Tuple[TestSuiteTarget, ...]:
+        return tuple([lib.test_target for lib in sorted(self.lib_targets)])
+
+    @property
     def default_test_targets(self) -> Tuple[Union[TestSuiteTarget, TestCaseTarget], ...]:
         if self._default_test_targets is None:
-            return tuple([lib.test_target for lib in sorted(self.lib_targets)])
+            return self.all_test_targets
         else:
             return tuple(parse_generic_test_target(s) for s in self._default_test_targets)
 

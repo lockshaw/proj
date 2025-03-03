@@ -5,9 +5,6 @@ from typing import (
     Iterator,
     Iterable,
 )
-from proj.__main__ import (
-    main,
-)
 from proj.targets import (
     BuildTarget,
     LibTarget,
@@ -461,6 +458,30 @@ def test_check_format() -> None:
             'format',
         ])
 
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_check_cpu_tests() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_succeeds(d, [
+            'check',
+            'cpu-tests',
+        ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_check_cpu_ci() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_fails(d, [
+            'check',
+            'cpu-ci',
+        ])
+        check_cmd_succeeds(d, [
+            'format',
+        ])
+        check_cmd_succeeds(d, [
+            'check',
+            'cpu-ci',
+        ])
 
 @pytest.mark.e2e
 @pytest.mark.slow
