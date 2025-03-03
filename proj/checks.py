@@ -109,12 +109,12 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
-        cwd=config.debug_build_dir,
+        cwd=config.coverage_build_dir,
     )
 
     run_targets = [target.run_target for target in test_targets]
     _l.info('Running tests %s', run_targets)
-    run_tests(run_targets, config.debug_build_dir, debug=False)
+    run_tests(run_targets, config.coverage_build_dir, debug=False)
 
 def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
     run_dtgen(
