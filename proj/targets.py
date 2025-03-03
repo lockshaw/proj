@@ -70,11 +70,11 @@ class BuildTarget:
             return BinTarget(pieces[0]).build_target
         elif s in names.lib_names:
             return LibTarget(pieces[0]).build_target
-        elif len(pieces) == 2 and len(pieces[1]) > 0 and 'benchmarks'.startswith(pieces[1]):
+        elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
             lib_name = pieces[0]
             assert lib_name in names.lib_names
             return LibTarget(lib_name).benchmark_target.build_target
-        elif len(pieces) == 2 and len(pieces[1]) > 0 and 'tests'.startswith(pieces[1]):
+        elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'tests'):
             lib_name = pieces[0]
             assert lib_name in names.lib_names
             return LibTarget(lib_name).test_target.build_target
@@ -93,6 +93,9 @@ class RunTargetType(Enum):
             RunTargetType.TESTS: BuildTargetType.TESTS,
             RunTargetType.BENCHMARKS: BuildTargetType.BENCHMARKS,
         }[self]
+
+def is_nonempty_prefix_of(needle: str, haystack: str) -> bool:
+    return len(needle) > 0 and haystack.startswith(needle)
 
 @dataclass(frozen=True, order=True)
 class RunTarget:
@@ -118,13 +121,13 @@ class RunTarget:
         pieces = s.split(':')
         if len(pieces) == 1:
             return BinTarget(pieces[0]).run_target
-        elif len(pieces) == 2 and pieces[1] == 'benchmarks':
+        elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
             return LibTarget(pieces[0]).benchmark_target.run_target
-        elif len(pieces) == 3 and pieces[1] == 'benchmarks':
+        elif len(pieces) == 3 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
             return LibTarget(pieces[0]).benchmark_target.get_benchmark_case(pieces[2]).run_target
-        elif len(pieces) == 2 and pieces[1] == 'tests':
+        elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'tests'):
             return LibTarget(pieces[0]).test_target.run_target
-        elif len(pieces) == 3 and pieces[1] == 'tests':
+        elif len(pieces) == 3 and is_nonempty_prefix_of(pieces[1], 'tests'):
             return LibTarget(pieces[0]).test_target.get_test_case(pieces[2]).run_target
         else:
             raise ValueError(f'Failed to parse {s=}')
