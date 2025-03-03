@@ -6,11 +6,8 @@ from typing import (
     Tuple,
     Iterator,
     Union,
-    Dict,
-    TypeVar,
-    Callable,
-    List,
 )
+from immutables import Map
 import string
 import re
 import io
@@ -28,6 +25,15 @@ from .targets import (
     parse_generic_benchmark_target,
 )
 import logging
+from .utils import (
+    map_optional,
+)
+from .json import (
+    require_str,
+    require_bool,
+    require_list_of,
+    require_dict_of,
+)
 
 _l = logging.getLogger(__name__)
 
@@ -267,53 +273,23 @@ def _load_target_config(m: Mapping[str, object]) -> Union[LibConfig, BinConfig]:
     else:
         raise ValueError
 
-def require_str(x: object) -> str:
-    assert isinstance(x, str)
-    return x
-
-def require_bool(x: object) -> bool:
-    assert isinstance(x, bool)
-    return x
-
-T = TypeVar('T')
-def require_list_of(x: object, check_element: Callable[[object], T]) -> List[T]:
-    assert isinstance(x, list)
-    return [check_element(e) for e in x]
-
-K = TypeVar('K')
-V = TypeVar('V')
-def require_dict_of(x: object, check_key: Callable[[object], K], check_value: Callable[[object], V]) -> Dict[K, V]:
-    assert isinstance(x, dict)
-
-    return {
-        check_key(k): check_value(v) for k, v in x.items()
-    }
-
-def _load_targets(m: object) -> Dict[str, Union[LibConfig, BinConfig]]:
+def _load_targets(m: object) -> Map[str, Union[LibConfig, BinConfig]]:
     assert isinstance(m, dict)
 
-    return {
+    return Map({
         target_name: _load_target_config(target_config)
         for target_name, target_config
         in m.items()
-    }
-
-T1 = TypeVar('T1')
-T2 = TypeVar('T2')
-def optional_map(x: Optional[T1], f: Callable[[T1], T2]) -> Optional[T2]:
-    if x is None:
-        return x
-    else:
-        return f(x)
+    })
 
 def load_str_tuple(x: object) -> Optional[Tuple[str, ...]]:
-    return optional_map(optional_map(x, lambda l: require_list_of(l, require_str)), lambda ll: tuple(ll))
+    return map_optional(map_optional(x, lambda l: require_list_of(l, require_str)), lambda ll: tuple(ll))
 
 def load_path(x: object) -> Optional[Path]:
-    return optional_map(optional_map(x, require_str), lambda s: Path(s))
+    return map_optional(map_optional(x, require_str), lambda s: Path(s))
 
-def load_cmake_flags(x: object) -> Optional[Dict[str, str]]:
-    return optional_map(x, lambda y: require_dict_of(y, require_str, require_str))
+def load_cmake_flags(x: object) -> Optional[Map[str, str]]:
+    return map_optional(x, lambda y: require_dict_of(y, require_str, require_str))
 
 def _load_config(d: Path) -> Optional[ProjectConfig]:
     config_root = find_config_root(d)
@@ -336,13 +312,13 @@ def _load_parsed_config(config_root: Path, raw: object) -> ProjectConfig:
         _default_build_targets=load_str_tuple(raw.get('default_bin_targets')),
         _default_test_targets=load_str_tuple(raw.get('default_test_targets')),
         _default_benchmark_targets=load_str_tuple(raw.get('default_benchmark_targets')),
-        _testsuite_macro=optional_map(raw.get('testsuite_macro'), require_str),
-        _ifndef_name=optional_map(raw.get('ifndef_name'), require_str),
-        _namespace_name=optional_map(raw.get('namespace_name'), require_str),
+        _testsuite_macro=map_optional(raw.get('testsuite_macro'), require_str),
+        _ifndef_name=map_optional(raw.get('ifndef_name'), require_str),
+        _namespace_name=map_optional(raw.get('namespace_name'), require_str),
         _cmake_flags_extra=load_cmake_flags(raw.get('cmake_flags_extra')),
-        _cmake_require_shell=optional_map(raw.get('cmake_require_shell'), require_bool),
-        _header_extension=optional_map(raw.get('header_extension'), require_str),
-        _fix_compile_commands=optional_map(raw.get('fix_compile_commands'), require_bool),
+        _cmake_require_shell=map_optional(raw.get('cmake_require_shell'), require_bool),
+        _header_extension=map_optional(raw.get('header_extension'), require_str),
+        _fix_compile_commands=map_optional(raw.get('fix_compile_commands'), require_bool),
         _test_header_path=load_path(raw.get('test_header_path')),
     )
 
@@ -382,7 +358,7 @@ def gen_ifndef_uid(p):
     unfixed = f'_{config.ifndef_name}_' + str(relpath)
     return re.sub(r'[^a-zA-Z0-9_]', '_', unfixed).upper()
 
-def get_config(p) -> ProjectConfig:
+def get_config(p: Union[Path, str]) -> ProjectConfig:
     p = Path(p).absolute()
     config = load_config(p)
     return config
@@ -396,20 +372,20 @@ def get_test_header_path(p: Path) -> Path:
     config = load_config(p)
     return config.test_header_path
 
-def with_suffixes(p, suffs):
+def with_suffixes(p: Path, suffs: str) -> Path:
     name = p.name
     while '.' in name:
         name = name[:name.rfind('.')]
     return p.with_name(name + suffs)
 
-def with_suffix_appended(p, suff):
+def with_suffix_appended(p: Path, suff: str) -> Path:
     assert suff.startswith('.')
     return p.with_name(p.name + suff)
 
-def with_suffix_removed(p):
+def with_suffix_removed(p: Path) -> Path:
     return p.with_suffix('')
 
-def get_sublib_root(p: Path):
+def get_sublib_root(p: Path) -> Optional[Path]:
     p = Path(p).resolve()
     assert p.is_absolute()
 
@@ -430,11 +406,11 @@ def get_sublib_root(p: Path):
         else:
             p = p.parent
 
-def get_src_dir(p: Path) -> Path:
-    return get_sublib_root(p) / 'src'
+def get_src_dir(p: Path) -> Optional[Path]:
+    return map_optional(get_sublib_root(p), lambda pp: pp / 'src')
 
-def get_include_dir(p: Path) -> Path:
-    return get_sublib_root(p) / 'include'
+def get_include_dir(p: Path) -> Optional[Path]:
+    return map_optional(get_sublib_root(p), lambda pp: pp / 'include')
 
 def with_project_specific_extension_removed(p: Path, config: ProjectConfig) -> Path:
     project_specific = [
@@ -462,6 +438,7 @@ def get_subrelpath(p: Path, config: Optional[ProjectConfig] = None) -> Path:
         config = load_config(p)
 
     sublib_root = get_sublib_root(p)
+    assert sublib_root is not None
     include_dir = sublib_root / 'include'
     assert include_dir.is_dir()
     src_dir = sublib_root / 'src'
@@ -479,7 +456,9 @@ def get_possible_spec_paths(p: Path) -> Iterator[Path]:
     assert p.name.endswith('.dtg.cc') or p.name.endswith('.dtg' + config.header_extension)
     subrelpath = get_subrelpath(p)
     include_dir = get_include_dir(p)
+    assert include_dir is not None
     src_dir = get_src_dir(p)
+    assert src_dir is not None
     for d in [include_dir, src_dir]:
         for ext in ['.struct.toml', '.enum.toml', '.variant.toml']:
             yield d / with_suffix_appended(with_suffix_removed(subrelpath), ext)
@@ -487,6 +466,7 @@ def get_possible_spec_paths(p: Path) -> Iterator[Path]:
 def get_include_path(p: Path) -> str:
     p = Path(p).absolute()
     sublib_root = get_sublib_root(p)
+    assert sublib_root is not None
     config = load_config(p)
     subrelpath = get_subrelpath(p)
 
@@ -508,6 +488,7 @@ def get_include_path(p: Path) -> str:
 def get_source_path(p: Path) -> Path:
     p = Path(p).absolute()
     sublib_root = get_sublib_root(p)
+    assert sublib_root is not None
     src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
 

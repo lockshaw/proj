@@ -17,7 +17,6 @@ from datetime import datetime
 import statistics
 from tempfile import NamedTemporaryFile
 import logging
-import enlighten # type: ignore
 import re
 from .browser import open_in_browser
 from .config_file import ProjectConfig
@@ -26,6 +25,10 @@ from .targets import (
     BenchmarkCaseTarget,
 )
 from pathlib import Path
+from .progressbar import (
+    get_progress_manager,
+    ProgressBar,
+)
 
 _l = logging.getLogger(__name__)
 
@@ -218,7 +221,7 @@ def render_table(columns: Sequence[str], data: Sequence[Sequence[str]], sep: Opt
     
 
 def pretty_print_benchmark(benchmark: BenchmarkResult, f: IO[str]) -> None:
-    def line(s: str):
+    def line(s: str) -> None:
         print(s, file=f)
 
     line(benchmark.context.date.isoformat())
@@ -252,19 +255,19 @@ def call_benchmarks(benchmark_binaries: Sequence[Union[BenchmarkSuiteTarget, Ben
     benchmark_binaries = list(sorted(benchmark_binaries))
     all_benchmarks = list_benchmarks(benchmark_binaries, build_dir)
 
-    manager = enlighten.get_manager()
+    manager = get_progress_manager()
     with manager.counter(total=len(all_benchmarks), desc='Benchmarks') as pbar:
         results = [call_benchmark(bin, pbar, build_dir) for bin in benchmark_binaries]
     return merge_benchmark_results(results)
 
-def call_benchmark(benchmark: Union[BenchmarkCaseTarget, BenchmarkSuiteTarget], pbar, build_dir: Path) -> BenchmarkResult:
+def call_benchmark(benchmark: Union[BenchmarkCaseTarget, BenchmarkSuiteTarget], pbar: ProgressBar, build_dir: Path) -> BenchmarkResult:
     if isinstance(benchmark, BenchmarkCaseTarget):
         return call_benchmark_case(benchmark, pbar, build_dir)
     else:
         assert isinstance(benchmark, BenchmarkSuiteTarget)
         return call_benchmark_suite(benchmark, pbar, build_dir)
 
-def call_benchmark_case(benchmark: BenchmarkCaseTarget, pbar, build_dir: Path) -> BenchmarkResult:
+def call_benchmark_case(benchmark: BenchmarkCaseTarget, pbar: ProgressBar, build_dir: Path) -> BenchmarkResult:
     pbar.update(incr=0, force=True)
     functions = [benchmark]
 
@@ -283,7 +286,7 @@ def call_benchmark_case(benchmark: BenchmarkCaseTarget, pbar, build_dir: Path) -
     return BenchmarkResult.from_json(json.loads(stdout))
 
 NAME_RE = re.compile(r'"name": "(?P<testname>[^"]+)"')
-def call_benchmark_suite(benchmark: BenchmarkSuiteTarget, pbar, build_dir: Path) -> BenchmarkResult:
+def call_benchmark_suite(benchmark: BenchmarkSuiteTarget, pbar: ProgressBar, build_dir: Path) -> BenchmarkResult:
     functions = get_benchmark_list_for_binary(benchmark, build_dir)
     pbar.update(incr=0, force=True)
     def hook(line: str) -> None:

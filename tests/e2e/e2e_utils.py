@@ -1,6 +1,9 @@
 from pathlib import Path
 import subprocess
-from typing import Union
+from typing import (
+    Union,
+    Iterable,
+)
 import os
 
 def require_successful(r: Union[subprocess.CompletedProcess, subprocess.CalledProcessError]) -> subprocess.CompletedProcess:
@@ -12,7 +15,7 @@ def require_fail(r: Union[subprocess.CompletedProcess, subprocess.CalledProcessE
     assert isinstance(r, subprocess.CalledProcessError)
     return r
 
-def run(dir: Path, args, capture: bool = True) -> Union[subprocess.CompletedProcess, subprocess.CalledProcessError]:
+def run(dir: Path, args: Iterable[str], capture: bool = True) -> Union[subprocess.CompletedProcess, subprocess.CalledProcessError]:
     cmd = [
         'proj',
         *args,
@@ -22,5 +25,5 @@ def run(dir: Path, args, capture: bool = True) -> Union[subprocess.CompletedProc
     except subprocess.CalledProcessError as e:
         return e
 
-def check_cmd_succeeds(dir: Path, args) -> None:
+def check_cmd_succeeds(dir: Path, args: Iterable[str]) -> None:
     require_successful(run(dir, args, capture=False))

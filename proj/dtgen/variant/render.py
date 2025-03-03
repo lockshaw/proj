@@ -107,7 +107,7 @@ def render_visit_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
                 with sline(f):
                     f.write(f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", this->index()))')
 
-def get_fresh_typevar(spec: VariantSpec, prefix='T'):
+def get_fresh_typevar(spec: VariantSpec, prefix: str='T') -> str:
     if prefix not in spec.template_params:
         return prefix
     for s in string.digits:

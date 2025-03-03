@@ -189,7 +189,7 @@ def render_binop_impl(spec: StructSpec, op: str, f: TextIO) -> None:
     f.write(' const')
 
 
-    def render_tie(prefix: str):
+    def render_tie(prefix: str) -> None:
         f.write('std::tie')
         with parens(f):
             for field in commad(spec.fields, f):

@@ -9,8 +9,30 @@
 , valgrind
 , kcachegrind
 , callPackage
+, ff-clang-format
+, bencher-cli
+, hotspot
+, perf
+, ccache
+, compdb
+, cmake
+, mypy
+, ...
 }:
 
+let
+  bins = [
+    valgrind
+    kcachegrind
+    ff-clang-format
+    bencher-cli
+    hotspot
+    perf
+    ccache
+    compdb
+    cmake
+  ];
+in 
 buildPythonApplication {
   pname = "proj";
   version = "0.0.1";
@@ -22,9 +44,7 @@ buildPythonApplication {
     typing-extensions
     enlighten
     immutables
-    valgrind
-    kcachegrind
-  ];
+  ] ++ bins;
 
   build-system = [
     setuptools
@@ -33,7 +53,8 @@ buildPythonApplication {
   checkPhase = ''
     runHook preCheck
 
-    CCACHE_DIR="$(mktemp -d)" pytest -s -vvvv tests/ -m 'not no_sandbox' --log-level=DEBUG
+    mypy proj/ tests/
+    pytest -s -vvvv tests/ -m 'not no_sandbox' --log-level=DEBUG
 
     runHook postCheck
   '';
@@ -42,6 +63,7 @@ buildPythonApplication {
     pytestCheckHook
     pytest
     pytest-skip-slow
+    mypy
   ];
 
   passthru.tests = {

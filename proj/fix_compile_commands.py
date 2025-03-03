@@ -2,10 +2,39 @@ import json
 from pathlib import Path
 import shlex
 import functools
-from typing import List
-from dataclasses import dataclass
+from typing import (
+    List,
+    Callable,
+    Iterable,
+    Optional,
+)
+from dataclasses import dataclass, replace
 import sys
+from .json import (
+    Json,
+    require_str,
+    require_path,
+)
 
+@dataclass(frozen=True, order=True)
+class Entry:
+    directory: Path
+    command: str
+    file: Path
+
+    @staticmethod
+    def from_json(j: Json) -> 'Entry':
+        assert isinstance(j, dict)
+
+        return Entry(
+            directory=require_path(j['path']),
+            command=require_str(j['command']),
+            file=require_path(j['path']),
+        )
+
+@dataclass(frozen=True)
+class Template:
+    apply: Callable[[Entry], Entry]
 
 @functools.cache
 def load_options_file(p: Path) -> List[str]:
@@ -14,44 +43,43 @@ def load_options_file(p: Path) -> List[str]:
     return list(loaded)
 
 
-def get_relpath(entry, base_dir: Path):
-    file = Path(entry["file"])
-    directory = Path(entry["directory"])
-    reldir = directory.relative_to(base_dir / "build/normal")
-    relative = file.relative_to(base_dir / reldir)
+def get_relpath(entry: Entry, base_dir: Path) -> Path:
+    reldir = entry.directory.relative_to(base_dir / "build/normal")
+    relative = entry.file.relative_to(base_dir / reldir)
     return relative
 
 
-def apply_template(template, entry, base_dir: Path):
+def apply_template(template: Entry, entry: Entry, base_dir: Path) -> Entry:
     template_relpath = get_relpath(template, base_dir)
     entry_relpath = get_relpath(entry, base_dir)
-    entry["command"] = template["command"].replace(
+    return replace(entry, command=template.command.replace(
         str(template_relpath), str(entry_relpath)
-    )
+    ),)
 
 
-def find_template(entries, base_dir: Path):
+def find_template(entries: Iterable[Entry], base_dir: Path) -> Template:
     for entry in entries:
-        command = shlex.split(entry["command"])
+        command = shlex.split(entry.command)
         if (
             Path(command[0]).stem in ["clang++", "g++"]
-            and Path(entry["directory"]).stem == "kernels"
+            and Path(entry.directory).stem == "kernels"
         ):
-            return lambda e, base_dir=base_dir, template=entry: apply_template(
-                template, e, base_dir
-            )
+            def _apply(e: Entry, base_dir: Path=base_dir, template: Entry = entry) -> Entry:
+                return apply_template(template, e, base_dir)
+
+            return Template(_apply)
     assert False
 
 
-def expand_rsp_file(entry, template) -> bool:
-    command = shlex.split(entry["command"])
+def expand_rsp_file(entry: Entry, template: Template) -> bool:
+    command = shlex.split(entry.command)
     if Path(command[0]).stem == "nvcc":
-        template(entry)
+        template.apply(entry)
         return True
     return False
 
 
-def filter_args(entry) -> bool:
+def filter_args(entry: Entry) -> Optional[Entry]:
     banned = [
         lambda c: c.startswith("-Xcompiler"),
         lambda c: c.startswith("--generate-code"),
@@ -61,13 +89,13 @@ def filter_args(entry) -> bool:
     def is_banned(tok):
         return any(b(tok) for b in banned)
 
-    command = shlex.split(entry["command"])
+    command = shlex.split(entry.command)
 
     if Path(command[0]).stem == "nvcc":
         fixed = [tok for tok in command if not is_banned(tok)]
         fixed[2:2] = ["-D__noinline__=noinline"]
-        entry["command"] = shlex.join(fixed)
-    return False
+        return replace(entry, command=shlex.join(fixed))
+    return None
 
 
 def fix_entry(entry, template):

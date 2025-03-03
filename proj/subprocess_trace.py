@@ -12,13 +12,15 @@ import io
 from typing import (
     overload, 
     Literal, 
-    Iterable,
+    Sequence,
     Tuple,
     Union,
     IO,
     Optional,
     Any,
+    Mapping,
 )
+from pathlib import Path
 
 
 _l = logging.getLogger(__name__)
@@ -46,37 +48,38 @@ def check_output(command, **kwargs):
 
 @overload
 def tee_output(
-    command: Union[str, Iterable[str]], 
+    command: Union[str, Sequence[str]], 
     *,
     stdout: Optional[IO[bytes]] = None, 
     stderr: Optional[IO[bytes]] = None,
     text: Literal[False] = False, 
-    **kwargs,
+    shell: bool = False,
 ) -> Tuple[bytes, bytes]:
     ...
 
 @overload
 def tee_output(
-    command: Union[str, Iterable[str]], 
+    command: Union[str, Sequence[str]], 
     *,
     stdout: Optional[IO[str]] = None, 
     stderr: Optional[IO[str]] = None, 
     text: Literal[True], 
-    **kwargs,
+    shell: bool
 ) -> Tuple[str, str]:
     ...
 
-def tee_output(command, *, stdout=None, stderr=None, text: bool=False, **kwargs):
-    if kwargs.get("shell", False):
-        pretty_cmd = " ".join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
+def tee_output(command: Union[str, Sequence[str]], *, stdout: Optional[Union[IO[bytes], IO[str]]]=None, stderr: Optional[Union[IO[bytes], IO[str]]]=None, text: bool=False, shell: bool = False) -> Union[Tuple[bytes, bytes], Tuple[str, str]]:
+    if isinstance(command, str):
+        _l.info(f"+++ $ {command}")
     else:
-        pretty_cmd = shlex.join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
+        if shell:
+            command = " ".join(command)
+            _l.info(f"+++ $ {command}")
+        else:
+            pretty_cmd = shlex.join(command)
+            _l.info(f"+++ $ {pretty_cmd}")
 
-    assert isinstance(command, str) == kwargs.get('shell', False)
-
-    proc = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, bufsize=0, text=text, **kwargs)
+    proc = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, bufsize=0, text=text, shell=shell)
     stderrs: Any
     stdouts: Any
     if text:
@@ -163,16 +166,13 @@ def hook_stdout(command, *, stdout_hook, **kwargs):
         raise CalledProcessError(
             returncode=returncode,
             cmd=command,
-            output=stdouts[0].getvalue(),
-            stderr=stderrs[0].getvalue(),
         )
 
-def run(command, **kwargs):
-    if kwargs.get("shell", False):
+def run(command: Sequence[str], stdout: Optional[Union[IO[bytes], IO[str], int]]=None, stderr: Optional[Union[IO[bytes], IO[str], int]]=None, text: bool=False, shell: bool = False, env: Optional[Mapping[str, str]] = None, cwd: Optional[Path] = None, check: bool = False) -> CompletedProcess:
+    if not shell:
         pretty_cmd = " ".join(command)
         _l.info(f"+++ $ {pretty_cmd}")
-        return subprocess.run(pretty_cmd, **kwargs)
     else:
         pretty_cmd = shlex.join(command)
         _l.info(f"+++ $ {pretty_cmd}")
-        return subprocess.run(command, **kwargs)
+    return subprocess.run(command, stdout=stdout, stderr=stderr, text=text, shell=shell, env=env, cwd=cwd, check=check)

@@ -16,11 +16,17 @@
       };
 
       lib = pkgs.lib;
-    in 
-    rec {
+
       packages = rec {
         proj = pkgs.python3Packages.callPackage ./pkgs/proj { 
           inherit pytest-skip-slow;
+          inherit bencher-cli;
+          inherit ff-clang-format;
+
+          # for perf the kernel version doesn't matter as it's entirely in perl
+          # see https://discourse.nixos.org/t/which-perf-package/22399
+          perf = pkgs.linuxPackages_latest.perf;
+
           callPackage = path: args: pkgs.callPackage path (packages // args);
         };
         bencher-cli = pkgs.callPackage ./pkgs/bencher.nix { };
@@ -36,6 +42,9 @@
 
         default = proj;
       };
+    in
+    rec {
+      inherit packages;
 
       checks = {
         default = pkgs.runCommand "default" {} ''

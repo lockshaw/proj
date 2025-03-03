@@ -36,7 +36,7 @@ def profile_target_with_perf(build_dir: Path, target: RunTarget, output_file: Pa
         '--output',
         str(output_file),
         '--',
-        str(build_dir / target.executable_path)
+        str(build_dir / target.executable_path),
         *target.args,
     ])
 

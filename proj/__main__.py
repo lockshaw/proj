@@ -6,6 +6,9 @@ from typing import (
     TextIO,
     Collection,
     List,
+    TypeVar,
+    Type,
+    Callable,
 )
 from . import subprocess_trace as subprocess
 import os
@@ -70,16 +73,19 @@ DIR = Path(__file__).resolve().parent
 
 KERNELS_LIB = LibTarget.from_str('kernels')
 
+STATUS_OK = 0
+
 @dataclass(frozen=True)
 class MainRootArgs:
     path: Path
     verbosity: int
 
-def main_root(args: MainRootArgs) -> None:
+def main_root(args: MainRootArgs) -> int:
     config_root = get_config_root(args.path)
     print(config_root)
+    return STATUS_OK
 
-def xdg_open(path: Path):
+def xdg_open(path: Path) -> None:
     subprocess.check_call(
         ['xdg-open', str(path)],
         stderr=sys.stdout,
@@ -379,7 +385,7 @@ def main_test(args: MainTestArgs) -> int:
         postprocess_coverage_data(config=config)
         view_coverage_data(config=config, browser=args.browser)
 
-    return 0
+    return STATUS_OK
     
 
 @dataclass(frozen=True)
@@ -389,7 +395,7 @@ class MainLintArgs:
     profile_checks: bool
     verbosity: int
 
-def main_lint(args: MainLintArgs) -> None:
+def main_lint(args: MainLintArgs) -> int:
     root = get_config_root(args.path)
     config = get_config(args.path)
     if len(args.files) == 0:
@@ -399,6 +405,7 @@ def main_lint(args: MainLintArgs) -> None:
             assert file.is_file()
         files = list(args.files)
     run_linter(root, config, files, profile_checks=args.profile_checks)
+    return STATUS_OK
 
 @dataclass(frozen=True)
 class MainFormatArgs:
@@ -406,7 +413,7 @@ class MainFormatArgs:
     files: Sequence[Path]
     verbosity: int
 
-def main_format(args: Any) -> None:
+def main_format(args: Any) -> int:
     root = get_config_root(args.path)
     config = get_config(args.path)
     if len(args.files) == 0:
@@ -416,6 +423,7 @@ def main_format(args: Any) -> None:
             assert file.is_file()
         files = list(args.files)
     run_formatter(root, config, files)
+    return STATUS_OK
 
 @dataclass(frozen=True)
 class MainDtgenArgs:
@@ -425,7 +433,7 @@ class MainDtgenArgs:
     force: bool
     verbosity: int
 
-def main_dtgen(args: MainDtgenArgs) -> None:
+def main_dtgen(args: MainDtgenArgs) -> int:
     root = get_config_root(args.path)
     config = get_config(args.path)
     if len(args.files) == 0:
@@ -441,6 +449,7 @@ def main_dtgen(args: MainDtgenArgs) -> None:
         force=args.force,
         delete_outdated=not args.no_delete_outdated,
     )
+    return STATUS_OK
 
 @dataclass(frozen=True)
 class MainDoxygenArgs:
@@ -448,7 +457,7 @@ class MainDoxygenArgs:
     browser: bool
     verbosity: int
 
-def main_doxygen(args: MainDoxygenArgs) -> None:
+def main_doxygen(args: MainDoxygenArgs) -> int:
     root = get_config_root(args.path)
     config = get_config(args.path)
 
@@ -479,13 +488,17 @@ def main_doxygen(args: MainDoxygenArgs) -> None:
     if args.browser:
         xdg_open(config.doxygen_dir / 'html/index.html') 
 
+    return STATUS_OK
+
+
+T = TypeVar('T')
 
 def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
     subparsers = p.add_subparsers()
 
-    def set_main_signature(parser, func, args_type):
-        def _f(args: argparse.Namespace, func=func, args_type=args_type):
+    def set_main_signature(parser: argparse.ArgumentParser, func: Callable[[T], int], args_type: Type[T]) -> None:
+        def _f(args: argparse.Namespace, func: Callable[[T], int]=func, args_type: Type[T]=args_type) -> int:
             return func(args_type(**{k.replace('-', '_'): v for k, v in vars(args).items() if k != 'func'}))
         parser.set_defaults(func=_f)
 

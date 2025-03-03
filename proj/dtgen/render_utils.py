@@ -44,13 +44,13 @@ def angles(f: TextIO) -> Iterator[None]:
     f.write('>')
 
 @contextmanager
-def ifblock(cond: str, f: TextIO):
+def ifblock(cond: str, f: TextIO) -> Iterator[None]:
     f.write(f'if ({cond}) ')
     with braces(f):
         yield
 
 @contextmanager
-def elseblock(f: TextIO):
+def elseblock(f: TextIO) -> Iterator[None]:
     f.write('else ')
     with braces(f):
         yield
@@ -182,7 +182,7 @@ def render_function_definition(*, template_params: Sequence[str] = tuple(), retu
         yield
     f.write('\n')
 
-def render_static_assert(cond: str, message: str, f: TextIO):
+def render_static_assert(cond: str, message: str, f: TextIO) -> None:
     f.write(f'static_assert({cond}, "{message}");')
 
 T = TypeVar('T')

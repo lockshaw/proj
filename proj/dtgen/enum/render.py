@@ -26,14 +26,13 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
         return [IncludeSpec(path='nlohmann/json.hpp', system=True)]
     elif feature == Feature.RAPIDCHECK:
         return [IncludeSpec(path='rapidcheck.h', system=True)]
-    elif feature == Feature.FMT:
+    else:
+        assert feature == Feature.FMT
         return [
             IncludeSpec(path='string', system=True),
             IncludeSpec(path='ostream', system=True),
             IncludeSpec(path='fmt/format.h', system=True),
         ]
-    else:
-        return []
 
 def source_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature in [Feature.FMT, Feature.JSON]:

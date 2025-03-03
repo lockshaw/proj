@@ -41,7 +41,10 @@ from .variant.render import (
     render_source as render_variant_source,
 )
 from proj.hash import get_file_hash
-import json
+from .. import json as json
+from ..json import (
+    Json,
+)
 import logging
 from .find_outdated import find_outdated
 
@@ -79,7 +82,7 @@ def render_proj_metadata(spec_path: Path, root: Path, f: TextIO) -> None:
     f.write(json.dumps(proj_metadata, sort_keys=True, indent=2))
     f.write('\n*/\n')
 
-def _load_proj_metadata(f: TextIO) -> Optional[Mapping[str, Any]]:
+def _load_proj_metadata(f: TextIO) -> Optional[Json]:
     found = ''
     has_started = False
     has_finished = False
@@ -102,7 +105,7 @@ def _load_proj_metadata(f: TextIO) -> Optional[Mapping[str, Any]]:
     else:
         return None
 
-def load_proj_metadata(p: Path) -> Optional[Mapping[str, Any]]:
+def load_proj_metadata(p: Path) -> Optional[Json]:
     with p.open('r') as f:
         found = _load_proj_metadata(f)
     return found
@@ -115,6 +118,7 @@ def get_existing_hash(p: Path) -> Optional[bytes]:
     if _loaded is None:
         return None
 
+    assert isinstance(_loaded, dict)
     as_hex_str = _loaded.get('generated_from', None)
     if as_hex_str is None:
         return None
