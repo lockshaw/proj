@@ -133,7 +133,7 @@ class ProjectConfig:
         if self._default_build_targets is None: 
             return self.all_build_targets
         else:
-            return tuple(BuildTarget.from_str(s) for s in self._default_build_targets)
+            return tuple(BuildTarget.from_str(self.configured_names, s) for s in self._default_build_targets)
 
     @property
     def all_test_targets(self) -> Tuple[TestSuiteTarget, ...]:
@@ -365,6 +365,12 @@ def gen_ifndef_uid(p):
     config = load_config(p)
     unfixed = f'_{config.ifndef_name}_' + str(relpath)
     return re.sub(r'[^a-zA-Z0-9_]', '_', unfixed).upper()
+
+def try_get_config(p: Union[Path, str]) -> Optional[ProjectConfig]:
+    try:
+        return get_config(p)
+    except FileNotFoundError:
+        return None
 
 def get_config(p: Union[Path, str]) -> ProjectConfig:
     p = Path(p).absolute()

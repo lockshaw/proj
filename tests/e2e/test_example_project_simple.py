@@ -143,19 +143,19 @@ def test_debug_build() -> None:
         config = get_config(d)
 
         targets = [
-            BuildTarget.from_str('lib:lib1'),
-            BuildTarget.from_str('bin:bin2'),
-            BuildTarget.from_str('test:lib2'),
-            BuildTarget.from_str('bench:lib1'),
+            BuildTarget.from_str(config.configured_names, 'lib1'),
+            BuildTarget.from_str(config.configured_names, 'bin2'),
+            BuildTarget.from_str(config.configured_names, 'lib2:tests'),
+            BuildTarget.from_str(config.configured_names, 'lib1:benchmarks'),
         ]
 
         require_successful(run(d, [
             'build',
             '-j1',
-            'lib:lib1',
-            'bin:bin2',
-            'test:lib2',
-            'bench:lib1',
+            'lib1',
+            'bin2',
+            'lib2:test',
+            'lib1:benchmarks',
         ]))
 
         for t in targets:

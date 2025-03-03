@@ -56,24 +56,28 @@ class BuildTarget:
             return None
 
     @staticmethod
-    def from_str(s: str) -> 'BuildTarget':
-        result = BuildTarget.try_from_str(s)
+    def from_str(names: ConfiguredNames, s: str) -> 'BuildTarget':
+        result = BuildTarget.try_from_str(names, s)
         if result is None:
             raise ValueError(f'Failed to parse {s=}')
         else:
             return result
 
     @staticmethod
-    def try_from_str(s: str) -> Optional['BuildTarget']:
+    def try_from_str(names: ConfiguredNames, s: str) -> Optional['BuildTarget']:
         pieces = s.split(':')
-        if len(pieces) == 2 and pieces[0] == 'bin':
-            return BinTarget(pieces[1]).build_target
-        elif len(pieces) == 2 and pieces[0] == 'lib':
-            return LibTarget(pieces[1]).build_target
-        elif len(pieces) == 2 and pieces[0] == 'bench':
-            return LibTarget(pieces[1]).benchmark_target.build_target
-        elif len(pieces) == 2 and pieces[0] == 'test':
-            return LibTarget(pieces[1]).test_target.build_target
+        if s in names.bin_names:
+            return BinTarget(pieces[0]).build_target
+        elif s in names.lib_names:
+            return LibTarget(pieces[0]).build_target
+        elif len(pieces) == 2 and len(pieces[1]) > 0 and 'benchmarks'.startswith(pieces[1]):
+            lib_name = pieces[0]
+            assert lib_name in names.lib_names
+            return LibTarget(lib_name).benchmark_target.build_target
+        elif len(pieces) == 2 and len(pieces[1]) > 0 and 'tests'.startswith(pieces[1]):
+            lib_name = pieces[0]
+            assert lib_name in names.lib_names
+            return LibTarget(lib_name).test_target.build_target
         else:
             return None
 

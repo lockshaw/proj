@@ -15,6 +15,7 @@ import os
 import multiprocessing
 import sys
 from .config_file import (
+    try_get_config,
     get_config,
     get_config_root,
 )
@@ -69,6 +70,9 @@ from .testing import (
 from .checks import (
     Check,
     run_check,
+)
+from .utils import (
+    require_nonnull,
 )
 
 _l = logging.getLogger(name='proj')
@@ -336,6 +340,8 @@ class MainTestArgs:
     targets: Collection[Union[TestSuiteTarget, TestCaseTarget]]
 
 def main_test(args: MainTestArgs) -> int:
+    assert isinstance(args, MainTestArgs)
+
     config = get_config(args.path)
 
     if args.coverage:
@@ -512,21 +518,20 @@ def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
     subparsers = p.add_subparsers()
 
+    config = try_get_config(Path.cwd())
+
     def set_main_signature(parser: argparse.ArgumentParser, func: Callable[[T], int], args_type: Type[T]) -> None:
         def _f(args: argparse.Namespace, func: Callable[[T], int]=func, args_type: Type[T]=args_type) -> int:
+            setattr(args, 'path', Path.cwd())
             return func(args_type(**{k.replace('-', '_'): v for k, v in vars(args).items() if k != 'func'}))
         parser.set_defaults(func=_f)
 
     root_p = subparsers.add_parser("root")
     set_main_signature(root_p, main_root, MainRootArgs)
-    root_p.set_defaults(func=main_root)
-    root_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     add_verbosity_args(root_p)
 
     test_p = subparsers.add_parser("test")
     set_main_signature(test_p, main_test, MainTestArgs)
-    test_p.set_defaults(func=main_test)
-    test_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     test_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     test_p.add_argument("--coverage", "-c", action="store_true")   
     test_p.add_argument("--dtgen-force", action="store_true")   
@@ -544,17 +549,14 @@ def make_parser() -> argparse.ArgumentParser:
 
     build_p = subparsers.add_parser("build")
     set_main_signature(build_p, main_build, MainBuildArgs)
-    build_p.set_defaults(func=main_build)
-    build_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     build_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     build_p.add_argument("--dtgen-skip", action="store_true")
     build_p.add_argument("--release", action="store_true")
-    build_p.add_argument('targets', nargs='*', type=BuildTarget.from_str)
+    build_p.add_argument('targets', nargs='*', type=lambda p: BuildTarget.from_str(require_nonnull(config).configured_names, p))
     add_verbosity_args(build_p)
 
     benchmark_p = subparsers.add_parser('benchmark')
     set_main_signature(benchmark_p, main_benchmark, MainBenchmarkArgs)
-    benchmark_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     benchmark_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
     benchmark_p.add_argument('--dtgen-skip', action='store_true')
     benchmark_p.add_argument("--skip-gpu-benchmarks", action="store_true")
@@ -568,7 +570,6 @@ def make_parser() -> argparse.ArgumentParser:
 
     run_p = subparsers.add_parser('run')
     set_main_signature(run_p, main_run, MainRunArgs)
-    run_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     run_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
     run_p.add_argument('target', type=RunTarget.from_str)
     run_p.add_argument('--debug-build', action='store_true')
@@ -577,7 +578,6 @@ def make_parser() -> argparse.ArgumentParser:
     
     profile_p = subparsers.add_parser('profile')
     set_main_signature(profile_p, main_profile, MainProfileArgs)
-    profile_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     profile_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
     profile_p.add_argument('--dry-run', action='store_true')
     profile_p.add_argument('--tool', choices=list(sorted(ProfilingTool)), default=ProfilingTool.CALLGRIND)
@@ -588,15 +588,12 @@ def make_parser() -> argparse.ArgumentParser:
 
     cmake_p = subparsers.add_parser("cmake")
     set_main_signature(cmake_p, main_cmake, MainCmakeArgs)
-    cmake_p.add_argument("--path", "-p", type=Path, default=Path.cwd())
     cmake_p.add_argument("--fast", action="store_true")
     cmake_p.add_argument("--trace", action="store_true")
     cmake_p.add_argument("--dtgen-skip", action="store_true")
     add_verbosity_args(cmake_p)
 
     dtgen_p = subparsers.add_parser('dtgen')
-    dtgen_p.set_defaults(func=main_dtgen)
-    dtgen_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     dtgen_p.add_argument('--force', action='store_true', help='Disable incremental toml->c++ generation')
     dtgen_p.add_argument('--no-delete-outdated', action='store_true')
     dtgen_p.add_argument('files', nargs='*', type=Path)
@@ -604,26 +601,22 @@ def make_parser() -> argparse.ArgumentParser:
 
     format_p = subparsers.add_parser('format')
     set_main_signature(format_p, main_format, MainFormatArgs)
-    format_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     format_p.add_argument('files', nargs='*', type=Path)
     add_verbosity_args(format_p)
 
     check_p = subparsers.add_parser('check')
     set_main_signature(check_p, main_check, MainCheckArgs)
-    check_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     check_p.add_argument('check', choices=list(sorted(Check)))
     add_verbosity_args(check_p)
 
     lint_p = subparsers.add_parser('lint')
     set_main_signature(lint_p, main_lint, MainLintArgs)
-    lint_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     lint_p.add_argument('--profile-checks', action='store_true')
     lint_p.add_argument('files', nargs='*', type=Path)
     add_verbosity_args(lint_p)
 
     doxygen_p = subparsers.add_parser('doxygen')
     set_main_signature(doxygen_p, main_doxygen, MainDoxygenArgs)
-    doxygen_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     doxygen_p.add_argument(
         "--browser", "-b", action="store_true", help="open generated documentation in browser"
     )
