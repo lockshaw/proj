@@ -133,10 +133,9 @@ def tee_output(command: Union[str, Sequence[str]], *, stdout: Optional[Union[IO[
 def hook_stdout(command, *, stdout_hook, **kwargs):
     if kwargs.get("shell", False):
         pretty_cmd = " ".join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
     else:
         pretty_cmd = shlex.join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
+    _l.info("+++ $ %s", pretty_cmd)
 
     assert isinstance(command, str) == kwargs.get('shell', False)
 

@@ -282,7 +282,7 @@ def call_benchmark_case(benchmark: BenchmarkCaseTarget, pbar: ProgressBar, build
             print(f'Running {functions[0]}')
         pbar.update()
 
-    stdout = subprocess.hook_stdout([str(benchmark.run_target.executable_path), *benchmark.run_target.args], stdout_hook=hook)
+    stdout = subprocess.hook_stdout([str(build_dir / benchmark.run_target.executable_path), '--benchmark_format=json', *benchmark.run_target.args], stdout_hook=hook)
     return BenchmarkResult.from_json(json.loads(stdout))
 
 NAME_RE = re.compile(r'"name": "(?P<testname>[^"]+)"')

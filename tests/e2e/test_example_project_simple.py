@@ -266,7 +266,7 @@ def test_run_benchmark_suite() -> None:
 
 @pytest.mark.e2e
 @pytest.mark.slow
-def test_benchmark_case() -> None:
+def test_run_benchmark_case() -> None:
     with cmade_project_instance() as d:
         check_cmd_succeeds(d, [
             'run',
@@ -282,6 +282,16 @@ def test_benchmark_suite() -> None:
             'benchmark',
             '-j1',
             'lib1',
+        ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_benchmark_case() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_succeeds(d, [
+            'benchmark',
+            '-j1',
+            'lib1:example_benchmark/75/16',
         ])
 
 @pytest.mark.e2e
