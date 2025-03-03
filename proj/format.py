@@ -22,6 +22,8 @@ def find_files(config: ProjectConfig) -> Iterator[Path]:
         for blacklisted in blacklist:
             if p.is_relative_to(blacklisted):
                 return True
+        if p.name.endswith('.dtg.cc') or p.name.endswith('.dtg' + config.header_extension):
+            return True
         return False
 
     for pattern in patterns:
