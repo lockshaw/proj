@@ -11,12 +11,11 @@ from .config_file import ProjectConfig
 
 _l = logging.getLogger(__name__)
 
-def find_files(root: Path, config: ProjectConfig) -> Iterator[Path]:
+def find_files(config: ProjectConfig) -> Iterator[Path]:
     patterns = [f'*{config.header_extension}', '*.cc', '*.cpp', '*.cu', '*.c', '*.decl']
     blacklist = [
-        root / 'triton',
-        root / 'deps',
-        root / 'build',
+        config.base / 'deps',
+        config.base / 'build',
     ]
     
     def is_blacklisted(p: Path) -> bool:
@@ -26,7 +25,7 @@ def find_files(root: Path, config: ProjectConfig) -> Iterator[Path]:
         return False
 
     for pattern in patterns:
-        for found in root.rglob(pattern):
+        for found in config.base.rglob(pattern):
             if not is_blacklisted(found):
                 yield found
 
@@ -44,14 +43,26 @@ def _run_clang_format(
         _l.debug(f"Running command {command} on {len(files)} files")
     subprocess.check_call(command + [*files], stderr=subprocess.STDOUT)
 
-def run_formatter(root: Path, config: ProjectConfig, files: Optional[Sequence[PathLike[str]]] = None) -> None:
+def run_formatter_check(config: ProjectConfig, files: Optional[Sequence[PathLike[str]]] = None) -> None:
     if files is None:
-        files = list(find_files(root=root, config=config))
+        files = list(find_files(config=config))
+    _l.info('Checking the following files:')
+    for f in files:
+        _l.info(f'- {f}')
+    _run_clang_format(
+        root=config.base,
+        args=['--dry-run', '--Werror'],
+        files=files,
+    )
+
+def run_formatter(config: ProjectConfig, files: Optional[Sequence[PathLike[str]]] = None) -> None:
+    if files is None:
+        files = list(find_files(config=config))
     _l.info('Formatting the following files:')
     for f in files:
         _l.info(f'- {f}')
     _run_clang_format(
-        root=root,
+        root=config.base,
         args=['-i'], # in-place
         files=files,
     )

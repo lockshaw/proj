@@ -66,6 +66,10 @@ from .profile import (
 from .testing import (
     run_tests,
 )
+from .checks import (
+    Check,
+    run_check,
+)
 
 _l = logging.getLogger(name='proj')
 
@@ -387,6 +391,18 @@ def main_test(args: MainTestArgs) -> int:
 
     return STATUS_OK
     
+@dataclass(frozen=True)
+class MainCheckArgs:
+    path: Path
+    check: Check
+    verbosity: int
+
+def main_check(args: MainCheckArgs) -> int:
+    config = get_config(args.path)
+
+    run_check(config, args.check)
+
+    return STATUS_OK
 
 @dataclass(frozen=True)
 class MainLintArgs:
@@ -414,7 +430,6 @@ class MainFormatArgs:
     verbosity: int
 
 def main_format(args: Any) -> int:
-    root = get_config_root(args.path)
     config = get_config(args.path)
     if len(args.files) == 0:
         files = None
@@ -422,7 +437,7 @@ def main_format(args: Any) -> int:
         for file in args.files:
             assert file.is_file()
         files = list(args.files)
-    run_formatter(root, config, files)
+    run_formatter(config, files)
     return STATUS_OK
 
 @dataclass(frozen=True)
@@ -592,6 +607,12 @@ def make_parser() -> argparse.ArgumentParser:
     format_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
     format_p.add_argument('files', nargs='*', type=Path)
     add_verbosity_args(format_p)
+
+    check_p = subparsers.add_parser('check')
+    set_main_signature(check_p, main_check, MainCheckArgs)
+    check_p.add_argument('--path', '-p', type=Path, default=Path.cwd())
+    check_p.add_argument('check', choices=list(sorted(Check)))
+    add_verbosity_args(check_p)
 
     lint_p = subparsers.add_parser('lint')
     set_main_signature(lint_p, main_lint, MainLintArgs)

@@ -37,6 +37,7 @@ from .e2e_utils import (
     require_successful,
     run,
     check_cmd_succeeds,
+    check_cmd_fails,
 )
 
 def project_instance():
@@ -443,6 +444,23 @@ def test_profile_benchmark_case_perf_dry_run() -> None:
             '--dry-run',
             'lib1:benchmarks:example_benchmark/75/32'
         ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_check_format() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_fails(d, [
+            'check',
+            'format',
+        ])
+        check_cmd_succeeds(d, [
+            'format',
+        ])
+        check_cmd_succeeds(d, [
+            'check',
+            'format',
+        ])
+
 
 @pytest.mark.e2e
 @pytest.mark.slow

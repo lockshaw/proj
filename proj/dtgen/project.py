@@ -216,7 +216,7 @@ def run_dtgen(root: Path, config: ProjectConfig, force: bool, files: Optional[Se
     for spec_path in files:
         generated = list(generate_files(root=root, config=config, spec_path=Path(spec_path), force=force))
         if len(generated) > 0:
-            run_formatter(root, config, generated)
+            run_formatter(config, generated)
 
     for outdated in find_outdated(root, config):
         if delete_outdated:
