@@ -23,5 +23,5 @@ jobs:
           name: ff
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Run flake checks
-        run: nix flake check --print-build-logs
+      - name: Run build
+        run: nix build

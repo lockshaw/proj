@@ -8,7 +8,6 @@
 , pytest
 , valgrind
 , kcachegrind
-, callPackage
 , ff-clang-format
 , bencher-cli
 , hotspot
@@ -17,6 +16,15 @@
 , compdb
 , cmake
 , mypy
+, doctest
+, gbenchmark
+, rapidcheckFull
+, nlohmann_json
+, fmt
+, tree
+# TODO use these if we ever update nixpkgs
+# , writableTmpDirAsHomeHook
+# , addBinAsPathHook
 , ...
 }:
 
@@ -53,20 +61,25 @@ buildPythonApplication {
   checkPhase = ''
     runHook preCheck
 
+    export HOME="$(mktemp -d)"
+    export PATH="$out/bin:$PATH"
     mypy proj/ tests/
-    pytest -s -vvvv tests/ -m 'not no_sandbox' --log-level=DEBUG
+    pytest -x -s -vvvv tests/ -m 'not no_sandbox' --log-level=DEBUG --slow
 
     runHook postCheck
   '';
 
+  checkInputs = [
+    doctest
+    gbenchmark
+    rapidcheckFull
+    nlohmann_json
+    fmt
+  ];
+
   nativeCheckInputs = [
-    pytestCheckHook
     pytest
     pytest-skip-slow
     mypy
-  ];
-
-  passthru.tests = {
-    e2e = callPackage ./tests-e2e.nix { };
-  };
+  ] ++ bins;
 }

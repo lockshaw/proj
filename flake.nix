@@ -22,12 +22,12 @@
           inherit pytest-skip-slow;
           inherit bencher-cli;
           inherit ff-clang-format;
+          inherit rapidcheckFull;
+          inherit doctest;
 
           # for perf the kernel version doesn't matter as it's entirely in perl
           # see https://discourse.nixos.org/t/which-perf-package/22399
           perf = pkgs.linuxPackages_latest.perf;
-
-          callPackage = path: args: pkgs.callPackage path (packages // args);
         };
         bencher-cli = pkgs.callPackage ./pkgs/bencher.nix { };
         ff-clang-format = pkgs.callPackage ./pkgs/ff-clang-format.nix { };
@@ -46,31 +46,11 @@
     rec {
       inherit packages;
 
-      checks = {
-        default = pkgs.runCommand "default" {} ''
-          ${self.packages.${system}.proj}/bin/proj -h
-          touch $out
-        '';
-
-        e2e = self.packages.${system}.proj.passthru.tests.e2e;
-      };
-
       apps = {
         default = {
           type = "app";
           program = "${self.packages.${system}.proj}/bin/proj";
         };
-        # ci = pkgs.symlinkJoin {
-        #   name = my-name;
-        #   paths = builtins.concatList [         
-        #     (pkgs.writeShellScriptBin "ci" "pytest")
-        #     self.packages.${system}.proj.propagatedBuildInputs
-        #   ];
-        #   buildInputs = [ pkgs.makeWrapper ];
-        #   postBuild = "wrapProgram $out/bin/${my-name} --prefix PATH : $out/bin";
-        #
-        # };
-        # }
       };
 
       devShells = {
@@ -81,7 +61,6 @@
         default = pkgs.mkShell {
           inputsFrom = [ 
             self.packages.${system}.proj 
-            self.checks.${system}.e2e
           ];
 
           buildInputs = builtins.concatLists [
