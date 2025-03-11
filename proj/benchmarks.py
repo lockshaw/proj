@@ -33,7 +33,7 @@ from .progressbar import (
 _l = logging.getLogger(__name__)
 
 def require_float(x: Any) -> float:
-    assert isinstance(x, float), x
+    assert isinstance(x, (int, float)), x
     return x
 
 @dataclass(frozen=True)
@@ -230,7 +230,9 @@ def pretty_print_benchmark(benchmark: BenchmarkResult, f: IO[str]) -> None:
     line('CPU Caches:')
     for cache in benchmark.context.caches:
         line(f'  L{cache.level} {cache.type_} {cache.size} B (x{benchmark.context.num_cpus // cache.num_sharing})')
-    line('Load Average: ' + ', '.join([str(round(load_avg, 2)) for load_avg in benchmark.context.load_avg]))
+    assert len(benchmark.context.load_avg) == 3
+    (load0, load1, load2) = benchmark.context.load_avg
+    line(f'Load Average: {load0:.2f}, {load1:.2f}, {load2:.2f}')
 
     columns = ['Benchmark', 'Time', 'CPU', 'Iterations']
     sep = [1, 3, 3]

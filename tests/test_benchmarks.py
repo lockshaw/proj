@@ -40,7 +40,7 @@ COMPILER_BENCHMARK_JSON = '''{
         "num_sharing": 4
       }
     ],
-    "load_avg": [0.481934,0.565918,0.555664],
+    "load_avg": [1.00,0.565918,0.555664],
     "library_build_type": "release"
   },
   "benchmarks": [
@@ -168,7 +168,7 @@ def test_pretty_print_benchmark():
         '  L1 Instruction 32768 B (x4)\n'
         '  L2 Unified 262144 B (x4)\n'
         '  L3 Unified 6291456 B (x1)\n'
-        'Load Average: 0.48, 0.57, 0.56\n'
+        'Load Average: 1.00, 0.57, 0.56\n'
         '---------------------------------------------------------------------------------------------------------------------\n'
         'Benchmark                                                                           Time             CPU   Iterations\n'
         '---------------------------------------------------------------------------------------------------------------------\n'
