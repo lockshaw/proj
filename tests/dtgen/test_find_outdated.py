@@ -12,6 +12,7 @@ from proj.dtgen.find_outdated import (
 from proj.config_file import (
     get_config,
 )
+from pathlib import Path
 
 def test_find_config_root():
     with project_instance('dtgen') as d:
@@ -36,7 +37,7 @@ def test_find_outdated():
 
 def test_get_source_path():
     with project_instance('dtgen') as d:
-        correct = d / 'lib/person/src/person/color.dtg.cc'
+        correct = Path('lib/person/src/person/color.dtg.cc')
         assert get_source_path(d / 'lib/person/include/person/color.dtg.hh') == correct
 
 def test_get_possible_spec_paths():

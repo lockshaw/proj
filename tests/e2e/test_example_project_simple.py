@@ -36,6 +36,7 @@ from .e2e_utils import (
     check_cmd_succeeds,
     check_cmd_fails,
 )
+import json
 
 def project_instance():
     return _project_instance('simple')
@@ -492,6 +493,45 @@ def test_check_cpu_ci() -> None:
             'check',
             'cpu-ci',
         ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_config_subcommand() -> None:
+    with project_instance() as d:
+        result = require_successful(run(d, [
+            'config',
+        ]))
+
+        out = json.loads(result.stdout)
+        assert out == {
+            'namespace_name': 'TestProject',
+            'testsuite_macro': 'TP_TEST_SUITE',
+            'header_extension': '.h',
+        }
+
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_query_path() -> None:
+    with project_instance() as d:
+        result = require_successful(run(d, [
+            'query-path',
+            './lib/lib1/include/lib1/lib1.h',
+        ]))
+
+        out = json.loads(result.stdout)
+        assert out == {
+            'public_header': {
+                'path': 'lib/lib1/include/lib1/lib1.h',
+                'ifndef': '_TEST_PROJECT_1_LIB_LIB1_INCLUDE_LIB1_LIB1_H',
+            },
+            'private_header': {
+                'path': 'lib/lib1/src/lib1/lib1.h',
+                'ifndef': '_TEST_PROJECT_1_LIB_LIB1_SRC_LIB1_LIB1_H',
+            },
+            'source': 'lib/lib1/src/lib1/lib1.cc',
+            'include': 'lib1/lib1.h',
+        }
 
 @pytest.mark.e2e
 @pytest.mark.slow

@@ -163,7 +163,7 @@ def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: P
 
     return True
 
-def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path, force: bool) -> bool:
+def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], include_path: Path, spec_path: Path, root: Path, out: Path, force: bool) -> bool:
     if not (force or needs_generate_to_path(spec_path=spec_path, root=root, out=out)):
         _l.info(f'No generation needed for {spec_path.relative_to(root)} -> {out.relative_to(root)}')
         return False
@@ -175,7 +175,7 @@ def generate_source(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: P
         render_disclaimer(spec_path=spec_path, root=root, f=f)
         render_proj_metadata(spec_path=spec_path, root=root, f=f)
         f.write('\n')
-        f.write(f'#include "{get_include_path(out)}"\n')
+        f.write(f'#include "{include_path}"\n')
         f.write('\n')
         if isinstance(spec, StructSpec):
             render_struct_source(spec, f)
@@ -199,12 +199,13 @@ def generate_files(root: Path, config: ProjectConfig, spec_path: Path, force: bo
         assert suffix == '.enum.toml'
         spec = load_enum_spec(spec_path)
 
-    header_path = spec_path.with_suffix('').with_suffix('.dtg' + config.header_extension)
-    source_path = get_source_path(header_path)
+    header_path = root / spec_path.with_suffix('').with_suffix('.dtg' + config.header_extension)
+    source_path = root / get_source_path(header_path)
+    include_path = get_include_path(header_path)
 
     if generate_header(spec=spec, spec_path=spec_path, root=root, out=header_path, force=force):
         yield header_path
-    if generate_source(spec=spec, spec_path=spec_path, root=root, out=source_path, force=force):
+    if generate_source(spec=spec, include_path=include_path, spec_path=spec_path, root=root, out=source_path, force=force):
         yield source_path
 
 def run_dtgen(root: Path, config: ProjectConfig, force: bool, files: Optional[Sequence[PathLike[str]]] = None, delete_outdated: bool = True) -> None:

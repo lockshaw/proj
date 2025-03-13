@@ -18,6 +18,8 @@ from .config_file import (
     try_get_config,
     get_config,
     get_config_root,
+    dump_config,
+    get_path_info,
 )
 from .dtgen import run_dtgen
 from .format import run_formatter
@@ -74,6 +76,7 @@ from .checks import (
 from .utils import (
     require_nonnull,
 )
+import json
 
 _l = logging.getLogger(name='proj')
 
@@ -91,6 +94,27 @@ class MainRootArgs:
 def main_root(args: MainRootArgs) -> int:
     config_root = get_config_root(args.path)
     print(config_root)
+    return STATUS_OK
+
+@dataclass(frozen=True)
+class MainConfigArgs:
+    path: Path
+    verbosity: int
+
+def main_config(args: MainConfigArgs) -> int:
+    config = get_config(args.path)
+    json.dump(dump_config(config), sort_keys=True, indent=2, fp=sys.stdout)
+    return STATUS_OK
+
+@dataclass(frozen=True)
+class MainQueryPathArgs:
+    path: Path
+    verbosity: int
+    file: Path
+
+def main_query_path(args: MainQueryPathArgs) -> int:
+    path_info = get_path_info(args.file)
+    json.dump(path_info.json(), sort_keys=True, indent=2, fp=sys.stdout)
     return STATUS_OK
 
 def xdg_open(path: Path) -> None:
@@ -529,6 +553,15 @@ def make_parser() -> argparse.ArgumentParser:
     root_p = subparsers.add_parser("root")
     set_main_signature(root_p, main_root, MainRootArgs)
     add_verbosity_args(root_p)
+
+    config_p = subparsers.add_parser("config")
+    set_main_signature(config_p, main_config, MainConfigArgs)
+    add_verbosity_args(config_p)
+
+    query_path_p = subparsers.add_parser("query-path")
+    set_main_signature(query_path_p, main_query_path, MainQueryPathArgs)
+    query_path_p.add_argument('file', type=Path)
+    add_verbosity_args(query_path_p)
 
     test_p = subparsers.add_parser("test")
     set_main_signature(test_p, main_test, MainTestArgs)

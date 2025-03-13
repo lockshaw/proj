@@ -29,11 +29,13 @@ from .utils import (
     map_optional,
 )
 from .json import (
+    Json,
     require_str,
     require_bool,
     require_list_of,
     require_dict_of,
 )
+from enum import Enum
 
 _l = logging.getLogger(__name__)
 
@@ -156,10 +158,10 @@ class ProjectConfig:
     @property
     def ifndef_name(self) -> str:
         if self._ifndef_name is None:
-            result = self.project_name.upper()
+            result = re.sub(r'[^a-zA-Z0-9_]', '_', self.project_name).upper()
         else:
             result = self._ifndef_name
-        allowed = set(string.ascii_uppercase + '_')
+        allowed = set(string.ascii_uppercase + string.digits + '_')
         assert all(c in allowed for c in result)
         return result
 
@@ -358,9 +360,10 @@ def load_config(d: Path) -> ProjectConfig:
     else:
         return config
 
-def gen_ifndef_uid(p):
+def gen_ifndef_uid(p: Union[Path, str]) -> str:
     p = Path(p).absolute()
     config_root = find_config_root(p)
+    assert config_root is not None
     relpath = p.relative_to(config_root)
     config = load_config(p)
     unfixed = f'_{config.ifndef_name}_' + str(relpath)
@@ -446,6 +449,42 @@ def with_project_specific_extension_removed(p: Path, config: ProjectConfig) -> P
 
     raise ValueError(f'Could not find project-specific extension for path {p}')
 
+@dataclass(frozen=True, order=True)
+class HeaderInfo:
+    path: Path
+    ifndef: str
+
+    def json(self) -> Json:
+        return {
+            'path': str(self.path),
+            'ifndef': self.ifndef,
+        }
+
+@dataclass(frozen=True, order=True)
+class PathInfo:
+    include: Path
+    public_header: HeaderInfo
+    private_header: HeaderInfo
+    source: Path
+
+    def json(self) -> Json:
+        return {
+            'include': str(self.include),
+            'public_header': self.public_header.json(),
+            'private_header': self.private_header.json(),
+            'source': str(self.source),
+        }
+
+def get_path_info(p: Path) -> PathInfo:
+    public_header_info = get_public_header_info(p)
+    private_header_info = get_private_header_info(p)
+    return PathInfo(
+        include=get_include_path(p),
+        public_header=public_header_info,
+        private_header=private_header_info,
+        source=get_source_path(p),
+    )
+
 def get_subrelpath(p: Path, config: Optional[ProjectConfig] = None) -> Path:
     p = Path(p).absolute()
     if config is None:
@@ -477,33 +516,94 @@ def get_possible_spec_paths(p: Path) -> Iterator[Path]:
         for ext in ['.struct.toml', '.enum.toml', '.variant.toml']:
             yield d / with_suffix_appended(with_suffix_removed(subrelpath), ext)
 
-def get_include_path(p: Path) -> str:
+@dataclass(frozen=True, order=True)
+class LibInfo:
+    include_dir: Path
+    src_dir: Path
+
+def get_lib_info(p: Path) -> LibInfo:
     p = Path(p).absolute()
     sublib_root = get_sublib_root(p)
     assert sublib_root is not None
-    config = load_config(p)
-    subrelpath = get_subrelpath(p)
+    config_root = get_config_root(p)
 
     include_dir = sublib_root / 'include'
     assert include_dir.is_dir()
     src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
 
+    return LibInfo(
+        include_dir=include_dir.relative_to(config_root),
+        src_dir=src_dir.relative_to(config_root),
+    )
+
+def get_public_header_path(p: Path) -> Path:
+    config = get_config(p)
+
+    lib_info = get_lib_info(p)
+
+    subrelpath = get_subrelpath(p)
     subrelpath_with_extension = with_suffix_appended(subrelpath, config.header_extension)
 
-    public_include = include_dir / subrelpath_with_extension
-    private_include = src_dir / subrelpath_with_extension
+    return lib_info.include_dir / subrelpath_with_extension
+
+def get_public_header_info(p: Path) -> HeaderInfo:
+    path = get_public_header_path(p)
+    return HeaderInfo(
+        path=path,
+        ifndef=gen_ifndef_uid(path),
+    )
+
+def get_private_header_path(p: Path) -> Path:
+    config = get_config(p)
+
+    lib_info = get_lib_info(p)
+
+    subrelpath = get_subrelpath(p)
+    subrelpath_with_extension = with_suffix_appended(subrelpath, config.header_extension)
+
+    return lib_info.src_dir / subrelpath_with_extension
+
+def get_private_header_info(p: Path) -> HeaderInfo:
+    path = get_private_header_path(p)
+    return HeaderInfo(
+        path=path,
+        ifndef=gen_ifndef_uid(path),
+    )
+
+def get_header_path(p: Path) -> Path:
+    config_root = get_config_root(p)
+    config = get_config(p)
+
+    lib_info = get_lib_info(p)
+
+    subrelpath = get_subrelpath(p)
+    subrelpath_with_extension = with_suffix_appended(subrelpath, config.header_extension)
+
+    public_include = lib_info.include_dir / subrelpath_with_extension
+    private_include = lib_info.src_dir / subrelpath_with_extension
     if public_include.exists():
-        return str(public_include.relative_to(include_dir))
-    if private_include.exists():
-        return str(private_include.relative_to(src_dir))
-    raise ValueError([public_include, private_include])
+        return public_include
+    elif private_include.exists():
+        return private_include
+    else:
+        raise ValueError([public_include, private_include])
+
+def get_include_path(p: Path) -> Path:
+    lib_info = get_lib_info(p)
+    header_path = get_public_header_path(p)
+    return header_path.relative_to(lib_info.include_dir)
 
 def get_source_path(p: Path) -> Path:
     p = Path(p).absolute()
-    sublib_root = get_sublib_root(p)
-    assert sublib_root is not None
-    src_dir = sublib_root / 'src'
-    assert src_dir.is_dir()
 
-    return src_dir / with_suffix_appended(get_subrelpath(p), '.cc')
+    lib_info = get_lib_info(p)
+
+    return lib_info.src_dir / with_suffix_appended(get_subrelpath(p), '.cc')
+
+def dump_config(cfg: ProjectConfig) -> Json:
+    return {
+        'namespace_name': cfg.namespace_name,
+        'testsuite_macro': cfg.testsuite_macro,
+        'header_extension': cfg.header_extension,
+    }

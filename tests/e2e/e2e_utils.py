@@ -6,7 +6,7 @@ from typing import (
 import os
 
 def require_successful(r: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
-    assert r.returncode == 0
+    assert r.returncode == 0, r.stderr
     return r
 
 def require_fail(r: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
