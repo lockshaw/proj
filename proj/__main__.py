@@ -177,7 +177,7 @@ def main_build(args: MainBuildArgs) -> int:
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=build_dir,
+        build_dir=build_dir,
     )
     return 0
 
@@ -233,7 +233,7 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=config.release_build_dir,
+        build_dir=config.release_build_dir,
     )
 
     benchmark_result = call_benchmarks(build_run_plan.targets_to_run, config.release_build_dir)
@@ -285,7 +285,7 @@ def main_run(args: MainRunArgs) -> int:
         dtgen_skip=False,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=build_dir,
+        build_dir=build_dir,
     )
 
     binary_path = build_dir / args.target.executable_path
@@ -334,7 +334,7 @@ def main_profile(args: MainProfileArgs) -> int:
         dtgen_skip=False,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=config.release_build_dir,
+        build_dir=config.release_build_dir,
     )
 
     assert len(build_run_plan.run_targets) == 1
@@ -410,7 +410,7 @@ def main_test(args: MainTestArgs) -> int:
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
-        cwd=build_dir,
+        build_dir=build_dir,
     )
 
     run_tests(build_run_plan.run_targets, build_dir, debug=args.debug)

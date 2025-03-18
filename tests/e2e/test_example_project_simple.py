@@ -175,7 +175,7 @@ def built_project_instance(targets: Iterable[BuildTarget], build_mode: BuildMode
             dtgen_skip=False,
             jobs=1,
             verbosity=MAX_VERBOSITY,
-            cwd=get_build_dir(config, build_mode),
+            build_dir=get_build_dir(config, build_mode),
         )
         yield d
 

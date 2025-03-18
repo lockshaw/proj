@@ -8,6 +8,7 @@ explicit_package_bases = true
 # strict = true
 no_implicit_optional = true
 disallow_incomplete_defs = true
+error_summary = false
 
 [tool.ruff.lint]
 select = ["E", "F"]

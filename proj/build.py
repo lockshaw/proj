@@ -21,7 +21,7 @@ def build_targets(
     dtgen_skip: bool,
     jobs: int,
     verbosity: int,
-    cwd: Path,
+    build_dir: Path,
 ) -> None:
     _targets = list(sorted(set([t.name for t in targets])))
     _l.info('Building targets: %s', _targets)
@@ -37,9 +37,12 @@ def build_targets(
 
     subprocess.check_call(
         [
-            "make",
+            "cmake",
+            "--build",
+            str(build_dir),
             "-j",
             str(jobs),
+            "--target",
             *_targets,
         ],
         env={
@@ -48,5 +51,4 @@ def build_targets(
             **({"VERBOSE": "1"} if verbosity <= logging.DEBUG else {}),
         },
         stderr=sys.stdout,
-        cwd=cwd,
     )

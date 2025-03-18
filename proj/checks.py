@@ -64,7 +64,7 @@ def run_build_check(config: ProjectConfig, verbosity: int) -> None:
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
-        cwd=config.debug_build_dir,
+        build_dir=config.debug_build_dir,
     )
 
 def run_cpu_tests(config: ProjectConfig, verbosity: int) -> None:
@@ -82,7 +82,7 @@ def run_cpu_tests(config: ProjectConfig, verbosity: int) -> None:
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
-        cwd=config.debug_build_dir,
+        build_dir=config.debug_build_dir,
     )
 
     run_tests([target.run_target for target in test_targets], config.debug_build_dir, debug=False)
@@ -109,7 +109,7 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
-        cwd=config.coverage_build_dir,
+        build_dir=config.coverage_build_dir,
     )
 
     run_targets = [target.run_target for target in test_targets]
@@ -131,7 +131,7 @@ def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
-        cwd=config.debug_build_dir,
+        build_dir=config.debug_build_dir,
     )
 
     run_tests([target.run_target for target in test_targets], config.debug_build_dir, debug=False)
