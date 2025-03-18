@@ -37,12 +37,11 @@ def build_targets(
 
     subprocess.check_call(
         [
-            "cmake",
-            "--build",
+            "make",
+            "-C",
             str(build_dir),
             "-j",
             str(jobs),
-            "--target",
             *_targets,
         ],
         env={
