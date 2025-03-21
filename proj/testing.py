@@ -49,7 +49,7 @@ def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -
 
 def run_test_case(target: TestCaseTarget, build_dir: Path, debug: bool) -> None:
     _l.info('Running test target %s', target)
-    label_regex = f"^{target.test_suite.lib_name}$"
+    label_regex = f"^{target.test_suite.test_binary_name}$"
     case_regex = f"^{target.test_case_name}$"
     subprocess.check_call(
         [
@@ -68,7 +68,7 @@ def run_test_case(target: TestCaseTarget, build_dir: Path, debug: bool) -> None:
 
 def run_tests(targets: Sequence[TestSuiteTarget], build_dir: Path, debug: bool) -> None:
     _l.info('Running test targets %s', targets)
-    target_regex = "^(" + "|".join([t.lib_name for t in targets]) + ")$"
+    target_regex = "^(" + "|".join([t.test_binary_name for t in targets]) + ")$"
     subprocess.check_call(
         [
             "ctest",

@@ -127,7 +127,7 @@ function(tp_add_test_executable)
     PRIVATE
     ${TP_TEST_EXEC_PRIVATE_INCLUDE})
 
-  target_compile_definitions(${FULL_TP_TEST_EXEC_NAME} PRIVATE TP_TEST_SUITE="${TP_TEST_EXEC_NAME}" TP_CUDA_TEST_SUITE="cuda-${TP_TEST_EXEC_NAME}")
+  target_compile_definitions(${FULL_TP_TEST_EXEC_NAME} PRIVATE TP_TEST_SUITE="${FULL_TP_TEST_EXEC_NAME}" TP_CUDA_TEST_SUITE="cuda-${FULL_TP_TEST_EXEC_NAME}")
 
   define_tp_vars(${FULL_TP_TEST_EXEC_NAME})
   tp_set_cxx_properties(${FULL_TP_TEST_EXEC_NAME})
