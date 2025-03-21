@@ -13,11 +13,13 @@ from pathlib import Path
 import os
 import json
 import logging
+import re
 
 _l = logging.getLogger(__name__)
 
+LABEL_RE = re.compile('(?P<libname>.*)-tests')
 def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -> Iterator[TestCaseTarget]:
-    target_regex = "^(" + "|".join([t.lib_name for t in targets]) + ")$"
+    target_regex = "^(" + "|".join([t.test_binary_name for t in targets]) + ")$"
     output = subprocess.check_output(
         [
             "ctest",
@@ -43,8 +45,10 @@ def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -
                 break
         else:
             raise ValueError(f'Could not find label for test {test=}')
+        match = LABEL_RE.fullmatch(label)
+        assert match is not None
         yield TestSuiteTarget(
-            lib_name=label,
+            lib_name=match.group('libname'),
         ).get_test_case(test['name'])
 
 def run_test_case(target: TestCaseTarget, build_dir: Path, debug: bool) -> None:
