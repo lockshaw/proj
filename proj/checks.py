@@ -85,7 +85,8 @@ def run_cpu_tests(config: ProjectConfig, verbosity: int) -> None:
         build_dir=config.debug_build_dir,
     )
 
-    run_tests([target.run_target for target in test_targets], config.debug_build_dir, debug=False)
+    _l.info('Running tests %s', test_targets)
+    run_tests(test_targets, config.debug_build_dir, debug=False)
 
 def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     _l.info('Running formatter check...')
@@ -112,9 +113,8 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
         build_dir=config.coverage_build_dir,
     )
 
-    run_targets = [target.run_target for target in test_targets]
-    _l.info('Running tests %s', run_targets)
-    run_tests(run_targets, config.coverage_build_dir, debug=False)
+    _l.info('Running tests %s', test_targets)
+    run_tests(test_targets, config.coverage_build_dir, debug=False)
 
 def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
     run_dtgen(
@@ -134,7 +134,7 @@ def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
         build_dir=config.debug_build_dir,
     )
 
-    run_tests([target.run_target for target in test_targets], config.debug_build_dir, debug=False)
+    run_tests(test_targets, config.debug_build_dir, debug=False)
 
 def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
     run_gpu_tests(config, verbosity) 

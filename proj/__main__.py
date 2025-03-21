@@ -68,6 +68,7 @@ from .profile import (
 )
 from .testing import (
     run_tests,
+    run_test_case,
 )
 from .checks import (
     Check,
@@ -384,6 +385,13 @@ def main_test(args: MainTestArgs) -> int:
     else:
         requested_test_targets = list(args.targets)
 
+    if all([isinstance(t, TestSuiteTarget) for t in requested_test_targets]):
+        pass
+    elif len(requested_test_targets) == 1 and isinstance(requested_test_targets[0], TestCaseTarget):
+        pass
+    else:
+        raise ValueError('Currently only n test suites or 1 test case is allowed. If you need this feature, let @lockshaw know.')
+
     test_targets_requiring_gpu = [KERNELS_LIB.test_target]
 
     build_run_plan = infer_build_run_plan(
@@ -413,7 +421,17 @@ def main_test(args: MainTestArgs) -> int:
         build_dir=build_dir,
     )
 
-    run_tests(build_run_plan.run_targets, build_dir, debug=args.debug)
+    def require_test_suite(t: Union[TestCaseTarget, TestSuiteTarget]) -> TestSuiteTarget:
+        assert isinstance(t, TestSuiteTarget)
+        return t
+
+    to_run = build_run_plan.targets_to_run
+    assert len(to_run) >= 1
+    if isinstance(to_run[0], TestCaseTarget):
+        assert len(to_run) == 1
+        run_test_case(to_run[0], build_dir, debug=args.debug)
+    elif isinstance(to_run[0], TestSuiteTarget):
+        run_tests([require_test_suite(t) for t in to_run], build_dir, debug=args.debug)
     
     if args.coverage:
         postprocess_coverage_data(config=config)

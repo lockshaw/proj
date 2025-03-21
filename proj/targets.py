@@ -6,6 +6,9 @@ from typing import (
     Optional,
     Union,
     Container,
+    Set,
+    Iterable,
+    Iterator,
 )
 from enum import (
     Enum,
@@ -212,6 +215,24 @@ def parse_generic_test_target(s: str) -> Union[TestSuiteTarget, TestCaseTarget]:
         return LibTarget(pieces[0]).test_target.get_test_case(pieces[1])
     else:
         raise ValueError(f'Failed to parse {s=}')
+
+def remove_redundant_test_targets(
+    targets: Iterable[Union[TestSuiteTarget, TestCaseTarget]]
+) -> Iterator[Union[TestSuiteTarget, TestCaseTarget]]:
+    all_targets = list(targets)
+
+    suites = {t for t in all_targets if isinstance(t, TestSuiteTarget)}
+
+    seen: Set[Union[TestSuiteTarget, TestCaseTarget]] = set()
+    for t in all_targets:
+        if t in seen: 
+            continue
+
+        if isinstance(t, TestCaseTarget) and t.test_suite in suites:
+            continue
+
+        yield t
+        seen.add(t)
 
 @dataclass(frozen=True, order=True)
 class BenchmarkSuiteTarget:

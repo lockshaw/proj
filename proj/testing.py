@@ -1,9 +1,9 @@
 from typing import (
     Sequence,
     Iterator,
+    Union,
 )
 from .targets import (
-    RunTarget,
     TestSuiteTarget,
     TestCaseTarget,
 )
@@ -47,10 +47,29 @@ def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -
             lib_name=label,
         ).get_test_case(test['name'])
 
-def run_tests(targets: Sequence[RunTarget], build_dir: Path, debug: bool) -> None:
+def run_test_case(target: TestCaseTarget, build_dir: Path, debug: bool) -> None:
+    _l.info('Running test target %s', target)
+    label_regex = f"^{target.test_suite.lib_name}$"
+    case_regex = f"^{target.test_case_name}$"
+    subprocess.check_call(
+        [
+            "ctest",
+            "--progress",
+            "--output-on-failure",
+            "-L",
+            label_regex,
+            "-R",
+            case_regex,
+        ],
+        stderr=sys.stdout,
+        cwd=build_dir,
+        env=os.environ,
+    )
+
+def run_tests(targets: Sequence[TestSuiteTarget], build_dir: Path, debug: bool) -> None:
     _l.info('Running test targets %s', targets)
-    target_regex = "^(" + "|".join([t.name for t in targets]) + ")$"
-    subprocess.run(
+    target_regex = "^(" + "|".join([t.lib_name for t in targets]) + ")$"
+    subprocess.check_call(
         [
             "ctest",
             "--progress",

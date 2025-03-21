@@ -200,30 +200,69 @@ def test_list_tests_in_target() -> None:
 @pytest.mark.slow
 def test_test_all() -> None:
     with cmade_project_instance() as d:
-        check_cmd_succeeds(d, [
+        cmd = [
             'test',
             '-j1',
-        ])
+        ]
+        result = require_successful(run(d, cmd))
+
+        assert 'call_lib1' in result.stdout
+        assert 'other_lib1' in result.stdout
+        assert 'call_lib2' in result.stdout
+        assert 'other_lib2' in result.stdout
+
+        for fail_key in [
+            'PROJ_TESTS_FAIL_LIB1_CALL_LIB1',
+            'PROJ_TESTS_FAIL_LIB1_OTHER_LIB1',
+            'PROJ_TESTS_FAIL_LIB2_CALL_LIB2',
+            'PROJ_TESTS_FAIL_LIB2_OTHER_LIB2',
+        ]:
+            check_cmd_fails(d, cmd, env={
+                fail_key: 'y'
+            })
 
 @pytest.mark.e2e
 @pytest.mark.slow
 def test_test_test_suite() -> None:
     with cmade_project_instance() as d:
-        check_cmd_succeeds(d, [
+        cmd = [
             'test',
             '-j1',
             'lib2',
-        ])
+        ]
+
+        check_cmd_succeeds(d, cmd)
+        check_cmd_succeeds(d, cmd, env={
+            'PROJ_TESTS_FAIL_LIB1_CALL_LIB1': 'y',
+            'PROJ_TESTS_FAIL_LIB1_OTHER_LIB1': 'y',
+        })
+        for fail_key in [
+            'PROJ_TESTS_FAIL_LIB2_CALL_LIB2',
+            'PROJ_TESTS_FAIL_LIB2_OTHER_LIB2',
+        ]:
+            check_cmd_fails(d, cmd, env={
+                fail_key: 'y',
+            })
 
 @pytest.mark.e2e
 @pytest.mark.slow
 def test_test_test_case():
     with cmade_project_instance() as d:
-        check_cmd_succeeds(d, [
+        cmd = [
             'test',
             '-j1',
             'lib2:call_lib2',
-        ])
+        ]
+
+        check_cmd_succeeds(d, cmd)
+        check_cmd_succeeds(d, cmd, env={
+            'PROJ_TESTS_FAIL_LIB1_CALL_LIB1': 'y',
+            'PROJ_TESTS_FAIL_LIB1_OTHER_LIB1': 'y',
+            'PROJ_TESTS_FAIL_LIB2_OTHER_LIB2': 'y',
+        })
+        check_cmd_fails(d, cmd, env={
+            'PROJ_TESTS_FAIL_LIB2_CALL_LIB2': 'y',
+        })
 
 @pytest.mark.e2e
 @pytest.mark.slow
