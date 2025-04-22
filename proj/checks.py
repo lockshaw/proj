@@ -27,6 +27,8 @@ import logging
 
 _l = logging.getLogger(__name__)
 
+KERNELS_TESTS = LibTarget.from_str('kernels').test_target
+
 class Check(StrEnum):
     FORMAT = 'format'
     BUILD = 'build'
@@ -75,18 +77,18 @@ def run_cpu_tests(config: ProjectConfig, verbosity: int) -> None:
     )
     cmake_all(config, fast=False, trace=False)
 
-    test_targets = list(config.all_test_targets)
+    cpu_test_targets = [t for t in config.all_test_targets if t != KERNELS_TESTS]
     build_targets(
         config=config,
-        targets=[target.build_target for target in test_targets],
+        targets=[target.build_target for target in cpu_test_targets],
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
         build_dir=config.debug_build_dir,
     )
 
-    _l.info('Running tests %s', test_targets)
-    run_tests(test_targets, config.debug_build_dir, debug=False)
+    _l.info('Running tests %s', cpu_test_targets)
+    run_tests(cpu_test_targets, config.debug_build_dir, debug=False)
 
 def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     _l.info('Running formatter check...')
@@ -113,8 +115,9 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
         build_dir=config.coverage_build_dir,
     )
 
-    _l.info('Running tests %s', test_targets)
-    run_tests(test_targets, config.coverage_build_dir, debug=False)
+    cpu_test_targets = [t for t in test_targets if t != KERNELS_TESTS]
+    _l.info('Running tests %s', cpu_test_targets)
+    run_tests(cpu_test_targets, config.coverage_build_dir, debug=False)
 
 def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
     run_dtgen(
@@ -124,7 +127,7 @@ def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
     )
     cmake_all(config, fast=False, trace=False)
 
-    test_targets = [LibTarget.from_str('kernels').test_target]
+    test_targets = [KERNELS_TESTS]
     build_targets(
         config=config,
         targets=[target.build_target for target in test_targets],

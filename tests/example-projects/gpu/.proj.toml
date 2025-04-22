@@ -1,0 +1,14 @@
+project_name = "gpu-test-project"
+testsuite_macro = "TP_TEST_SUITE"
+namespace_name = "GPUTestProject"
+header_extension = ".h"
+
+[targets.kernels]
+type = "lib"
+tests = true
+benchmarks = false
+
+[targets.not-kernels]
+type = "lib"
+tests = true
+benchmarks = false
