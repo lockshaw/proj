@@ -8,9 +8,10 @@ from typing import (
 from proj.targets import (
     BuildTarget,
     LibTarget,
-    BinTarget,
-    TestSuiteTarget as _TestSuiteTarget,
+    GenericBinTarget,
+    GenericTestSuiteTarget,
     BenchmarkSuiteTarget,
+    CpuTestSuiteTarget,
 )
 from proj.config_file import get_config
 from proj.cmake import (
@@ -23,7 +24,7 @@ from proj.build import (
     build_targets,
 )
 from proj.testing import (
-    list_tests_in_targets,
+    list_test_cases_in_targets,
 )
 from ..project_utils import (
     project_instance as _project_instance,
@@ -37,11 +38,12 @@ from .e2e_utils import (
     check_cmd_fails,
 )
 import json
+from contextlib import AbstractContextManager
 
-def project_instance():
+def project_instance() -> AbstractContextManager[Path]:
     return _project_instance('simple')
 
-def cmade_project_instance():
+def cmade_project_instance() -> AbstractContextManager[Path]:
     return _cmade_project_instance('simple')
 
 @pytest.mark.e2e
@@ -110,10 +112,10 @@ def test_get_cmake_targets_list() -> None:
         required = [
             LibTarget('lib1').build_target,
             LibTarget('lib2').build_target,
-            BinTarget('bin1').build_target,
-            BinTarget('bin2').build_target,
-            _TestSuiteTarget('lib1').build_target,
-            _TestSuiteTarget('lib2').build_target,
+            GenericBinTarget('bin1').build_target,
+            GenericBinTarget('bin2').build_target,
+            GenericTestSuiteTarget('lib1').build_target,
+            GenericTestSuiteTarget('lib2').build_target,
             BenchmarkSuiteTarget('lib1').build_target,
         ]
         required_not = [
@@ -182,13 +184,13 @@ def built_project_instance(targets: Iterable[BuildTarget], build_mode: BuildMode
 @pytest.mark.e2e
 @pytest.mark.slow
 def test_list_tests_in_target() -> None:
-    lib2_target = _TestSuiteTarget('lib2')
+    lib2_target = CpuTestSuiteTarget('lib2')
     with built_project_instance([
         lib2_target.build_target,
     ]) as d:
         config = get_config(d)
 
-        found = set(list_tests_in_targets([lib2_target], config.debug_build_dir))
+        found = set(list_test_cases_in_targets([lib2_target.generic_test_suite_target], config.debug_build_dir))
         correct = {
             lib2_target.get_test_case('call_lib2'),
             lib2_target.get_test_case('other_lib2'),
@@ -246,7 +248,7 @@ def test_test_test_suite() -> None:
 
 @pytest.mark.e2e
 @pytest.mark.slow
-def test_test_test_case():
+def test_test_test_case() -> None:
     with cmade_project_instance() as d:
         cmd = [
             'test',

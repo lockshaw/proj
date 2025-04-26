@@ -10,8 +10,6 @@ from subprocess import (
 import sys
 import io
 from typing import (
-    overload, 
-    Literal, 
     Sequence,
     Tuple,
     Union,
@@ -46,29 +44,31 @@ def check_output(command, **kwargs):
         _l.info(f"+++ $ {pretty_cmd}")
         return subprocess.check_output(command, **kwargs)
 
-@overload
-def tee_output(
+def tee_output_bytes(
     command: Union[str, Sequence[str]], 
     *,
     stdout: Optional[IO[bytes]] = None, 
     stderr: Optional[IO[bytes]] = None,
-    text: Literal[False] = False, 
     shell: bool = False,
 ) -> Tuple[bytes, bytes]:
-    ...
+    result = _tee_output(command, stdout=stdout, stderr=stderr, text=False, shell=shell)
+    assert isinstance(result[0], bytes)
+    assert isinstance(result[1], bytes)
+    return result
 
-@overload
-def tee_output(
+def tee_output_str(
     command: Union[str, Sequence[str]], 
     *,
     stdout: Optional[IO[str]] = None, 
     stderr: Optional[IO[str]] = None, 
-    text: Literal[True], 
-    shell: bool
+    shell: bool = False,
 ) -> Tuple[str, str]:
-    ...
+    result = _tee_output(command, stdout=stdout, stderr=stderr, text=True, shell=shell)
+    assert isinstance(result[0], str)
+    assert isinstance(result[1], str)
+    return result
 
-def tee_output(command: Union[str, Sequence[str]], *, stdout: Optional[Union[IO[bytes], IO[str]]]=None, stderr: Optional[Union[IO[bytes], IO[str]]]=None, text: bool=False, shell: bool = False) -> Union[Tuple[bytes, bytes], Tuple[str, str]]:
+def _tee_output(command: Union[str, Sequence[str]], *, stdout: Optional[Union[IO[bytes], IO[str]]]=None, stderr: Optional[Union[IO[bytes], IO[str]]]=None, text: bool=False, shell: bool = False) -> Union[Tuple[bytes, bytes], Tuple[str, str]]:
     if isinstance(command, str):
         _l.info(f"+++ $ {command}")
     else:

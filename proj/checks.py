@@ -21,13 +21,12 @@ from .testing import (
     run_tests,
 )
 from .targets import (
-    LibTarget,
+    CpuTestSuiteTarget, 
+    CudaTestSuiteTarget,
 )
 import logging
 
 _l = logging.getLogger(__name__)
-
-KERNELS_TESTS = LibTarget.from_str('kernels').test_target
 
 class Check(StrEnum):
     FORMAT = 'format'
@@ -77,18 +76,17 @@ def run_cpu_tests(config: ProjectConfig, verbosity: int) -> None:
     )
     cmake_all(config, fast=False, trace=False)
 
-    cpu_test_targets = [t for t in config.all_test_targets if t != KERNELS_TESTS]
     build_targets(
         config=config,
-        targets=[target.build_target for target in cpu_test_targets],
+        targets=[target.build_target for target in config.all_cpu_test_targets],
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
         build_dir=config.debug_build_dir,
     )
 
-    _l.info('Running tests %s', cpu_test_targets)
-    run_tests(cpu_test_targets, config.debug_build_dir, debug=False)
+    _l.info('Running tests %s', config.all_cpu_test_targets)
+    run_tests(list(sorted(config.all_cpu_test_targets)), config.debug_build_dir, debug=False)
 
 def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     _l.info('Running formatter check...')
@@ -103,21 +101,19 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     _l.info('Running cmake...')
     cmake_all(config, fast=False, trace=False)
 
-    test_targets = list(config.all_test_targets)
-    all_build_targets = [target.build_target for target in test_targets] + list(config.all_build_targets)
-    _l.info('Building %s', all_build_targets)
+    cpu_build_targets = [t.build_target for t in config.all_cpu_test_targets]
+    _l.info('Building %s', cpu_build_targets)
     build_targets(
         config=config,
-        targets=all_build_targets,
+        targets=cpu_build_targets,
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
         build_dir=config.coverage_build_dir,
     )
 
-    cpu_test_targets = [t for t in test_targets if t != KERNELS_TESTS]
-    _l.info('Running tests %s', cpu_test_targets)
-    run_tests(cpu_test_targets, config.coverage_build_dir, debug=False)
+    _l.info('Running tests %s', config.all_cpu_test_targets)
+    run_tests(list(sorted(config.all_cpu_test_targets)), config.coverage_build_dir, debug=False)
 
 def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
     run_dtgen(
@@ -127,17 +123,17 @@ def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
     )
     cmake_all(config, fast=False, trace=False)
 
-    test_targets = [KERNELS_TESTS]
+    cuda_build_targets = [t.build_target for t in config.all_cuda_test_targets]
     build_targets(
         config=config,
-        targets=[target.build_target for target in test_targets],
+        targets=cuda_build_targets,
         dtgen_skip=True,
         jobs=multiprocessing.cpu_count(),
         verbosity=verbosity,
         build_dir=config.debug_build_dir,
     )
 
-    run_tests(test_targets, config.debug_build_dir, debug=False)
+    run_tests(list(sorted(config.all_cuda_test_targets)), config.debug_build_dir, debug=False)
 
 def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
     run_gpu_tests(config, verbosity) 

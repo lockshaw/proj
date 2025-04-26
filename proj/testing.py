@@ -4,8 +4,13 @@ from typing import (
     Union,
 )
 from .targets import (
-    TestSuiteTarget,
-    TestCaseTarget,
+    CpuTestSuiteTarget,
+    CpuTestCaseTarget,
+    CudaTestSuiteTarget,
+    CudaTestCaseTarget,
+    GenericTestSuiteTarget,
+    GenericTestCaseTarget,
+    MixedTestSuiteTarget,
 )
 from . import subprocess_trace as subprocess
 import sys
@@ -14,11 +19,20 @@ import os
 import json
 import logging
 import re
+from .config_file import (
+    ProjectConfig,
+    resolve_test_case_type_without_build,
+)
 
 _l = logging.getLogger(__name__)
 
-LABEL_RE = re.compile('(?P<libname>.*)-tests')
-def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -> Iterator[TestCaseTarget]:
+CPU_LABEL_RE = re.compile('(?P<libname>.*)-tests')
+CUDA_LABEL_RE = re.compile('cuda-(?P<libname>.*)-tests')
+
+def list_test_cases_in_targets(
+    targets: Sequence[GenericTestSuiteTarget], 
+    build_dir: Path
+) -> Iterator[Union[CpuTestCaseTarget, CudaTestCaseTarget]]:
     target_regex = "^(" + "|".join([t.test_binary_name for t in targets]) + ")$"
     output = subprocess.check_output(
         [
@@ -45,13 +59,46 @@ def list_tests_in_targets(targets: Sequence[TestSuiteTarget], build_dir: Path) -
                 break
         else:
             raise ValueError(f'Could not find label for test {test=}')
-        match = LABEL_RE.fullmatch(label)
-        assert match is not None
-        yield TestSuiteTarget(
-            lib_name=match.group('libname'),
-        ).get_test_case(test['name'])
+        
+        cuda_match = CUDA_LABEL_RE.fullmatch(label)
+        if cuda_match is not None:
+            yield CudaTestSuiteTarget(
+                lib_name=cuda_match.group('libname'),
+            ).get_test_case(test['name'])
+        else:
+            cpu_match = CPU_LABEL_RE.fullmatch(label)
+            assert cpu_match is not None
+            yield CpuTestSuiteTarget(
+                lib_name=cpu_match.group('libname'),
+            ).get_test_case(test['name'])
 
-def run_test_case(target: TestCaseTarget, build_dir: Path, debug: bool) -> None:
+def resolve_test_case_target_using_build(config: ProjectConfig, test_case: GenericTestCaseTarget, build_dir: Path) -> Union[CpuTestCaseTarget, CudaTestCaseTarget]:
+    result_without_build = resolve_test_case_type_without_build(config, test_case)
+    if result_without_build is not None:
+        return result_without_build
+    else:
+        all_test_cases_in_suite = list_test_cases_in_targets([test_case.test_suite], build_dir)
+        cpu_test_case_names = [
+            t.test_case_name for t in 
+            all_test_cases_in_suite
+            if isinstance(t, CpuTestCaseTarget)
+        ]
+        cuda_test_case_names = [
+            t.test_case_name for t in 
+            all_test_cases_in_suite
+            if isinstance(t, CudaTestCaseTarget)
+        ]
+        has_cpu_test_with_matching_name = test_case.test_case_name in cpu_test_case_names
+        has_cuda_test_with_matching_name = test_case.test_case_name in cuda_test_case_names
+        assert has_cpu_test_with_matching_name or has_cuda_test_with_matching_name
+        assert not (has_cpu_test_with_matching_name and has_cuda_test_with_matching_name)
+        if has_cpu_test_with_matching_name:
+            return test_case.cpu_test_case
+        else:
+            assert has_cuda_test_with_matching_name
+            return test_case.cuda_test_case
+
+def run_test_case(target: Union[CpuTestCaseTarget, CudaTestCaseTarget], build_dir: Path, debug: bool) -> None:
     _l.info('Running test target %s', target)
     label_regex = f"^{target.test_suite.test_binary_name}$"
     case_regex = f"^{target.test_case_name}$"
@@ -70,7 +117,7 @@ def run_test_case(target: TestCaseTarget, build_dir: Path, debug: bool) -> None:
         env=os.environ,
     )
 
-def run_tests(targets: Sequence[TestSuiteTarget], build_dir: Path, debug: bool) -> None:
+def run_tests(targets: Sequence[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]], build_dir: Path, debug: bool) -> None:
     _l.info('Running test targets %s', targets)
     target_regex = "^(" + "|".join([t.test_binary_name for t in targets]) + ")$"
     subprocess.check_call(

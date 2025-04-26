@@ -8,7 +8,7 @@ from .e2e_utils import (
 
 @pytest.mark.slow
 @pytest.mark.e2e
-def test_dtgen_1():
+def test_dtgen_1() -> None:
     with cmade_project_instance('dtgen') as d:
         check_cmd_succeeds(d, [
             'test',
@@ -16,7 +16,7 @@ def test_dtgen_1():
         ])
 
 @pytest.mark.slow
-def test_dtgen_2():
+def test_dtgen_2() -> None:
     with cmade_project_instance('dtgen-2') as d:
         check_cmd_succeeds(d, [
             'test',

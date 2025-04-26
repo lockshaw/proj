@@ -5,10 +5,14 @@ header_extension = ".h"
 
 [targets.kernels]
 type = "lib"
-tests = true
-benchmarks = false
+has-cpu-only-tests = true
+has-cpu-only-benchmarks = false
+has-cuda-tests = true
+has-cuda-benchmarks = false
 
 [targets.not-kernels]
 type = "lib"
-tests = true
-benchmarks = false
+has-cpu-only-tests = true
+has-cpu-only-benchmarks = false
+has-cuda-tests = true
+has-cuda-benchmarks = false

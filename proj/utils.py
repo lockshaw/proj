@@ -2,9 +2,21 @@ from typing import (
     TypeVar,
     Optional,
     Callable,
+    Collection,
+    FrozenSet,
+    Iterable,
 )
+from functools import reduce
 
 T = TypeVar('T')
+
+def union_all(c: Iterable[FrozenSet[T]]) -> FrozenSet[T]:
+    return reduce(lambda accum, x: accum.union(x), c, frozenset())
+
+def get_only(c: Collection[T]) -> T:
+    assert len(c) == 1
+    return next(iter(c))
+
 def require_nonnull(x: Optional[T]) -> T:
     assert x is not None
     return x

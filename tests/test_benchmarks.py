@@ -118,7 +118,7 @@ COMPILER_BENCHMARK_JSON = '''{
 }
 '''
 
-def test_render_table():
+def test_render_table() -> None:
     columns = ['Benchmark', 'Time', 'CPU', 'Iterations']
     data = [
         ('benchmark_get_computation_graph_series_parallel_decomposition/split_test', '1885935 ns', '1851548 ns', '370'),
@@ -145,14 +145,14 @@ def test_render_table():
 
     assert result == correct
 
-def test_benchmark_json_serialization():
+def test_benchmark_json_serialization() -> None:
     correct = json.loads(COMPILER_BENCHMARK_JSON)
     benchmark = BenchmarkResult.from_json(correct)
     result = benchmark.to_json()
 
     assert result == correct
 
-def test_pretty_print_benchmark():
+def test_pretty_print_benchmark() -> None:
     j = json.loads(COMPILER_BENCHMARK_JSON)
     benchmark = BenchmarkResult.from_json(j)
     f = io.StringIO()

@@ -5,19 +5,25 @@ header_extension = ".h"
 
 [targets.bin1]
 type = "bin"
+cuda = false
 
 [targets.bin2]
 type = "bin"
+cuda = false
 
 [targets.lib1]
 type = "lib"
-tests = true
-benchmarks = true
+has-cpu-only-tests = true
+has-cpu-only-benchmarks = true
+has-cuda-tests = false
+has-cuda-benchmarks = false
 
 [targets.lib2]
 type = "lib"
-tests = true
-benchmarks = false
+has-cpu-only-tests = true
+has-cpu-only-benchmarks = false
+has-cuda-tests = false
+has-cuda-benchmarks = false
 
 # default_build_targets = [
 #   "bin1",

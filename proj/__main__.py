@@ -20,6 +20,9 @@ from .config_file import (
     get_config_root,
     dump_config,
     get_path_info,
+    resolve_bin_target,
+    resolve_test_target,
+    ProjectConfig,
 )
 from .dtgen import run_dtgen
 from .format import run_formatter
@@ -31,7 +34,7 @@ from .verbosity import (
     calculate_log_level,
 )
 from .gpu_handling import (
-    infer_build_run_plan,
+    check_if_machine_supports_cuda,
 )
 from .coverage import (
     postprocess_coverage_data,
@@ -51,15 +54,24 @@ from .cmake import (
 )
 import argparse
 from .targets import (
-    LibTarget,
-    TestSuiteTarget,
+    GenericBinTarget,
+    CpuBinTarget,
+    CudaBinTarget,
+    MixedTestSuiteTarget,
+    CpuTestSuiteTarget,
+    CudaTestSuiteTarget,
     BenchmarkSuiteTarget,
     BenchmarkCaseTarget,
     BuildTarget,
-    RunTarget,
-    TestCaseTarget,
+    CpuRunTarget,
+    CudaRunTarget,
+    CpuTestCaseTarget,
+    CudaTestCaseTarget,
+    GenericTestSuiteTarget,
+    GenericTestCaseTarget,
     parse_generic_test_target,
     parse_generic_benchmark_target,
+    parse_generic_run_target,
 )
 from .profile import (
     profile_target,
@@ -69,6 +81,7 @@ from .profile import (
 from .testing import (
     run_tests,
     run_test_case,
+    resolve_test_case_target_using_build,
 )
 from .checks import (
     Check,
@@ -76,14 +89,13 @@ from .checks import (
 )
 from .utils import (
     require_nonnull,
+    get_only,
 )
 import json
 
 _l = logging.getLogger(name='proj')
 
 DIR = Path(__file__).resolve().parent
-
-KERNELS_LIB = LibTarget.from_str('kernels')
 
 STATUS_OK = 0
 
@@ -207,37 +219,35 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
         requested_benchmark_targets = list(args.targets)
     _l.debug('Determined requested benchmark targets to be: %s', requested_benchmark_targets)
 
-    benchmark_targets_requiring_gpu = [KERNELS_LIB.benchmark_target]
+    # build_run_plan = infer_build_run_plan(
+    #     requested_targets=requested_benchmark_targets,
+    #     target_requires_gpu=lambda t: t in benchmark_targets_requiring_gpu,
+    #     skip_run_gpu_targets=args.skip_gpu_benchmarks,
+    #     skip_build_gpu_targets=args.skip_build_gpu_benchmarks,
+    #     skip_run_cpu_targets=args.skip_cpu_benchmarks,
+    #     skip_build_cpu_targets=args.skip_build_cpu_benchmarks,
+    # )
+    # _l.debug('Inferred build/run plan: %s', build_run_plan)
 
-    build_run_plan = infer_build_run_plan(
-        requested_targets=requested_benchmark_targets,
-        target_requires_gpu=lambda t: t in benchmark_targets_requiring_gpu,
-        skip_run_gpu_targets=args.skip_gpu_benchmarks,
-        skip_build_gpu_targets=args.skip_build_gpu_benchmarks,
-        skip_run_cpu_targets=args.skip_cpu_benchmarks,
-        skip_build_cpu_targets=args.skip_build_cpu_benchmarks,
-    )
-    _l.debug('Inferred build/run plan: %s', build_run_plan)
+    # if build_run_plan.failed_gpu_check:
+    #     fail_with_error(
+    #         'Cannot run gpu benchmarks as no gpus are available on the current machine. '
+    #         'Pass --skip-gpu-benchmarks to skip running benchmarks that require a GPU.'
+    #     )
 
-    if build_run_plan.failed_gpu_check:
-        fail_with_error(
-            'Cannot run gpu benchmarks as no gpus are available on the current machine. '
-            'Pass --skip-gpu-benchmarks to skip running benchmarks that require a GPU.'
-        )
-
-    if len(build_run_plan.targets_to_run) == 0:
+    if len(requested_benchmark_targets) == 0:
         fail_with_error('No benchmark targets available to run')
 
     build_targets(
         config=config,
-        targets=build_run_plan.build_targets,
+        targets=[t.build_target for t in requested_benchmark_targets],
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
         build_dir=config.release_build_dir,
     )
 
-    benchmark_result = call_benchmarks(build_run_plan.targets_to_run, config.release_build_dir)
+    benchmark_result = call_benchmarks(requested_benchmark_targets, config.release_build_dir)
     pretty_print_benchmark(benchmark_result, f=sys.stdout)
     if args.upload:
         upload_to_bencher(config, benchmark_result, browser=args.browser)
@@ -249,47 +259,97 @@ class MainRunArgs:
     path: Path
     verbosity: int
     jobs: int
-    target: RunTarget
+    target: Union[
+        GenericBinTarget,
+        BenchmarkSuiteTarget,
+        BenchmarkCaseTarget,
+        GenericTestSuiteTarget,
+        GenericTestCaseTarget,
+    ]
     debug_build: bool
     target_run_args: Sequence[str]
 
-def main_run(args: MainRunArgs) -> int:
-    config = get_config(args.path)
-
-    run_targets_requiring_gpu: List[RunTarget] = [
-        KERNELS_LIB.test_target.run_target,
-        KERNELS_LIB.benchmark_target.run_target,
+def fully_resolve_run_target(
+    config: ProjectConfig, 
+    build_dir: Path,
+    unresolved_target: Union[
+        GenericBinTarget, 
+        BenchmarkSuiteTarget, 
+        BenchmarkCaseTarget, 
+        GenericTestSuiteTarget, 
+        GenericTestCaseTarget,
+    ],
+    jobs: int,
+    verbosity: int,
+) -> Union[
+    CpuRunTarget,
+    CudaRunTarget,
+]:
+    resolved_target: Union[
+        CpuBinTarget,
+        CudaBinTarget,
+        BenchmarkSuiteTarget,
+        BenchmarkCaseTarget,
+        MixedTestSuiteTarget,
+        CpuTestSuiteTarget,
+        CudaTestSuiteTarget,
+        CpuTestCaseTarget,
+        CudaTestCaseTarget,
+        GenericTestCaseTarget,
     ]
+    if isinstance(unresolved_target, GenericBinTarget):
+        resolved_target = resolve_bin_target(config, unresolved_target)
+    elif isinstance(unresolved_target, (BenchmarkSuiteTarget, BenchmarkCaseTarget)):
+        resolved_target = unresolved_target
+    else:
+        assert isinstance(unresolved_target, (GenericTestSuiteTarget, GenericTestCaseTarget))
+        resolved_target = resolve_test_target(config, unresolved_target)
 
-    build_run_plan = infer_build_run_plan(
-        requested_targets=[args.target],
-        target_requires_gpu=lambda t: t in run_targets_requiring_gpu,
-        skip_run_gpu_targets=False,
-        skip_build_gpu_targets=False,
-        skip_run_cpu_targets=False,
-        skip_build_cpu_targets=False,
+    has_cuda = check_if_machine_supports_cuda()
+    if not has_cuda and isinstance(resolved_target, (CudaBinTarget, CudaTestCaseTarget)):
+        fail_with_error(
+            f'Cannot run target {unresolved_target} as no gpus are available on the current machine.'
+        )
+
+    build_targets(
+        config=config,
+        targets=[resolved_target.build_target],
+        dtgen_skip=False,
+        jobs=jobs,
+        verbosity=verbosity,
+        build_dir=build_dir,
     )
 
-    if build_run_plan.failed_gpu_check:
-        fail_with_error(
-            f'Cannot run target {args.target} as no gpus are available on the current machine.'
-        )
+    fully_resolved_target: Union[
+        CpuBinTarget,
+        CudaBinTarget,
+        BenchmarkSuiteTarget,
+        BenchmarkCaseTarget,
+        MixedTestSuiteTarget,
+        CpuTestSuiteTarget,
+        CudaTestSuiteTarget,
+        CpuTestCaseTarget,
+        CudaTestCaseTarget,
+    ]
+    if isinstance(resolved_target, GenericTestCaseTarget):
+        fully_resolved_target = resolve_test_case_target_using_build(config, resolved_target, build_dir)
+    else:
+        fully_resolved_target = resolved_target
+
+    return fully_resolved_target.run_target
+
+
+def main_run(args: MainRunArgs) -> int:
+    config = get_config(args.path)
 
     if args.debug_build:
         build_dir = config.debug_build_dir
     else:
         build_dir = config.release_build_dir
 
-    build_targets(
-        config=config,
-        targets=build_run_plan.build_targets,
-        dtgen_skip=False,
-        jobs=args.jobs,
-        verbosity=args.verbosity,
-        build_dir=build_dir,
-    )
+    run_target = fully_resolve_run_target(config, build_dir, args.target, jobs=args.jobs, verbosity=args.verbosity)
 
-    binary_path = build_dir / args.target.executable_path
+    binary_path = build_dir / run_target.executable_path
     assert binary_path.is_file()
 
     result = subprocess.run([str(binary_path), *args.target_run_args])
@@ -304,42 +364,23 @@ class MainProfileArgs:
     dry_run: bool
     gui: bool
     tool: ProfilingTool
-    target: RunTarget
+    target: Union[
+        GenericBinTarget,
+        BenchmarkSuiteTarget,
+        BenchmarkCaseTarget,
+        GenericTestSuiteTarget,
+        GenericTestCaseTarget,
+    ]
     target_run_args: Sequence[str]
 
 def main_profile(args: MainProfileArgs) -> int:
     config = get_config(args.path)
 
-    profile_targets_requiring_gpu: List[RunTarget] = [
-        KERNELS_LIB.benchmark_target.run_target,
-        KERNELS_LIB.test_target.run_target,
-    ]
+    build_dir = config.release_build_dir
 
-    build_run_plan = infer_build_run_plan(
-        requested_targets=[args.target],
-        target_requires_gpu=lambda t: t in profile_targets_requiring_gpu,
-        skip_run_gpu_targets=False,
-        skip_build_gpu_targets=False,
-        skip_run_cpu_targets=False,
-        skip_build_cpu_targets=False,
-    )
+    run_target = fully_resolve_run_target(config, build_dir, args.target, jobs=args.jobs, verbosity=args.verbosity)
 
-    if build_run_plan.failed_gpu_check:
-        fail_with_error(
-            f'Cannot run target {args.target} as no gpus are available on the current machine.'
-        )
-
-    build_targets(
-        config=config,
-        targets=build_run_plan.build_targets,
-        dtgen_skip=False,
-        jobs=args.jobs,
-        verbosity=args.verbosity,
-        build_dir=config.release_build_dir,
-    )
-
-    assert len(build_run_plan.run_targets) == 1
-    profile_file = profile_target(config.release_build_dir, build_run_plan.run_targets[0], dry_run=args.dry_run, tool=args.tool)
+    profile_file = profile_target(build_dir, run_target, dry_run=args.dry_run, tool=args.tool)
     if args.gui:
         visualize_profile(profile_file, tool=args.tool)
     else:
@@ -362,7 +403,7 @@ class MainTestArgs:
     skip_build_gpu_tests: bool
     skip_cpu_tests: bool
     skip_build_cpu_tests: bool
-    targets: Collection[Union[TestSuiteTarget, TestCaseTarget]]
+    targets: Collection[Union[GenericTestSuiteTarget, GenericTestCaseTarget]]
 
 def main_test(args: MainTestArgs) -> int:
     assert isinstance(args, MainTestArgs)
@@ -377,62 +418,63 @@ def main_test(args: MainTestArgs) -> int:
     if not build_dir.exists():
         cmake_all(config=config, fast=False, trace=False)
 
-
-    # Currently hardcode GPU tests as 'kernels-tests'
-    requested_test_targets: List[Union[TestSuiteTarget, TestCaseTarget]]
+    requested_test_targets: List[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget, CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]]
     if len(args.targets) == 0:
         requested_test_targets = list(config.default_test_targets)
     else:
-        requested_test_targets = list(args.targets)
+        requested_test_targets = [resolve_test_target(config, t) for t in args.targets]
 
-    if all([isinstance(t, TestSuiteTarget) for t in requested_test_targets]):
+    requested_test_cases = [
+        t for t in requested_test_targets if isinstance(t, (CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget))
+    ]
+    requested_test_suites = [
+        t for t in requested_test_targets if isinstance(t, (MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget))
+    ]
+
+    if len(requested_test_cases) == 0:
         pass
-    elif len(requested_test_targets) == 1 and isinstance(requested_test_targets[0], TestCaseTarget):
+    elif len(requested_test_suites) == 0 and len(requested_test_cases) == 1:
         pass
     else:
         raise ValueError('Currently only n test suites or 1 test case is allowed. If you need this feature, let @lockshaw know.')
 
-    test_targets_requiring_gpu = [KERNELS_LIB.test_target]
+    has_cuda = check_if_machine_supports_cuda()
 
-    build_run_plan = infer_build_run_plan(
-        requested_targets=requested_test_targets,
-        target_requires_gpu=lambda t: t in test_targets_requiring_gpu,
-        skip_run_gpu_targets=args.skip_gpu_tests,
-        skip_build_gpu_targets=args.skip_build_gpu_tests,
-        skip_run_cpu_targets=args.skip_cpu_tests,
-        skip_build_cpu_targets=args.skip_build_cpu_tests,
-    )
-
-    if build_run_plan.failed_gpu_check:
+    if has_cuda and any(isinstance(t, (CudaTestSuiteTarget, CudaTestCaseTarget)) for t in requested_test_targets):
         fail_with_error(
             'Cannot run gpu tests as no gpus are available on the current machine. '
             'Pass --skip-gpu-tests to skip running tests that require a GPU.'
         )
     
-    if len(build_run_plan.targets_to_run) == 0:
+    if len(requested_test_targets) == 0:
         fail_with_error('No test targets available to run')
+
+    requested_build_targets = set(t.build_target for t in requested_test_targets)
 
     build_targets(
         config=config,
-        targets=build_run_plan.build_targets,
+        targets=requested_build_targets,
         dtgen_skip=args.dtgen_skip,
         jobs=args.jobs,
         verbosity=args.verbosity,
         build_dir=build_dir,
     )
 
-    def require_test_suite(t: Union[TestCaseTarget, TestSuiteTarget]) -> TestSuiteTarget:
-        assert isinstance(t, TestSuiteTarget)
+    def require_test_suite(t: Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget, CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]) -> Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]:
+        assert isinstance(t, (MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget))
         return t
 
-    to_run = build_run_plan.targets_to_run
-    assert len(to_run) >= 1
-    if isinstance(to_run[0], TestCaseTarget):
-        assert len(to_run) == 1
-        run_test_case(to_run[0], build_dir, debug=args.debug)
-    elif isinstance(to_run[0], TestSuiteTarget):
-        run_tests([require_test_suite(t) for t in to_run], build_dir, debug=args.debug)
-    
+    if len(requested_test_cases) == 0:
+        run_tests([require_test_suite(t) for t in requested_test_suites], build_dir, debug=args.debug)
+    else:
+        assert len(requested_test_suites) == 0
+
+        only_to_run = get_only(requested_test_cases)
+        assert isinstance(only_to_run, (MixedTestSuiteTarget, CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget))
+        if isinstance(only_to_run, GenericTestCaseTarget):
+            only_to_run = resolve_test_case_target_using_build(config, only_to_run, build_dir)
+        run_test_case(only_to_run, build_dir, debug=args.debug)
+
     if args.coverage:
         postprocess_coverage_data(config=config)
         view_coverage_data(config=config, browser=args.browser)
@@ -622,7 +664,7 @@ def make_parser() -> argparse.ArgumentParser:
     run_p = subparsers.add_parser('run')
     set_main_signature(run_p, main_run, MainRunArgs)
     run_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
-    run_p.add_argument('target', type=RunTarget.from_str)
+    run_p.add_argument('target', type=parse_generic_run_target)
     run_p.add_argument('--debug-build', action='store_true')
     run_p.add_argument('target-run-args', nargs='*')
     add_verbosity_args(run_p)
@@ -633,7 +675,7 @@ def make_parser() -> argparse.ArgumentParser:
     profile_p.add_argument('--dry-run', action='store_true')
     profile_p.add_argument('--tool', choices=list(sorted(ProfilingTool)), default=ProfilingTool.CALLGRIND)
     profile_p.add_argument('-g', '--gui', action='store_true')
-    profile_p.add_argument('target', type=RunTarget.from_str)
+    profile_p.add_argument('target', type=parse_generic_run_target)
     profile_p.add_argument('target-run-args', nargs='*')
     add_verbosity_args(profile_p)
 

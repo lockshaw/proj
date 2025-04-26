@@ -1,4 +1,10 @@
-from .targets import RunTarget
+from typing import (
+    Union,
+)
+from .targets import (
+    CpuRunTarget,
+    CudaRunTarget,
+)
 from . import subprocess_trace as subprocess
 from pathlib import Path
 from enum import StrEnum
@@ -7,10 +13,10 @@ class ProfilingTool(StrEnum):
     PERF = 'perf'
     CALLGRIND = 'callgrind'
 
-def output_file_for_target(target: RunTarget, tool: ProfilingTool) -> Path:
+def output_file_for_target(target: Union[CpuRunTarget, CudaRunTarget], tool: ProfilingTool) -> Path:
     return target.executable_path.parent / (target.executable_path.name + '.' + tool)
 
-def profile_target(build_dir: Path, target: RunTarget, dry_run: bool, tool: ProfilingTool) -> Path:
+def profile_target(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], dry_run: bool, tool: ProfilingTool) -> Path:
     output_file = build_dir / output_file_for_target(target, tool)
 
     if tool == ProfilingTool.PERF:
@@ -21,7 +27,7 @@ def profile_target(build_dir: Path, target: RunTarget, dry_run: bool, tool: Prof
 
     return output_file
 
-def profile_target_with_perf(build_dir: Path, target: RunTarget, output_file: Path, dry_run: bool) -> None:
+def profile_target_with_perf(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], output_file: Path, dry_run: bool) -> None:
     extra_flags = []
     if dry_run:
         extra_flags.append('--dry-run')
@@ -43,7 +49,7 @@ def profile_target_with_perf(build_dir: Path, target: RunTarget, output_file: Pa
     if not dry_run:
         assert output_file.is_file()
 
-def profile_target_with_callgrind(build_dir: Path, target: RunTarget, output_file: Path) -> None:
+def profile_target_with_callgrind(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], output_file: Path) -> None:
     subprocess.check_call([
         'valgrind', 
         '--tool=callgrind',

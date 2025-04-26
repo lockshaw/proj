@@ -44,13 +44,13 @@ class BuildTarget:
     @staticmethod
     def try_from_cmake_name(names: ConfiguredNames, s: str) -> Optional['BuildTarget']:
         if s in names.bin_names:
-            return BinTarget(s).build_target
+            return GenericBinTarget(s).build_target
         elif s in names.lib_names:
             return LibTarget(s).build_target
         elif s.endswith('-tests'):
             lib_name = s[:-len('-tests')]
             assert lib_name in names.lib_names
-            return LibTarget(lib_name).test_target.build_target
+            return LibTarget(lib_name).generic_test_target.build_target
         elif s.endswith('-benchmarks'):
             lib_name = s[:-len('-benchmarks')]
             assert lib_name in names.lib_names
@@ -70,7 +70,7 @@ class BuildTarget:
     def try_from_str(names: ConfiguredNames, s: str) -> Optional['BuildTarget']:
         pieces = s.split(':')
         if s in names.bin_names:
-            return BinTarget(pieces[0]).build_target
+            return GenericBinTarget(pieces[0]).build_target
         elif s in names.lib_names:
             return LibTarget(pieces[0]).build_target
         elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
@@ -80,7 +80,7 @@ class BuildTarget:
         elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'tests'):
             lib_name = pieces[0]
             assert lib_name in names.lib_names
-            return LibTarget(lib_name).test_target.build_target
+            return LibTarget(lib_name).generic_test_target.build_target
         else:
             return None
 
@@ -101,15 +101,11 @@ def is_nonempty_prefix_of(needle: str, haystack: str) -> bool:
     return len(needle) > 0 and haystack.startswith(needle)
 
 @dataclass(frozen=True, order=True)
-class RunTarget:
+class GenericRunTarget:
     name: str
     type_: RunTargetType
     executable_path: Path
     args: Tuple[str, ...]
-
-    @property
-    def run_target(self) -> 'RunTarget':
-        return self
 
     @property
     def build_target(self) -> BuildTarget:
@@ -119,24 +115,72 @@ class RunTarget:
             artifact_path=self.executable_path,
         )
 
-    @staticmethod
-    def from_str(s: str) -> 'RunTarget':
-        pieces = s.split(':')
-        if len(pieces) == 1:
-            return BinTarget(pieces[0]).run_target
-        elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
-            return LibTarget(pieces[0]).benchmark_target.run_target
-        elif len(pieces) == 3 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
-            return LibTarget(pieces[0]).benchmark_target.get_benchmark_case(pieces[2]).run_target
-        elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'tests'):
-            return LibTarget(pieces[0]).test_target.run_target
-        elif len(pieces) == 3 and is_nonempty_prefix_of(pieces[1], 'tests'):
-            return LibTarget(pieces[0]).test_target.get_test_case(pieces[2]).run_target
-        else:
-            raise ValueError(f'Failed to parse {s=}')
 
 @dataclass(frozen=True, order=True)
-class BinTarget:
+class CpuRunTarget:
+    generic_run_target: GenericRunTarget
+
+    @property
+    def name(self) -> str:
+        return self.generic_run_target.name
+
+    @property
+    def type_(self) -> RunTargetType:
+        return self.generic_run_target.type_
+
+    @property
+    def executable_path(self) -> Path:
+        return self.generic_run_target.executable_path
+
+    @property
+    def args(self) -> Tuple[str, ...]:
+        return self.generic_run_target.args
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.generic_run_target.build_target
+
+@dataclass(frozen=True, order=True)
+class CudaRunTarget:
+    generic_run_target: GenericRunTarget
+
+    @property
+    def name(self) -> str:
+        return self.generic_run_target.name
+
+    @property
+    def type_(self) -> RunTargetType:
+        return self.generic_run_target.type_
+
+    @property
+    def executable_path(self) -> Path:
+        return self.generic_run_target.executable_path
+
+    @property
+    def args(self) -> Tuple[str, ...]:
+        return self.generic_run_target.args
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.generic_run_target.build_target
+
+def parse_generic_run_target(s: str) -> Union['GenericBinTarget', 'BenchmarkSuiteTarget', 'BenchmarkCaseTarget', 'GenericTestSuiteTarget', 'GenericTestCaseTarget']:
+    pieces = s.split(':')
+    if len(pieces) == 1:
+        return GenericBinTarget(pieces[0])
+    elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
+        return LibTarget(pieces[0]).benchmark_target
+    elif len(pieces) == 3 and is_nonempty_prefix_of(pieces[1], 'benchmarks'):
+        return LibTarget(pieces[0]).benchmark_target.get_benchmark_case(pieces[2])
+    elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], 'tests'):
+        return LibTarget(pieces[0]).generic_test_target
+    elif len(pieces) == 3 and is_nonempty_prefix_of(pieces[1], 'tests'):
+        return LibTarget(pieces[0]).generic_test_target.get_test_case(pieces[2])
+    else:
+        raise ValueError(f'Failed to parse {s=}')
+
+@dataclass(frozen=True, order=True)
+class GenericBinTarget:
     bin_name: str
 
     @property
@@ -156,8 +200,8 @@ class BinTarget:
         )
 
     @property
-    def run_target(self) -> RunTarget:
-        return RunTarget(
+    def run_target(self) -> GenericRunTarget:
+        return GenericRunTarget(
             name=self.full_bin_name,
             type_=RunTargetType.BIN,
             executable_path=self.bin_path,
@@ -165,7 +209,90 @@ class BinTarget:
         )
 
 @dataclass(frozen=True, order=True)
-class TestSuiteTarget:
+class CpuBinTarget:
+    generic_bin_target: GenericBinTarget
+
+    @property
+    def full_bin_name(self) -> str:
+        return self.generic_bin_target.bin_name
+
+    @property
+    def bin_path(self) -> Path:
+        return self.generic_bin_target.bin_path
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.generic_bin_target.build_target
+
+    @property
+    def run_target(self) -> CpuRunTarget:
+        return CpuRunTarget(self.generic_bin_target.run_target)
+
+@dataclass(frozen=True, order=True)
+class CudaBinTarget:
+    generic_bin_target: GenericBinTarget
+
+    @property
+    def full_bin_name(self) -> str:
+        return self.generic_bin_target.bin_name
+
+    @property
+    def bin_path(self) -> Path:
+        return self.generic_bin_target.bin_path
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.generic_bin_target.build_target
+
+    @property
+    def run_target(self) -> CudaRunTarget:
+        return CudaRunTarget(self.generic_bin_target.run_target)
+
+@dataclass(frozen=True, order=True)
+class GenericTestSuiteTarget:
+    lib_name: str
+
+    @property
+    def lib(self) -> 'LibTarget':
+        return LibTarget(self.lib_name)
+
+    @property
+    def test_binary_name(self) -> str:
+        return self.lib_name + '-tests'
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return BuildTarget(
+            name=self.test_binary_name,
+            type_=BuildTargetType.TESTS,
+            artifact_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
+        )
+
+    @property
+    def run_target(self) -> GenericRunTarget:
+        return GenericRunTarget(
+            name=self.test_binary_name, 
+            type_=RunTargetType.TESTS,
+            executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
+            args=('-ts', self.lib_name + '-tests'),
+        )
+
+    @property
+    def cuda_test_suite(self) -> 'CudaTestSuiteTarget':
+        return CudaTestSuiteTarget(self.lib_name)
+
+    @property
+    def cpu_test_suite(self) -> 'CpuTestSuiteTarget':
+        return CpuTestSuiteTarget(self.lib_name)
+    
+    def get_test_case(self, test_case_name: str) -> 'GenericTestCaseTarget':
+        return GenericTestCaseTarget(
+            test_suite=self,
+            test_case_name=test_case_name,
+        )
+
+@dataclass(frozen=True, order=True)
+class CpuTestSuiteTarget:
     lib_name: str
 
     @property
@@ -177,23 +304,123 @@ class TestSuiteTarget:
         return self.run_target.build_target
 
     @property
-    def run_target(self) -> RunTarget:
-        return RunTarget(
-            name=self.test_binary_name, 
-            type_=RunTargetType.TESTS,
-            executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
-            args=tuple(),
+    def generic_test_suite_target(self) -> GenericTestSuiteTarget:
+        return GenericTestSuiteTarget(self.lib_name)
+
+    @property
+    def run_target(self) -> CpuRunTarget:
+        return CpuRunTarget(
+            GenericRunTarget(
+                name=self.test_binary_name, 
+                type_=RunTargetType.TESTS,
+                executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
+                args=('-ts', self.lib_name + '-tests'),
+            ),
         )
 
-    def get_test_case(self, test_case_name: str) -> 'TestCaseTarget':
-        return TestCaseTarget(
+    def get_test_case(self, test_case_name: str) -> 'CpuTestCaseTarget':
+        return CpuTestCaseTarget(
             test_suite=self,
             test_case_name=test_case_name,
         )
 
 @dataclass(frozen=True, order=True)
-class TestCaseTarget:
-    test_suite: TestSuiteTarget
+class CudaTestSuiteTarget:
+    lib_name: str
+
+    @property
+    def test_binary_name(self) -> str:
+        return self.lib_name + '-tests'
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.run_target.build_target
+
+    @property
+    def generic_test_suite_target(self) -> GenericTestSuiteTarget:
+        return GenericTestSuiteTarget(self.lib_name)
+
+    @property
+    def run_target(self) -> CudaRunTarget:
+        return CudaRunTarget(
+            GenericRunTarget(
+                name=self.test_binary_name, 
+                type_=RunTargetType.TESTS,
+                executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
+                args=('-ts', 'cuda-' + self.lib_name + '-tests'),
+            ),
+        )
+
+    def get_test_case(self, test_case_name: str) -> 'CudaTestCaseTarget':
+        return CudaTestCaseTarget(
+            test_suite=self,
+            test_case_name=test_case_name,
+        )
+
+@dataclass(frozen=True, order=True)
+class MixedTestSuiteTarget:
+    lib_name: str
+
+    @property
+    def test_binary_name(self) -> str:
+        return self.lib_name + '-tests'
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.run_target.build_target
+
+    @property
+    def run_target(self) -> CudaRunTarget:
+        return CudaRunTarget(
+            GenericRunTarget(
+                name=self.test_binary_name,
+                type_=RunTargetType.TESTS,
+                executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
+                args=tuple(),
+            ),
+        )
+
+    def get_test_case(self, test_case_name: str) -> 'GenericTestCaseTarget':
+        return GenericTestCaseTarget(
+            test_suite=GenericTestSuiteTarget(self.lib_name),
+            test_case_name=test_case_name,
+        )
+
+
+@dataclass(frozen=True, order=True)
+class GenericTestCaseTarget:
+    test_suite: GenericTestSuiteTarget
+    test_case_name: str
+
+    @property
+    def cpu_test_case(self) -> 'CpuTestCaseTarget':
+        return CpuTestCaseTarget(
+            test_suite=self.test_suite.cpu_test_suite,
+            test_case_name=self.test_case_name,
+        )
+
+    @property
+    def cuda_test_case(self) -> 'CudaTestCaseTarget':
+        return CudaTestCaseTarget(
+            test_suite=self.test_suite.cuda_test_suite,
+            test_case_name=self.test_case_name,
+        )
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.test_suite.build_target
+
+    @property
+    def run_target(self) -> GenericRunTarget:
+        generic_run_target = self.test_suite.run_target
+        return dataclasses.replace(generic_run_target, 
+            args=tuple(['--test-case=test_case_name']),
+        )
+
+    
+@dataclass(frozen=True, order=True)
+class CpuTestCaseTarget:
+    test_suite: CpuTestSuiteTarget
     test_case_name: str
 
     @property
@@ -201,34 +428,54 @@ class TestCaseTarget:
         return self.test_suite.build_target
     
     @property
-    def run_target(self) -> RunTarget:
-        suite_run_target = self.test_suite.run_target
-        return dataclasses.replace(suite_run_target, 
-            args=tuple(['--test-case=test_case_name']),
+    def run_target(self) -> CpuRunTarget:
+        generic_run_target = self.test_suite.run_target.generic_run_target
+        return CpuRunTarget(
+            dataclasses.replace(generic_run_target, 
+                args=tuple(['--test-case=test_case_name']),
+            ),
         )
 
-def parse_generic_test_target(s: str) -> Union[TestSuiteTarget, TestCaseTarget]:
+@dataclass(frozen=True, order=True)
+class CudaTestCaseTarget:
+    test_suite: CudaTestSuiteTarget
+    test_case_name: str
+
+    @property
+    def build_target(self) -> BuildTarget:
+        return self.test_suite.build_target
+    
+    @property
+    def run_target(self) -> CudaRunTarget:
+        generic_run_target = self.test_suite.run_target.generic_run_target
+        return CudaRunTarget(
+            dataclasses.replace(generic_run_target, 
+                args=tuple(['--test-case=test_case_name']),
+            ),
+        )
+
+def parse_generic_test_target(s: str) -> Union[GenericTestSuiteTarget, GenericTestCaseTarget]:
     pieces = s.split(':')
     if len(pieces) == 1:
-        return LibTarget(pieces[0]).test_target
+        return LibTarget(pieces[0]).generic_test_target
     elif len(pieces) == 2:
-        return LibTarget(pieces[0]).test_target.get_test_case(pieces[1])
+        return LibTarget(pieces[0]).generic_test_target.get_test_case(pieces[1])
     else:
         raise ValueError(f'Failed to parse {s=}')
 
 def remove_redundant_test_targets(
-    targets: Iterable[Union[TestSuiteTarget, TestCaseTarget]]
-) -> Iterator[Union[TestSuiteTarget, TestCaseTarget]]:
+    targets: Iterable[Union[CpuTestSuiteTarget, CpuTestCaseTarget]]
+) -> Iterator[Union[CpuTestSuiteTarget, CpuTestCaseTarget]]:
     all_targets = list(targets)
 
-    suites = {t for t in all_targets if isinstance(t, TestSuiteTarget)}
+    suites = {t for t in all_targets if isinstance(t, CpuTestSuiteTarget)}
 
-    seen: Set[Union[TestSuiteTarget, TestCaseTarget]] = set()
+    seen: Set[Union[CpuTestSuiteTarget, CpuTestCaseTarget]] = set()
     for t in all_targets:
         if t in seen: 
             continue
 
-        if isinstance(t, TestCaseTarget) and t.test_suite in suites:
+        if isinstance(t, CpuTestCaseTarget) and t.test_suite in suites:
             continue
 
         yield t
@@ -247,12 +494,14 @@ class BenchmarkSuiteTarget:
         return self.run_target.build_target
 
     @property
-    def run_target(self) -> RunTarget:
-        return RunTarget(
-            name=self.benchmark_binary_name, 
-            type_=RunTargetType.BENCHMARKS,
-            executable_path=Path('lib') / self.lib_name / 'benchmark' / self.benchmark_binary_name,
-            args=tuple(),
+    def run_target(self) -> CpuRunTarget:
+        return CpuRunTarget(
+            GenericRunTarget(
+                name=self.benchmark_binary_name, 
+                type_=RunTargetType.BENCHMARKS,
+                executable_path=Path('lib') / self.lib_name / 'benchmark' / self.benchmark_binary_name,
+                args=tuple(),
+            ),
         )
 
     def get_benchmark_case(self, case_name: str) -> 'BenchmarkCaseTarget':
@@ -271,10 +520,12 @@ class BenchmarkCaseTarget:
         return self.benchmark_suite.build_target
 
     @property
-    def run_target(self) -> RunTarget:
-        suite_run_target = self.benchmark_suite.run_target
-        return dataclasses.replace(suite_run_target, 
-            args=tuple([f'--benchmark_filter=^{re.escape(self.case_name)}$']),
+    def run_target(self) -> CpuRunTarget:
+        generic_run_target = self.benchmark_suite.run_target.generic_run_target
+        return CpuRunTarget(
+            dataclasses.replace(generic_run_target, 
+                args=tuple([f'--benchmark_filter=^{re.escape(self.case_name)}$']),
+            ),
         )
 
 def parse_generic_benchmark_target(s: str) -> Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]:
@@ -295,8 +546,20 @@ class LibTarget:
         return self.lib_name
 
     @property
-    def test_target(self) -> TestSuiteTarget:
-        return TestSuiteTarget(self.lib_name)
+    def generic_test_target(self) -> GenericTestSuiteTarget:
+        return GenericTestSuiteTarget(self.lib_name)
+
+    @property
+    def mixed_test_target(self) -> MixedTestSuiteTarget:
+        return MixedTestSuiteTarget(self.lib_name)
+
+    @property
+    def cpu_test_target(self) -> CpuTestSuiteTarget:
+        return CpuTestSuiteTarget(self.lib_name)
+
+    @property
+    def cuda_test_target(self) -> CudaTestSuiteTarget:
+        return CudaTestSuiteTarget(self.lib_name)
 
     @property
     def benchmark_target(self) -> BenchmarkSuiteTarget:
@@ -318,7 +581,7 @@ class LibTarget:
     def all_build_targets(self) -> Tuple[BuildTarget, ...]:
         return (
             self.build_target,
-            self.test_target.build_target,
+            self.generic_test_target.build_target,
             self.benchmark_target.build_target,
         )
 

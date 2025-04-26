@@ -6,6 +6,7 @@ from typing import (
     Tuple,
     Iterator,
     Union,
+    FrozenSet,
 )
 from immutables import Map
 import string
@@ -14,13 +15,20 @@ import io
 import proj.toml as toml
 from .targets import (
     BuildTarget,
-    TestCaseTarget,
+    CpuTestCaseTarget,
+    CpuTestSuiteTarget,
+    CudaTestCaseTarget,
+    CudaTestSuiteTarget,
     LibTarget,
-    TestSuiteTarget,
     BenchmarkSuiteTarget,
     BenchmarkCaseTarget,
-    BinTarget,
+    GenericTestCaseTarget,
+    GenericTestSuiteTarget,
     ConfiguredNames,
+    CpuBinTarget,
+    CudaBinTarget,
+    GenericBinTarget,
+    MixedTestSuiteTarget,
     parse_generic_test_target,
     parse_generic_benchmark_target,
 )
@@ -35,18 +43,27 @@ from .json import (
     require_list_of,
     require_dict_of,
 )
-from enum import Enum
 
 _l = logging.getLogger(__name__)
 
 @dataclass(frozen=True, order=True)
 class LibConfig:
-    has_test_suite: bool
-    has_benchmark_suite: bool
+    has_cpu_only_test_suite: bool
+    has_cuda_test_suite: bool
+    has_cpu_only_benchmark_suite: bool
+    has_cuda_benchmark_suite: bool
+
+def get_test_target(lib_name: str, lib_config: LibConfig) -> Union[CpuTestSuiteTarget, CudaTestSuiteTarget]:
+    assert lib_config.has_cpu_only_test_suite or lib_config.has_cuda_test_suite
+
+    if lib_config.has_cuda_test_suite:
+        return LibTarget(lib_name).cuda_test_target
+    else:
+        return LibTarget(lib_name).cpu_test_target
 
 @dataclass(frozen=True, order=True)
 class BinConfig:
-    pass
+    requires_cuda: bool
 
 @dataclass(frozen=True)
 class ProjectConfig:
@@ -88,17 +105,22 @@ class ProjectConfig:
         return self.base / 'build/doxygen'
 
     @property
-    def bin_names(self) -> Tuple[str, ...]:
-        return tuple([
-            target_name 
+    def bin_names(self) -> Mapping[str, BinConfig]:
+        return {
+            target_name: target_config
             for target_name, target_config 
             in sorted(self._targets.items()) 
             if isinstance(target_config, BinConfig)
-        ])
+        }
 
     @property
-    def bin_targets(self) -> Tuple[BinTarget, ...]:
-        return tuple(BinTarget(n) for n in self.bin_names)
+    def bin_targets(self) -> FrozenSet[Union[CpuBinTarget, CudaBinTarget]]:
+        return frozenset(
+            CudaBinTarget(GenericBinTarget(bin_name))
+            if conf.requires_cuda else
+            CpuBinTarget(GenericBinTarget(bin_name))
+            for bin_name, conf in self.bin_names.items()
+        )
 
     @property
     def lib_names(self) -> Mapping[str, LibConfig]:
@@ -138,15 +160,41 @@ class ProjectConfig:
             return tuple(BuildTarget.from_str(self.configured_names, s) for s in self._default_build_targets)
 
     @property
-    def all_test_targets(self) -> Tuple[TestSuiteTarget, ...]:
-        return tuple([lib.test_target for lib in sorted(self.lib_targets)])
+    def all_test_targets(self) -> FrozenSet[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]]:
+        return frozenset([self.test_suite_for_lib(lib) for lib in sorted(self.lib_targets)])
 
     @property
-    def default_test_targets(self) -> Tuple[Union[TestSuiteTarget, TestCaseTarget], ...]:
+    def all_cpu_test_targets(self) -> FrozenSet[CpuTestSuiteTarget]:
+        return frozenset([lib.cpu_test_target for lib, conf in sorted(self.lib_targets.items()) if conf.has_cpu_only_test_suite])
+
+    @property
+    def all_cuda_test_targets(self) -> FrozenSet[CudaTestSuiteTarget]:
+        return frozenset([lib.cuda_test_target for lib, conf in sorted(self.lib_targets.items()) if conf.has_cuda_test_suite])
+
+    @property
+    def default_test_targets(self) -> FrozenSet[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget, CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]]:
         if self._default_test_targets is None:
             return self.all_test_targets
         else:
-            return tuple(parse_generic_test_target(s) for s in self._default_test_targets)
+            return frozenset([resolve_test_target(self, parse_generic_test_target(s)) for s in self._default_test_targets])
+
+    def lib_has_cpu_only_test_suite(self, lib: LibTarget) -> bool:
+        return self.lib_targets[lib].has_cpu_only_test_suite
+
+    def lib_has_cuda_test_suite(self, lib: LibTarget) -> bool:
+        return self.lib_targets[lib].has_cuda_test_suite
+
+    def test_suite_for_lib(self, lib: LibTarget) -> Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]:
+        lib_config = self.lib_targets[lib]
+        assert lib_config.has_cpu_only_test_suite or lib_config.has_cuda_test_suite
+
+        if lib_config.has_cuda_test_suite and lib_config.has_cpu_only_test_suite:
+            return lib.mixed_test_target
+        elif lib_config.has_cpu_only_test_suite:
+            return lib.cpu_test_target
+        else:
+            assert lib_config.has_cuda_test_suite
+            return lib.cuda_test_target
 
     @property
     def default_benchmark_targets(self) -> Tuple[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget], ...]:
@@ -269,19 +317,69 @@ def _load_target_config(m: Mapping[str, object]) -> Union[LibConfig, BinConfig]:
     target_type = m["type"]
 
     if target_type == "lib":
-        assert set(m.keys()) == {'type', 'tests', 'benchmarks'}
-        has_test_suite = m["tests"]
-        assert isinstance(has_test_suite, bool)
-        has_benchmark_suite = m["benchmarks"]
-        assert isinstance(has_benchmark_suite, bool)
+        assert set(m.keys()) == {'type', 'has-cpu-only-tests', 'has-cpu-only-benchmarks', 'has-cuda-tests', 'has-cuda-benchmarks'}
+        has_cpu_only_test_suite = require_bool(m["has-cpu-only-tests"])
+        has_cuda_test_suite = require_bool(m["has-cuda-tests"])
+        has_cpu_only_benchmark_suite = require_bool(m["has-cpu-only-benchmarks"])
+        has_cuda_benchmark_suite = require_bool(m["has-cuda-benchmarks"])
         return LibConfig(
-            has_test_suite=has_test_suite,
-            has_benchmark_suite=has_benchmark_suite,
+            has_cpu_only_test_suite=has_cpu_only_test_suite,
+            has_cuda_test_suite=has_cuda_test_suite,
+            has_cpu_only_benchmark_suite=has_cpu_only_benchmark_suite,
+            has_cuda_benchmark_suite=has_cuda_benchmark_suite,
         )
     elif target_type == "bin":
-        return BinConfig()
+        assert set(m.keys()) == {'type', 'cuda'}
+        requires_cuda = require_bool(m["cuda"])
+        return BinConfig(requires_cuda)
     else:
         raise ValueError
+
+def resolve_test_case_type_without_build(
+    config: ProjectConfig, 
+    test_case: GenericTestCaseTarget, 
+) -> Optional[Union[CpuTestCaseTarget, CudaTestCaseTarget]]:
+    suite_has_cuda = config.lib_has_cuda_test_suite(test_case.test_suite.lib)
+    suite_has_cpu = config.lib_has_cpu_only_test_suite(test_case.test_suite.lib)
+    assert suite_has_cpu or suite_has_cuda
+    if suite_has_cpu and not suite_has_cuda:
+        return test_case.cpu_test_case
+    elif suite_has_cuda and not suite_has_cpu:
+        return test_case.cuda_test_case
+    else:
+        return None
+
+def resolve_generic_test_suite_target(config: ProjectConfig, t: GenericTestSuiteTarget) -> Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]:
+    return config.test_suite_for_lib(t.lib)
+
+def resolve_generic_test_case_target(config: ProjectConfig, t: GenericTestCaseTarget) -> Union[CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]:
+    result = resolve_test_case_type_without_build(config, t)
+    if result is not None:
+        return result
+    else:
+        return t
+
+def resolve_test_target(
+    config: ProjectConfig,
+    t: Union[GenericTestSuiteTarget, GenericTestCaseTarget]
+) -> Union[
+    Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget, CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget],
+]:
+    if isinstance(t, GenericTestSuiteTarget):
+        return resolve_generic_test_suite_target(config, t)
+    else:
+        assert isinstance(t, GenericTestCaseTarget)
+        return resolve_generic_test_case_target(config, t)
+
+def resolve_bin_target(
+    config: ProjectConfig,
+    t: GenericBinTarget,
+) -> Union[CpuBinTarget, CudaBinTarget]:
+    if CpuBinTarget(t) in config.bin_targets:
+        return CpuBinTarget(t)
+    else:
+        assert CudaBinTarget(t) in config.bin_targets
+        return CudaBinTarget(t)
 
 def _load_targets(m: object) -> Map[str, Union[LibConfig, BinConfig]]:
     assert isinstance(m, dict)
@@ -572,7 +670,6 @@ def get_private_header_info(p: Path) -> HeaderInfo:
     )
 
 def get_header_path(p: Path) -> Path:
-    config_root = get_config_root(p)
     config = get_config(p)
 
     lib_info = get_lib_info(p)

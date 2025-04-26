@@ -3,7 +3,8 @@
 
 namespace GPUTestProject {
 
-void call_not_kernels();
+void call_not_kernels_gpu();
+void call_not_kernels_cpu();
 
 }
 

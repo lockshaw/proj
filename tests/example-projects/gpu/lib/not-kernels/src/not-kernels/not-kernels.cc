@@ -3,8 +3,12 @@
 
 namespace GPUTestProject {
 
-void call_not_kernels() {
-  std::cout << "not-kernels" << std::endl; 
+void call_not_kernels_cpu() {
+  std::cout << "not-kernels-cpu" << std::endl; 
+}
+
+void call_not_kernels_gpu() {
+  std::cout << "not-kernels-gpu" << std::endl; 
 }
 
 }

@@ -2,5 +2,7 @@ project_name = "person"
 
 [targets.person]
 type = "lib"
-tests = true
-benchmarks = false
+has-cpu-only-tests = true
+has-cpu-only-benchmarks = false
+has-cuda-tests = false
+has-cuda-benchmarks = false
