@@ -20,31 +20,18 @@ from .build import (
 from .testing import (
     run_tests,
 )
-from .targets import (
-    CpuTestSuiteTarget, 
-    CudaTestSuiteTarget,
-)
 import logging
 
 _l = logging.getLogger(__name__)
 
 class Check(StrEnum):
     FORMAT = 'format'
-    BUILD = 'build'
-    CPU_TESTS = 'cpu-tests'
-    GPU_TESTS = 'gpu-tests'
     CPU_CI = 'cpu-ci'
     GPU_CI = 'gpu-ci'
 
 def run_check(config: ProjectConfig, check: Check, verbosity: int) -> None:
     if check == Check.FORMAT:
         run_formatter_check(config)
-    elif check == Check.BUILD:
-        run_build_check(config, verbosity=verbosity)
-    elif check == Check.CPU_TESTS:
-        run_cpu_tests(config, verbosity=verbosity)
-    elif check == Check.GPU_TESTS:
-        run_gpu_tests(config, verbosity=verbosity)
     elif check == Check.CPU_CI:
         run_cpu_ci(config, verbosity=verbosity)
     else:
@@ -67,26 +54,6 @@ def run_build_check(config: ProjectConfig, verbosity: int) -> None:
         verbosity=verbosity,
         build_dir=config.debug_build_dir,
     )
-
-def run_cpu_tests(config: ProjectConfig, verbosity: int) -> None:
-    run_dtgen(
-        root=config.base,
-        config=config,
-        force=True,
-    )
-    cmake_all(config, fast=False, trace=False)
-
-    build_targets(
-        config=config,
-        targets=[target.build_target for target in config.all_cpu_test_targets],
-        dtgen_skip=True,
-        jobs=multiprocessing.cpu_count(),
-        verbosity=verbosity,
-        build_dir=config.debug_build_dir,
-    )
-
-    _l.info('Running tests %s', config.all_cpu_test_targets)
-    run_tests(list(sorted(config.all_cpu_test_targets)), config.debug_build_dir, debug=False)
 
 def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     _l.info('Running formatter check...')
@@ -115,7 +82,7 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     _l.info('Running tests %s', config.all_cpu_test_targets)
     run_tests(list(sorted(config.all_cpu_test_targets)), config.coverage_build_dir, debug=False)
 
-def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
+def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
     run_dtgen(
         root=config.base,
         config=config,
@@ -134,6 +101,3 @@ def run_gpu_tests(config: ProjectConfig, verbosity: int) -> None:
     )
 
     run_tests(list(sorted(config.all_cuda_test_targets)), config.debug_build_dir, debug=False)
-
-def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
-    run_gpu_tests(config, verbosity) 

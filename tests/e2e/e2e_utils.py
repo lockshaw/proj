@@ -15,11 +15,13 @@ def require_fail(r: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
     assert r.returncode != 0
     return r
 
-def run(dir: Path, args: Iterable[str], capture: bool = True, env: Mapping[str, str] = imm.Map()) -> subprocess.CompletedProcess:
-    cmd = [
-        'proj',
-        *args,
-    ]
+def run(dir: Path, args: Iterable[str], capture: bool = True, env: Mapping[str, str] = imm.Map(), verbose: bool = True) -> subprocess.CompletedProcess:
+    _args = list(args)
+    cmd = ['proj', _args[0]]
+    if verbose:
+        cmd.append('-v')
+    cmd = [*cmd, *_args[1:]]
+    print(f'Running {cmd=}')
     return subprocess.run(cmd, capture_output=capture, text=True, cwd=dir, env={**os.environ, **env})
 
 def check_cmd_succeeds(dir: Path, args: Iterable[str], env: Mapping[str, str] = imm.Map()) -> None:

@@ -512,15 +512,6 @@ def test_check_format() -> None:
 
 @pytest.mark.e2e
 @pytest.mark.slow
-def test_check_cpu_tests() -> None:
-    with cmade_project_instance() as d:
-        check_cmd_succeeds(d, [
-            'check',
-            'cpu-tests',
-        ])
-
-@pytest.mark.e2e
-@pytest.mark.slow
 def test_check_cpu_ci() -> None:
     with cmade_project_instance() as d:
         check_cmd_fails(d, [

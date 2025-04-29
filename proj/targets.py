@@ -274,7 +274,7 @@ class GenericTestSuiteTarget:
             name=self.test_binary_name, 
             type_=RunTargetType.TESTS,
             executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
-            args=('-ts', self.lib_name + '-tests'),
+            args=tuple(),
         )
 
     @property
@@ -284,6 +284,10 @@ class GenericTestSuiteTarget:
     @property
     def cpu_test_suite(self) -> 'CpuTestSuiteTarget':
         return CpuTestSuiteTarget(self.lib_name)
+
+    @property
+    def test_suite_names(self) -> Tuple[str, ...]:
+        return self.cuda_test_suite.test_suite_names + self.cpu_test_suite.test_suite_names
     
     def get_test_case(self, test_case_name: str) -> 'GenericTestCaseTarget':
         return GenericTestCaseTarget(
@@ -304,6 +308,14 @@ class CpuTestSuiteTarget:
         return self.run_target.build_target
 
     @property
+    def test_suite_name(self) -> str:
+        return f'cpu-{self.lib_name}-tests'
+
+    @property
+    def test_suite_names(self) -> Tuple[str, ...]:
+        return tuple([self.test_suite_name])
+
+    @property
     def generic_test_suite_target(self) -> GenericTestSuiteTarget:
         return GenericTestSuiteTarget(self.lib_name)
 
@@ -314,7 +326,7 @@ class CpuTestSuiteTarget:
                 name=self.test_binary_name, 
                 type_=RunTargetType.TESTS,
                 executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
-                args=('-ts', self.lib_name + '-tests'),
+                args=tuple([f'--test-suite={self.test_suite_name}']),
             ),
         )
 
@@ -337,6 +349,14 @@ class CudaTestSuiteTarget:
         return self.run_target.build_target
 
     @property
+    def test_suite_name(self) -> str:
+        return f'cuda-{self.lib_name}-tests'
+
+    @property
+    def test_suite_names(self) -> Tuple[str, ...]:
+        return tuple([self.test_suite_name])
+
+    @property
     def generic_test_suite_target(self) -> GenericTestSuiteTarget:
         return GenericTestSuiteTarget(self.lib_name)
 
@@ -347,7 +367,7 @@ class CudaTestSuiteTarget:
                 name=self.test_binary_name, 
                 type_=RunTargetType.TESTS,
                 executable_path=Path('lib') / self.lib_name / 'test' / self.test_binary_name,
-                args=('-ts', 'cuda-' + self.lib_name + '-tests'),
+                args=tuple([f'--test-suite={self.test_suite_name}']),
             ),
         )
 
@@ -368,6 +388,18 @@ class MixedTestSuiteTarget:
     @property
     def build_target(self) -> BuildTarget:
         return self.run_target.build_target
+
+    @property
+    def cpu_test_suite_target(self) -> CpuTestSuiteTarget:
+        return CpuTestSuiteTarget(self.lib_name)
+
+    @property
+    def cuda_test_suite_target(self) -> CudaTestSuiteTarget:
+        return CudaTestSuiteTarget(self.lib_name)
+
+    @property
+    def test_suite_names(self) -> Tuple[str, ...]:
+        return self.cuda_test_suite_target.test_suite_names + self.cpu_test_suite_target.test_suite_names
 
     @property
     def run_target(self) -> CudaRunTarget:
@@ -414,7 +446,7 @@ class GenericTestCaseTarget:
     def run_target(self) -> GenericRunTarget:
         generic_run_target = self.test_suite.run_target
         return dataclasses.replace(generic_run_target, 
-            args=tuple(['--test-case=test_case_name']),
+            args=tuple([f'--test-case={self.test_case_name}']),
         )
 
     
@@ -432,7 +464,7 @@ class CpuTestCaseTarget:
         generic_run_target = self.test_suite.run_target.generic_run_target
         return CpuRunTarget(
             dataclasses.replace(generic_run_target, 
-                args=tuple(['--test-case=test_case_name']),
+                args=tuple([f'--test-case={self.test_case_name}']),
             ),
         )
 
@@ -450,7 +482,7 @@ class CudaTestCaseTarget:
         generic_run_target = self.test_suite.run_target.generic_run_target
         return CudaRunTarget(
             dataclasses.replace(generic_run_target, 
-                args=tuple(['--test-case=test_case_name']),
+                args=tuple([f'--test-case={self.test_case_name}']),
             ),
         )
 

@@ -8,6 +8,9 @@ from .targets import (
 from . import subprocess_trace as subprocess
 from pathlib import Path
 from enum import StrEnum
+import logging
+
+_l = logging.getLogger(__name__)
 
 class ProfilingTool(StrEnum):
     PERF = 'perf'
@@ -32,7 +35,7 @@ def profile_target_with_perf(build_dir: Path, target: Union[CpuRunTarget, CudaRu
     if dry_run:
         extra_flags.append('--dry-run')
 
-    subprocess.check_call([
+    cmd = [
         'perf', 
         'record',
         '--call-graph=dwarf', 
@@ -44,19 +47,23 @@ def profile_target_with_perf(build_dir: Path, target: Union[CpuRunTarget, CudaRu
         '--',
         str(build_dir / target.executable_path),
         *target.args,
-    ])
+    ]
+
+    subprocess.check_call(cmd)
 
     if not dry_run:
         assert output_file.is_file()
 
 def profile_target_with_callgrind(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], output_file: Path) -> None:
-    subprocess.check_call([
+    cmd = [
         'valgrind', 
         '--tool=callgrind',
         f'--callgrind-out-file={output_file}',
         str(build_dir / target.executable_path),
         *target.args,
-    ])
+    ]
+
+    subprocess.check_call(cmd)
 
     assert output_file.is_file()
 

@@ -9,6 +9,11 @@ from proj.__main__ import (
     main_cmake,
 )
 import tempfile
+from dataclasses import dataclass
+from proj.config_file import (
+    ProjectConfig,
+    load_config,
+)
 
 MAX_VERBOSITY = 100
 
@@ -44,3 +49,15 @@ def cmade_project_instance(project_name: str) -> Iterator[Path]:
 
         yield d
 
+@dataclass(frozen=True, eq=True)
+class LoadedProject:
+    path: Path
+    config: ProjectConfig
+
+@contextmanager
+def loaded_cmade_project_instance(project_name: str) -> Iterator[LoadedProject]:
+    with cmade_project_instance(project_name) as d:
+        yield LoadedProject(
+            path=d,
+            config=load_config(d),
+        )
