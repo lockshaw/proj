@@ -12,12 +12,12 @@ from .targets import (
     GenericTestSuiteTarget,
     GenericTestCaseTarget,
     MixedTestSuiteTarget,
+    get_test_suite_names,
 )
 from . import subprocess_trace as subprocess
 import sys
 from pathlib import Path
 import os
-import json
 import logging
 import re
 from .config_file import (
@@ -27,6 +27,7 @@ from .config_file import (
 from .utils import (
     concatmap,
 )
+import itertools
 
 _l = logging.getLogger(__name__)
 
@@ -41,51 +42,48 @@ def get_regex_for_test_suites(
         CpuTestSuiteTarget
     ]],
 ) -> str:
-    test_suite_names = concatmap(test_suites, lambda t: t.test_suite_names)
+    test_suite_names = concatmap(test_suites, get_test_suite_names)
     return "^(" + "|".join(test_suite_names) + ")$"
 
-def list_test_cases_in_targets(
-    targets: Sequence[GenericTestSuiteTarget], 
-    build_dir: Path
+def list_test_cases_in_single_suite(
+    suite: Union[CpuTestSuiteTarget, CudaTestSuiteTarget],
+    build_dir: Path,
 ) -> Iterator[Union[CpuTestCaseTarget, CudaTestCaseTarget]]:
-    target_regex = get_regex_for_test_suites(targets)
+
     output = subprocess.check_output(
         [
-            "ctest",
-            "-L",
-            target_regex,
-            "--show-only=json-v1",
+            str(suite.run_target.executable_path),
+            '--list-test-cases',
+            f'--test-suite={suite.test_suite_name}',
         ],
         stderr=sys.stdout,
         cwd=build_dir,
         env=os.environ,
         text=True,
-    )
+    ).splitlines()[2:-2]
 
-    loaded = json.loads(output)
-    _l.debug('Loaded json: %s', output)
-    for test in loaded['tests']:
-        properties = test['properties']
-        for property in properties:
-            if property['name'] == 'LABELS':
-                labels = properties[0]['value']
-                assert len(labels) == 1
-                label = labels[0]
-                break
-        else:
-            raise ValueError(f'Could not find label for test {test=}')
-        
-        cuda_match = CUDA_LABEL_RE.fullmatch(label)
-        if cuda_match is not None:
-            yield CudaTestSuiteTarget(
-                lib_name=cuda_match.group('libname'),
-            ).get_test_case(test['name'])
-        else:
-            cpu_match = CPU_LABEL_RE.fullmatch(label)
-            assert cpu_match is not None
-            yield CpuTestSuiteTarget(
-                lib_name=cpu_match.group('libname'),
-            ).get_test_case(test['name'])
+    for line in output:
+        yield suite.get_test_case(line)
+    
+
+def list_test_cases_in_suite(
+    suite: Union[GenericTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget, MixedTestSuiteTarget],
+    build_dir: Path,
+) -> Iterator[Union[CpuTestCaseTarget, CudaTestCaseTarget]]:
+    if isinstance(suite, (CpuTestSuiteTarget, CudaTestSuiteTarget)):
+        yield from list_test_cases_in_single_suite(suite, build_dir)
+    else:
+        assert isinstance(suite, (MixedTestSuiteTarget, GenericTestSuiteTarget))
+        yield from list_test_cases_in_single_suite(suite.cpu_test_suite_target, build_dir)
+        yield from list_test_cases_in_single_suite(suite.cuda_test_suite_target, build_dir)
+
+def list_test_cases_in_test_suites(
+    test_suites: Iterable[Union[GenericTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget, MixedTestSuiteTarget]],
+    build_dir: Path
+) -> Iterator[Union[CpuTestCaseTarget, CudaTestCaseTarget]]:
+    yield from itertools.chain.from_iterable([
+        list_test_cases_in_suite(suite, build_dir) for suite in test_suites
+    ])
 
 def resolve_test_case_target_using_build(
     config: ProjectConfig, 
@@ -96,7 +94,7 @@ def resolve_test_case_target_using_build(
     if result_without_build is not None:
         return result_without_build
     else:
-        all_test_cases_in_suite = list_test_cases_in_targets([test_case.test_suite], build_dir)
+        all_test_cases_in_suite = list_test_cases_in_suite(test_case.test_suite, build_dir)
         cpu_test_case_names = [
             t.test_case_name for t in 
             all_test_cases_in_suite
@@ -118,37 +116,38 @@ def resolve_test_case_target_using_build(
             assert has_cuda_test_with_matching_name
             return test_case.cuda_test_case
 
-def run_test_case(target: Union[CpuTestCaseTarget, CudaTestCaseTarget], build_dir: Path, debug: bool) -> None:
-    _l.info('Running test target %s', target)
-    label_regex = f"^{target.test_suite.test_suite_name}$"
-    case_regex = f"^{target.test_case_name}$"
+def run_test_case(
+    config: ProjectConfig, 
+    test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget], 
+    build_dir: Path, 
+    debug: bool,
+) -> None:
+    _l.info('Running test case %s', test_case)
+
     subprocess.check_call(
-        [
-            "ctest",
-            "--progress",
-            "--output-on-failure",
-            "-L",
-            label_regex,
-            "-R",
-            case_regex,
-        ],
+        config.cmd_for_run_target(test_case.run_target),
         stderr=sys.stdout,
         cwd=build_dir,
         env=os.environ,
     )
 
-def run_tests(targets: Sequence[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]], build_dir: Path, debug: bool) -> None:
-    _l.info('Running test targets %s', targets)
-    target_regex = get_regex_for_test_suites(targets)
-    subprocess.check_call(
-        [
-            "ctest",
-            "--progress",
-            "--output-on-failure",
-            "-L",
-            target_regex,
-        ],
-        stderr=sys.stdout,
-        cwd=build_dir,
-        env=os.environ,
+def run_test_suites(
+    config: ProjectConfig,
+    test_suites: Sequence[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]], 
+    build_dir: Path, 
+    debug: bool,
+) -> None:
+    _l.info('Running test suites %s', test_suites)
+
+    test_cases = list_test_cases_in_test_suites(
+        test_suites=test_suites,
+        build_dir=build_dir,
     )
+
+    for test_case in test_cases:
+        run_test_case(
+            config=config,
+            test_case=test_case,
+            build_dir=build_dir,
+            debug=debug,
+        )

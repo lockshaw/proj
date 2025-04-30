@@ -278,16 +278,12 @@ class GenericTestSuiteTarget:
         )
 
     @property
-    def cuda_test_suite(self) -> 'CudaTestSuiteTarget':
+    def cuda_test_suite_target(self) -> 'CudaTestSuiteTarget':
         return CudaTestSuiteTarget(self.lib_name)
 
     @property
-    def cpu_test_suite(self) -> 'CpuTestSuiteTarget':
+    def cpu_test_suite_target(self) -> 'CpuTestSuiteTarget':
         return CpuTestSuiteTarget(self.lib_name)
-
-    @property
-    def test_suite_names(self) -> Tuple[str, ...]:
-        return self.cuda_test_suite.test_suite_names + self.cpu_test_suite.test_suite_names
     
     def get_test_case(self, test_case_name: str) -> 'GenericTestCaseTarget':
         return GenericTestCaseTarget(
@@ -310,10 +306,6 @@ class CpuTestSuiteTarget:
     @property
     def test_suite_name(self) -> str:
         return f'cpu-{self.lib_name}-tests'
-
-    @property
-    def test_suite_names(self) -> Tuple[str, ...]:
-        return tuple([self.test_suite_name])
 
     @property
     def generic_test_suite_target(self) -> GenericTestSuiteTarget:
@@ -351,10 +343,6 @@ class CudaTestSuiteTarget:
     @property
     def test_suite_name(self) -> str:
         return f'cuda-{self.lib_name}-tests'
-
-    @property
-    def test_suite_names(self) -> Tuple[str, ...]:
-        return tuple([self.test_suite_name])
 
     @property
     def generic_test_suite_target(self) -> GenericTestSuiteTarget:
@@ -398,8 +386,8 @@ class MixedTestSuiteTarget:
         return CudaTestSuiteTarget(self.lib_name)
 
     @property
-    def test_suite_names(self) -> Tuple[str, ...]:
-        return self.cuda_test_suite_target.test_suite_names + self.cpu_test_suite_target.test_suite_names
+    def generic_test_suite_target(self) -> GenericTestSuiteTarget:
+        return GenericTestSuiteTarget(self.lib_name)
 
     @property
     def run_target(self) -> CudaRunTarget:
@@ -419,6 +407,23 @@ class MixedTestSuiteTarget:
         )
 
 
+def get_test_suite_names(
+    target: Union[
+        GenericTestSuiteTarget,
+        MixedTestSuiteTarget, 
+        CudaTestSuiteTarget,
+        CpuTestSuiteTarget,
+    ],
+) -> Tuple[str, ...]:
+    if isinstance(target, (CudaTestSuiteTarget, CpuTestSuiteTarget)):
+        return tuple([target.test_suite_name])
+    else:
+        assert isinstance(target, (MixedTestSuiteTarget, GenericTestSuiteTarget))
+        return (
+            target.cuda_test_suite_target.test_suite_name,
+            target.cpu_test_suite_target.test_suite_name,
+        )
+
 @dataclass(frozen=True, order=True)
 class GenericTestCaseTarget:
     test_suite: GenericTestSuiteTarget
@@ -427,14 +432,14 @@ class GenericTestCaseTarget:
     @property
     def cpu_test_case(self) -> 'CpuTestCaseTarget':
         return CpuTestCaseTarget(
-            test_suite=self.test_suite.cpu_test_suite,
+            test_suite=self.test_suite.cpu_test_suite_target,
             test_case_name=self.test_case_name,
         )
 
     @property
     def cuda_test_case(self) -> 'CudaTestCaseTarget':
         return CudaTestCaseTarget(
-            test_suite=self.test_suite.cuda_test_suite,
+            test_suite=self.test_suite.cuda_test_suite_target,
             test_case_name=self.test_case_name,
         )
 
@@ -448,6 +453,7 @@ class GenericTestCaseTarget:
         return dataclasses.replace(generic_run_target, 
             args=tuple([f'--test-case={self.test_case_name}']),
         )
+
 
     
 @dataclass(frozen=True, order=True)

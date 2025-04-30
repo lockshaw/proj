@@ -18,7 +18,7 @@ from .build import (
     build_targets,
 )
 from .testing import (
-    run_tests,
+    run_test_suites,
 )
 import logging
 
@@ -80,7 +80,12 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     )
 
     _l.info('Running tests %s', config.all_cpu_test_targets)
-    run_tests(list(sorted(config.all_cpu_test_targets)), config.coverage_build_dir, debug=False)
+    run_test_suites(
+        config=config,
+        test_suites=list(sorted(config.all_cpu_test_targets)), 
+        build_dir=config.coverage_build_dir, 
+        debug=False,
+    )
 
 def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
     run_dtgen(
@@ -100,4 +105,9 @@ def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
         build_dir=config.debug_build_dir,
     )
 
-    run_tests(list(sorted(config.all_cuda_test_targets)), config.debug_build_dir, debug=False)
+    run_test_suites(
+        config=config,
+        test_suites=list(sorted(config.all_cuda_test_targets)), 
+        build_dir=config.debug_build_dir, 
+        debug=False,
+    )

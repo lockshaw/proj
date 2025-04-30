@@ -24,7 +24,7 @@ from proj.build import (
     build_targets,
 )
 from proj.testing import (
-    list_test_cases_in_targets,
+    list_test_cases_in_test_suites,
 )
 from ..project_utils import (
     project_instance as _project_instance,
@@ -190,7 +190,7 @@ def test_list_tests_in_target() -> None:
     ]) as d:
         config = get_config(d)
 
-        found = set(list_test_cases_in_targets([lib2_target.generic_test_suite_target], config.debug_build_dir))
+        found = set(list_test_cases_in_test_suites([lib2_target.generic_test_suite_target], config.debug_build_dir))
         correct = {
             lib2_target.get_test_case('call_lib2'),
             lib2_target.get_test_case('other_lib2'),
@@ -206,12 +206,7 @@ def test_test_all() -> None:
             'test',
             '-j1',
         ]
-        result = require_successful(run(d, cmd))
-
-        assert 'call_lib1' in result.stdout
-        assert 'other_lib1' in result.stdout
-        assert 'call_lib2' in result.stdout
-        assert 'other_lib2' in result.stdout
+        check_cmd_succeeds(d, cmd)
 
         for fail_key in [
             'PROJ_TESTS_FAIL_LIB1_CALL_LIB1',

@@ -29,6 +29,8 @@ from .targets import (
     CudaBinTarget,
     GenericBinTarget,
     MixedTestSuiteTarget,
+    CpuRunTarget,
+    CudaRunTarget,
     parse_generic_test_target,
     parse_generic_benchmark_target,
 )
@@ -83,6 +85,7 @@ class ProjectConfig:
     _header_extension: Optional[str] = None
     _fix_compile_commands: Optional[bool] = None
     _test_header_path: Optional[Path] = None
+    _cuda_launch_cmd: Optional[Tuple[str, ...]] = None
 
     @property
     def debug_build_dir(self) -> Path:
@@ -298,6 +301,19 @@ class ProjectConfig:
         else:
             return self._test_header_path
 
+    @property
+    def cuda_launch_cmd(self) -> Tuple[str, ...]:
+        if self._cuda_launch_cmd is None:
+            return tuple()
+        else:
+            return self._cuda_launch_cmd
+
+    def cmd_for_run_target(self, run_target: Union[CpuRunTarget, CudaRunTarget]) -> Tuple[str, ...]:
+        cmd = tuple([str(run_target.executable_path), *run_target.args])
+        if isinstance(run_target, CudaRunTarget):
+            cmd = self.cuda_launch_cmd + cmd
+        return cmd
+
 def _possible_config_paths(d: Path) -> Iterator[Path]:
     d = Path(d).resolve()
     assert d.is_absolute()
@@ -349,10 +365,16 @@ def resolve_test_case_type_without_build(
     else:
         return None
 
-def resolve_generic_test_suite_target(config: ProjectConfig, t: GenericTestSuiteTarget) -> Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]:
+def resolve_generic_test_suite_target(
+    config: ProjectConfig, 
+    t: GenericTestSuiteTarget,
+) -> Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]:
     return config.test_suite_for_lib(t.lib)
 
-def resolve_generic_test_case_target(config: ProjectConfig, t: GenericTestCaseTarget) -> Union[CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]:
+def resolve_generic_test_case_target(
+    config: ProjectConfig, 
+    t: GenericTestCaseTarget,
+) -> Union[CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]:
     result = resolve_test_case_type_without_build(config, t)
     if result is not None:
         return result
@@ -363,7 +385,12 @@ def resolve_test_target(
     config: ProjectConfig,
     t: Union[GenericTestSuiteTarget, GenericTestCaseTarget]
 ) -> Union[
-    Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget, CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget],
+    MixedTestSuiteTarget, 
+    CpuTestSuiteTarget, 
+    CudaTestSuiteTarget, 
+    CpuTestCaseTarget, 
+    CudaTestCaseTarget, 
+    GenericTestCaseTarget,
 ]:
     if isinstance(t, GenericTestSuiteTarget):
         return resolve_generic_test_suite_target(config, t)
@@ -428,6 +455,7 @@ def _load_parsed_config(config_root: Path, raw: object) -> ProjectConfig:
         _header_extension=map_optional(raw.get('header_extension'), require_str),
         _fix_compile_commands=map_optional(raw.get('fix_compile_commands'), require_bool),
         _test_header_path=load_path(raw.get('test_header_path')),
+        _cuda_launch_cmd=load_str_tuple(raw.get('cuda_launch_cmd')),
     )
 
 

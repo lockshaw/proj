@@ -75,7 +75,7 @@ from .profile import (
     visualize_profile,
 )
 from .testing import (
-    run_tests,
+    run_test_suites,
     run_test_case,
     resolve_test_case_target_using_build,
 )
@@ -454,7 +454,12 @@ def main_test(args: MainTestArgs) -> int:
         return t
 
     if len(get_test_cases(requested_test_targets_to_run)) == 0:
-        run_tests(get_test_suites(requested_test_targets_to_run), build_dir, debug=args.debug)
+        run_test_suites(
+            config=config, 
+            test_suites=get_test_suites(requested_test_targets_to_run), 
+            build_dir=build_dir, 
+            debug=args.debug
+        )
     else:
         assert len(get_test_suites(requested_test_targets_to_run)) == 0
 
@@ -468,7 +473,12 @@ def main_test(args: MainTestArgs) -> int:
         elif isinstance(only_to_run, CudaTestCaseTarget) and not has_cuda:
             cuda_failure()
         else:
-            run_test_case(only_to_run, build_dir, debug=args.debug)
+            run_test_case(
+                config=config, 
+                test_case=only_to_run, 
+                build_dir=build_dir, 
+                debug=args.debug,
+            )
 
     if args.coverage:
         postprocess_coverage_data(config=config)
