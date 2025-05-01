@@ -45,6 +45,9 @@ from .json import (
     require_list_of,
     require_dict_of,
 )
+from enum import (
+    StrEnum,
+)
 
 _l = logging.getLogger(__name__)
 
@@ -434,28 +437,47 @@ def _load_config(d: Path) -> Optional[ProjectConfig]:
     with (config_root / '.proj.toml').open('r') as f:
         raw = toml.loads(f.read())
 
-    return _load_parsed_config(config_root, raw)
+    return load_parsed_config(config_root, raw)
 
-def _load_parsed_config(config_root: Path, raw: object) -> ProjectConfig:
+class ConfigKey(StrEnum):
+    PROJECT_NAME = 'project_name'
+    TARGETS = 'targets'
+    DEFAULT_BIN_TARGETS = 'default_bin_targets'
+    DEFAULT_TEST_TARGETS = 'default_test_targets'
+    DEFAULT_BENCHMARK_TARGETS = 'default_benchmark_targets'
+    TESTSUITE_MACRO = 'testsuite_macro'
+    IFNDEF_NAME = 'ifndef_name'
+    NAMESPACE_NAME = 'namespace_name'
+    CMAKE_FLAGS_EXTRA = 'cmake_flags_extra'
+    CMAKE_REQUIRE_SHELL = 'cmake_require_shell'
+    HEADER_EXTENSION = 'header_extension'
+    FIX_COMPILE_COMMANDS = 'fix_compile_commands'
+    TEST_HEADER_PATH = 'test_header_path'
+    CUDA_LAUNCH_CMD = 'cuda_launch_cmd'
+
+def load_parsed_config(config_root: Path, raw: object) -> ProjectConfig:
     _l.debug('Loading parsed config: %s', raw)
     assert isinstance(raw, dict)
 
+    allowed_keys = set(ConfigKey)
+    assert allowed_keys.issuperset(raw.keys())
+
     return ProjectConfig(
-        project_name=require_str(raw['project_name']),
+        project_name=require_str(raw[ConfigKey.PROJECT_NAME]),
         base=config_root,
-        _targets=_load_targets(raw['targets']),
-        _default_build_targets=load_str_tuple(raw.get('default_bin_targets')),
-        _default_test_targets=load_str_tuple(raw.get('default_test_targets')),
-        _default_benchmark_targets=load_str_tuple(raw.get('default_benchmark_targets')),
-        _testsuite_macro=map_optional(raw.get('testsuite_macro'), require_str),
-        _ifndef_name=map_optional(raw.get('ifndef_name'), require_str),
-        _namespace_name=map_optional(raw.get('namespace_name'), require_str),
-        _cmake_flags_extra=load_cmake_flags(raw.get('cmake_flags_extra')),
-        _cmake_require_shell=map_optional(raw.get('cmake_require_shell'), require_bool),
-        _header_extension=map_optional(raw.get('header_extension'), require_str),
-        _fix_compile_commands=map_optional(raw.get('fix_compile_commands'), require_bool),
-        _test_header_path=load_path(raw.get('test_header_path')),
-        _cuda_launch_cmd=load_str_tuple(raw.get('cuda_launch_cmd')),
+        _targets=_load_targets(raw[ConfigKey.TARGETS]),
+        _default_build_targets=load_str_tuple(raw.get(ConfigKey.DEFAULT_BIN_TARGETS)),
+        _default_test_targets=load_str_tuple(raw.get(ConfigKey.DEFAULT_TEST_TARGETS)),
+        _default_benchmark_targets=load_str_tuple(raw.get(ConfigKey.DEFAULT_BENCHMARK_TARGETS)),
+        _testsuite_macro=map_optional(raw.get(ConfigKey.TESTSUITE_MACRO), require_str),
+        _ifndef_name=map_optional(raw.get(ConfigKey.IFNDEF_NAME), require_str),
+        _namespace_name=map_optional(raw.get(ConfigKey.NAMESPACE_NAME), require_str),
+        _cmake_flags_extra=load_cmake_flags(raw.get(ConfigKey.CMAKE_FLAGS_EXTRA)),
+        _cmake_require_shell=map_optional(raw.get(ConfigKey.CMAKE_REQUIRE_SHELL), require_bool),
+        _header_extension=map_optional(raw.get(ConfigKey.HEADER_EXTENSION), require_str),
+        _fix_compile_commands=map_optional(raw.get(ConfigKey.FIX_COMPILE_COMMANDS), require_bool),
+        _test_header_path=load_path(raw.get(ConfigKey.TEST_HEADER_PATH)),
+        _cuda_launch_cmd=load_str_tuple(raw.get(ConfigKey.CUDA_LAUNCH_CMD)),
     )
 
 
