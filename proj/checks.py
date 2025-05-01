@@ -21,6 +21,9 @@ from .testing import (
     run_test_suites,
 )
 import logging
+from .failure import (
+    fail_without_error,
+)
 
 _l = logging.getLogger(__name__)
 
@@ -80,22 +83,28 @@ def run_cpu_ci(config: ProjectConfig, verbosity: int) -> None:
     )
 
     _l.info('Running tests %s', config.all_cpu_test_targets)
-    run_test_suites(
+    test_results = run_test_suites(
         config=config,
         test_suites=list(sorted(config.all_cpu_test_targets)), 
         build_dir=config.coverage_build_dir, 
         debug=False,
     )
 
+    if len(test_results.failed) > 0:
+        fail_without_error()
+
 def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
+    _l.info('Running dtgen')
     run_dtgen(
         root=config.base,
         config=config,
         force=True,
     )
+    _l.info('Running cmake')
     cmake_all(config, fast=False, trace=False)
 
     cuda_build_targets = [t.build_target for t in config.all_cuda_test_targets]
+    _l.info('Building targets %', cuda_build_targets)
     build_targets(
         config=config,
         targets=cuda_build_targets,
@@ -105,9 +114,14 @@ def run_gpu_ci(config: ProjectConfig, verbosity:int) -> None:
         build_dir=config.debug_build_dir,
     )
 
-    run_test_suites(
+    test_suites = list(sorted(config.all_cuda_test_targets))
+    _l.info('Running test suites %s', test_suites)
+    test_results = run_test_suites(
         config=config,
-        test_suites=list(sorted(config.all_cuda_test_targets)), 
+        test_suites=test_suites,
         build_dir=config.debug_build_dir, 
         debug=False,
     )
+
+    if len(test_results.failed) > 0:
+        fail_without_error()

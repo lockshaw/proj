@@ -462,6 +462,10 @@ class CpuTestCaseTarget:
     test_case_name: str
 
     @property
+    def full_name(self) -> str:
+        return f'{self.test_suite.lib_name}:{self.test_case_name}'
+
+    @property
     def build_target(self) -> BuildTarget:
         return self.test_suite.build_target
     
@@ -478,6 +482,10 @@ class CpuTestCaseTarget:
 class CudaTestCaseTarget:
     test_suite: CudaTestSuiteTarget
     test_case_name: str
+
+    @property
+    def full_name(self) -> str:
+        return f'{self.test_suite.lib_name}:{self.test_case_name}'
 
     @property
     def build_target(self) -> BuildTarget:

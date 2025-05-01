@@ -3,6 +3,7 @@ from typing import (
     Iterator,
     Union,
     Iterable,
+    Tuple,
 )
 from .targets import (
     CpuTestSuiteTarget,
@@ -28,6 +29,15 @@ from .utils import (
     concatmap,
 )
 import itertools
+from dataclasses import (
+    dataclass,
+)
+from .progressbar import (
+    get_progress_manager,
+)
+from .terminal_colors import (
+    TermColor,
+)
 
 _l = logging.getLogger(__name__)
 
@@ -116,38 +126,104 @@ def resolve_test_case_target_using_build(
             assert has_cuda_test_with_matching_name
             return test_case.cuda_test_case
 
+@dataclass(frozen=True, eq=True)
+class TestCaseResult:
+    did_pass: bool
+    stderr: bytes
+    stdout: bytes
+
 def run_test_case(
     config: ProjectConfig, 
     test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget], 
     build_dir: Path, 
     debug: bool,
-) -> None:
+) -> TestCaseResult:
     _l.info('Running test case %s', test_case)
 
-    subprocess.check_call(
-        config.cmd_for_run_target(test_case.run_target),
-        stderr=sys.stdout,
+    completed_process = subprocess.run(
+        command=config.cmd_for_run_target(test_case.run_target),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         cwd=build_dir,
         env=os.environ,
     )
+
+    return TestCaseResult(
+        did_pass=(completed_process.returncode == 0),
+        stderr=completed_process.stderr,
+        stdout=completed_process.stdout,
+    )
+
+@dataclass(frozen=True, eq=True)
+class TestStatistics:
+    passed: Tuple[Union[CpuTestCaseTarget, CudaTestCaseTarget], ...]
+    failed: Tuple[Union[CpuTestCaseTarget, CudaTestCaseTarget], ...]
+
+def report_test_failure(
+    test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget],
+    test_case_result: TestCaseResult,
+) -> None:
+    assert not test_case_result.did_pass
+
+    test_name_pretty = f'{test_case.test_suite.lib_name}:{test_case.test_case_name}'
+    header_line = ''.join([
+        TermColor.RED,
+        f'----FAILED {test_name_pretty}'.ljust(80, '-'),
+        TermColor.END,
+    ])
+    debug_line = f"----To debug, run: proj test --debug '{test_name_pretty}' ".ljust(80, '-')
+    
+    def msg(s: Union[str, bytes]) -> None:
+        if isinstance(s, str):
+            sys.stdout.write(s)
+        else:
+            assert isinstance(s, bytes)
+            sys.stdout.buffer.write(s)
+        sys.stdout.flush()
+
+    msg(header_line + '\n')
+    msg(debug_line + '\n')
+    msg('STDOUT:\n')
+    msg(test_case_result.stdout)
+    msg('STDERR:\n')
+    msg(test_case_result.stderr)
+
+
 
 def run_test_suites(
     config: ProjectConfig,
     test_suites: Sequence[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]], 
     build_dir: Path, 
     debug: bool,
-) -> None:
+) -> TestStatistics:
     _l.info('Running test suites %s', test_suites)
 
-    test_cases = list_test_cases_in_test_suites(
+    test_cases = tuple(list_test_cases_in_test_suites(
         test_suites=test_suites,
         build_dir=build_dir,
-    )
+    ))
 
-    for test_case in test_cases:
-        run_test_case(
-            config=config,
-            test_case=test_case,
-            build_dir=build_dir,
-            debug=debug,
-        )
+    passed = []
+    failed = []
+
+    manager = get_progress_manager()
+    with manager.counter(total=len(test_cases), desc='tests') as pbar:
+        for test_case in test_cases:
+            test_case_result = run_test_case(
+                config=config,
+                test_case=test_case,
+                build_dir=build_dir,
+                debug=debug,
+            )
+            pbar.update()
+            if test_case_result.did_pass:
+                passed.append(test_case)
+            else:
+                failed.append(test_case)
+
+                report_test_failure(test_case, test_case_result)
+
+    return TestStatistics(
+        passed=tuple(passed),
+        failed=tuple(failed),
+    )

@@ -78,6 +78,7 @@ from .testing import (
     run_test_suites,
     run_test_case,
     resolve_test_case_target_using_build,
+    report_test_failure,
 )
 from .checks import (
     Check,
@@ -98,6 +99,7 @@ _l = logging.getLogger(name='proj')
 DIR = Path(__file__).resolve().parent
 
 STATUS_OK = 0
+STATUS_ERR = 1
 
 @dataclass(frozen=True)
 class MainRootArgs:
@@ -454,12 +456,23 @@ def main_test(args: MainTestArgs) -> int:
         return t
 
     if len(get_test_cases(requested_test_targets_to_run)) == 0:
-        run_test_suites(
+        test_statistics = run_test_suites(
             config=config, 
             test_suites=get_test_suites(requested_test_targets_to_run), 
             build_dir=build_dir, 
             debug=args.debug
         )
+        num_passed = len(test_statistics.passed)
+        num_failed = len(test_statistics.failed)
+        print(f'Test results: {num_passed} passed / {num_failed} failed / {num_passed + num_failed} total')
+        if num_failed > 0:
+            fail_with_error('\n'.join([
+                'The following tests failed:',
+                *[
+                    '- ' + tc.full_name for tc in test_statistics.failed
+                ]
+            ]))
+
     else:
         assert len(get_test_suites(requested_test_targets_to_run)) == 0
 
@@ -473,12 +486,15 @@ def main_test(args: MainTestArgs) -> int:
         elif isinstance(only_to_run, CudaTestCaseTarget) and not has_cuda:
             cuda_failure()
         else:
-            run_test_case(
+            test_case_result = run_test_case(
                 config=config, 
                 test_case=only_to_run, 
                 build_dir=build_dir, 
                 debug=args.debug,
             )
+            if not test_case_result.did_pass:
+                report_test_failure(only_to_run, test_case_result)
+                return STATUS_ERR
 
     if args.coverage:
         postprocess_coverage_data(config=config)
