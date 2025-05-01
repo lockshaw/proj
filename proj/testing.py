@@ -207,7 +207,7 @@ def run_test_suites(
     failed = []
 
     manager = get_progress_manager()
-    with manager.counter(total=len(test_cases), desc='tests') as pbar:
+    with manager.counter(total=len(test_cases), desc='Running tests') as pbar:
         for test_case in test_cases:
             test_case_result = run_test_case(
                 config=config,

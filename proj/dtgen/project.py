@@ -137,7 +137,7 @@ def needs_generate_to_path(spec_path: Path, root: Path, out: Path) -> bool:
 
 def generate_header(spec: Union[StructSpec, EnumSpec, VariantSpec], spec_path: Path, root: Path, out: Path, force: bool) -> bool:
     if not (force or needs_generate_to_path(spec_path=spec_path, root=root, out=out)):
-        _l.info(f'No generation needed for {spec_path.relative_to(root)} -> {out.relative_to(root)}')
+        _l.debug(f'No generation needed for {spec_path.relative_to(root)} -> {out.relative_to(root)}')
         return False
 
     _l.info(f'Regenerating {spec_path.relative_to(root)} -> {out.relative_to(root)}')
