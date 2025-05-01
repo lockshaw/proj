@@ -144,7 +144,7 @@ def run_test_case(
         command=config.cmd_for_run_target(test_case.run_target),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        cwd=build_dir,
+        cwd=build_dir / test_case.run_target.executable_path.parent,
         env=os.environ,
     )
 

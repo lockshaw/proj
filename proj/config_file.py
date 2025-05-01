@@ -312,7 +312,7 @@ class ProjectConfig:
             return self._cuda_launch_cmd
 
     def cmd_for_run_target(self, run_target: Union[CpuRunTarget, CudaRunTarget]) -> Tuple[str, ...]:
-        cmd = tuple([str(run_target.executable_path), '--force-colors', *run_target.args])
+        cmd = tuple([f'./{run_target.executable_path.name}', '--no-intro', '--no-version', '--force-colors', *run_target.args])
         if isinstance(run_target, CudaRunTarget):
             cmd = self.cuda_launch_cmd + cmd
         return cmd

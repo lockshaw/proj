@@ -1,0 +1,11 @@
+project_name = "test-env-project"
+testsuite_macro = "TP_TEST_SUITE"
+namespace_name = "TestEnvProject"
+header_extension = ".h"
+
+[targets.test-env]
+type = "lib"
+has-cpu-only-tests = true
+has-cpu-only-benchmarks = false
+has-cuda-tests = false
+has-cuda-benchmarks = false

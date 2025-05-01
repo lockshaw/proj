@@ -170,8 +170,8 @@ def hook_stdout(command, *, stdout_hook, **kwargs):
 def run(command: Sequence[str], stdout: Optional[Union[IO[bytes], IO[str], int]]=None, stderr: Optional[Union[IO[bytes], IO[str], int]]=None, text: bool=False, shell: bool = False, env: Optional[Mapping[str, str]] = None, cwd: Optional[Path] = None, check: bool = False) -> CompletedProcess:
     if not shell:
         pretty_cmd = " ".join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
+        _l.info(f"+++ $ {pretty_cmd} (cwd = {cwd})")
     else:
         pretty_cmd = shlex.join(command)
-        _l.info(f"+++ $ {pretty_cmd}")
+        _l.info(f"+++ $ {pretty_cmd} (cwd = {cwd})")
     return subprocess.run(command, stdout=stdout, stderr=stderr, text=text, shell=shell, env=env, cwd=cwd, check=check)
