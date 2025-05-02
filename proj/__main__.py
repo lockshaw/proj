@@ -703,6 +703,7 @@ def make_parser() -> argparse.ArgumentParser:
     add_verbosity_args(cmake_p)
 
     dtgen_p = subparsers.add_parser('dtgen')
+    set_main_signature(dtgen_p, main_dtgen, MainDtgenArgs)
     dtgen_p.add_argument('--force', action='store_true', help='Disable incremental toml->c++ generation')
     dtgen_p.add_argument('files', nargs='*', type=Path)
     add_verbosity_args(dtgen_p)
