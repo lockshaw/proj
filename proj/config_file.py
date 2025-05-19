@@ -613,14 +613,20 @@ class PathInfo:
     include: Path
     public_header: HeaderInfo
     private_header: HeaderInfo
+    header: Optional[Path]
     source: Path
+    test_source: Optional[Path]
+    benchmark_source: Optional[Path]
 
     def json(self) -> Json:
         return {
             'include': str(self.include),
             'public_header': self.public_header.json(),
             'private_header': self.private_header.json(),
+            'header': map_optional(self.header, str),
             'source': str(self.source),
+            'test_source': map_optional(self.test_source, str),
+            'benchmark_source': map_optional(self.benchmark_source, str),
         }
 
 def get_path_info(p: Path) -> PathInfo:
@@ -630,7 +636,10 @@ def get_path_info(p: Path) -> PathInfo:
         include=get_include_path(p),
         public_header=public_header_info,
         private_header=private_header_info,
+        header=try_get_header_path(p),
         source=get_source_path(p),
+        test_source=get_test_source_path(p),
+        benchmark_source=get_benchmark_source_path(p),
     )
 
 def get_subrelpath(p: Path, config: Optional[ProjectConfig] = None) -> Path:
@@ -668,6 +677,8 @@ def get_possible_spec_paths(p: Path) -> Iterator[Path]:
 class LibInfo:
     include_dir: Path
     src_dir: Path
+    test_dir: Optional[Path]
+    benchmark_dir: Optional[Path]
 
 def get_lib_info(p: Path) -> LibInfo:
     p = Path(p).absolute()
@@ -677,12 +688,29 @@ def get_lib_info(p: Path) -> LibInfo:
 
     include_dir = sublib_root / 'include'
     assert include_dir.is_dir()
+
     src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
+
+    test_dir = sublib_root / 'test'
+    rel_test_dir: Optional[Path]
+    if test_dir.is_dir():
+        rel_test_dir = test_dir.relative_to(config_root)
+    else:
+        rel_test_dir = None
+
+    benchmark_dir = sublib_root / 'benchmark'
+    rel_benchmark_dir: Optional[Path]
+    if benchmark_dir.is_dir():
+        rel_benchmark_dir = benchmark_dir.relative_to(config_root)
+    else:
+        rel_benchmark_dir = None
 
     return LibInfo(
         include_dir=include_dir.relative_to(config_root),
         src_dir=src_dir.relative_to(config_root),
+        test_dir=rel_test_dir,
+        benchmark_dir=rel_benchmark_dir,
     )
 
 def get_public_header_path(p: Path) -> Path:
@@ -719,6 +747,12 @@ def get_private_header_info(p: Path) -> HeaderInfo:
         ifndef=gen_ifndef_uid(path),
     )
 
+def try_get_header_path(p: Path) -> Optional[Path]:
+    try:
+        return get_header_path(p)
+    except RuntimeError:
+        return None
+
 def get_header_path(p: Path) -> Path:
     config = get_config(p)
 
@@ -734,7 +768,7 @@ def get_header_path(p: Path) -> Path:
     elif private_include.exists():
         return private_include
     else:
-        raise ValueError([public_include, private_include])
+        raise RuntimeError([public_include, private_include])
 
 def get_include_path(p: Path) -> Path:
     lib_info = get_lib_info(p)
@@ -747,6 +781,26 @@ def get_source_path(p: Path) -> Path:
     lib_info = get_lib_info(p)
 
     return lib_info.src_dir / with_suffix_appended(get_subrelpath(p), '.cc')
+
+def get_test_source_path(p: Path) -> Optional[Path]:
+    p = Path(p).absolute()
+
+    lib_info = get_lib_info(p)
+
+    if lib_info.test_dir is None:
+        return None
+    else:
+        return lib_info.test_dir / 'src' / with_suffix_appended(get_subrelpath(p), '.cc')
+
+def get_benchmark_source_path(p: Path) -> Optional[Path]:
+    p = Path(p).absolute()
+
+    lib_info = get_lib_info(p)
+
+    if lib_info.benchmark_dir is None:
+        return None
+    else:
+        return lib_info.benchmark_dir / 'src' / with_suffix_appended(get_subrelpath(p), '.cc')
 
 def dump_config(cfg: ProjectConfig) -> Json:
     return {

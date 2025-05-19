@@ -556,8 +556,11 @@ def test_query_path() -> None:
                 'path': 'lib/lib1/src/lib1/lib1.h',
                 'ifndef': '_TEST_PROJECT_1_LIB_LIB1_SRC_LIB1_LIB1_H',
             },
+            'header': 'lib/lib1/include/lib1/lib1.h',
             'source': 'lib/lib1/src/lib1/lib1.cc',
             'include': 'lib1/lib1.h',
+            'test_source': 'lib/lib1/test/src/lib1/lib1.cc',
+            'benchmark_source': 'lib/lib1/benchmark/src/lib1/lib1.cc',
         }
 
 @pytest.mark.e2e
