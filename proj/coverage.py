@@ -7,8 +7,8 @@ from .browser import open_in_browser
 
 _l = logging.getLogger(__name__)
 
-def postprocess_coverage_data(config):
-    cwd = config.cov_dir
+def postprocess_coverage_data(config: ProjectConfig) -> None:
+    cwd = config.coverage_build_dir
 
     subprocess.run(
         [

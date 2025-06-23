@@ -22,6 +22,7 @@
 , nlohmann_json
 , fmt
 , tree
+, lcov
 # TODO use these if we ever update nixpkgs
 # , writableTmpDirAsHomeHook
 # , addBinAsPathHook
@@ -39,6 +40,7 @@ let
     ccache
     compdb
     cmake
+    lcov
   ];
 in 
 buildPythonApplication {

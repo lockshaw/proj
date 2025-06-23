@@ -220,6 +220,28 @@ def test_test_all() -> None:
 
 @pytest.mark.e2e
 @pytest.mark.slow
+def test_test_all_with_coverage() -> None:
+    with cmade_project_instance() as d:
+        cmd = [
+            'test',
+            '-j1',
+            '--coverage',
+        ]
+        check_cmd_succeeds(d, cmd)
+
+        for fail_key in [
+            'PROJ_TESTS_FAIL_LIB1_CALL_LIB1',
+            'PROJ_TESTS_FAIL_LIB1_OTHER_LIB1',
+            'PROJ_TESTS_FAIL_LIB2_CALL_LIB2',
+            'PROJ_TESTS_FAIL_LIB2_OTHER_LIB2',
+        ]:
+            check_cmd_fails(d, cmd, env={
+                fail_key: 'y'
+            })
+
+
+@pytest.mark.e2e
+@pytest.mark.slow
 def test_test_test_suite() -> None:
     with cmade_project_instance() as d:
         cmd = [

@@ -71,6 +71,7 @@
               fmt
               cmake
               gbenchmark
+              lcov
             ])
             (with pkgs.python3Packages; [
               pip
