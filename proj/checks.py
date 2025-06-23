@@ -1,3 +1,10 @@
+from typing import (
+    Optional,
+    Sequence,
+)
+from os import (
+    PathLike,
+)
 from enum import (
     StrEnum,
 )
@@ -5,7 +12,7 @@ from .config_file import (
     ProjectConfig,
 )
 from .format import (
-    run_formatter_check,
+    run_formatter_check as _run_formatter_check,
 )
 from .dtgen import (
     run_dtgen,
@@ -23,7 +30,9 @@ from .testing import (
 import logging
 from .failure import (
     fail_without_error,
+    fail_with_error,
 )
+from . import subprocess_trace as subprocess
 
 _l = logging.getLogger(__name__)
 
@@ -31,6 +40,12 @@ class Check(StrEnum):
     FORMAT = 'format'
     CPU_CI = 'cpu-ci'
     GPU_CI = 'gpu-ci'
+
+def run_formatter_check(config: ProjectConfig, files: Optional[Sequence[PathLike[str]]] = None) -> None:
+    try:
+        _run_formatter_check(config=config, files=files)
+    except subprocess.CalledProcessError:
+        fail_with_error("Formatter check failed. You should probably run 'proj format'")
 
 def run_check(config: ProjectConfig, check: Check, verbosity: int) -> None:
     if check == Check.FORMAT:
