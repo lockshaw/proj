@@ -6,6 +6,7 @@
 , setuptools
 , pytest-skip-slow
 , pytest
+, nclib
 , valgrind
 , kcachegrind
 , ff-clang-format
@@ -23,6 +24,7 @@
 , fmt
 , tree
 , lcov
+, gdb
 # TODO use these if we ever update nixpkgs
 # , writableTmpDirAsHomeHook
 # , addBinAsPathHook
@@ -41,6 +43,7 @@ let
     compdb
     cmake
     lcov
+    gdb
   ];
 in 
 buildPythonApplication {
@@ -83,5 +86,6 @@ buildPythonApplication {
     pytest
     pytest-skip-slow
     mypy
+    nclib
   ] ++ bins;
 }

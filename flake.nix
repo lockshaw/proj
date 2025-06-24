@@ -72,6 +72,7 @@
               cmake
               gbenchmark
               lcov
+              gdb
             ])
             (with pkgs.python3Packages; [
               pip
@@ -83,6 +84,7 @@
               black
               toml
               pytest
+              nclib
             ])
             (with self.packages.${system}; [
               rapidcheckFull

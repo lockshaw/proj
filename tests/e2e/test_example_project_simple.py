@@ -1,9 +1,12 @@
 import pytest
+import os
 from contextlib import contextmanager
+import nclib
 from pathlib import Path
 from typing import (
     Iterator,
     Iterable,
+    Mapping,
 )
 from proj.targets import (
     BuildTarget,
@@ -239,7 +242,6 @@ def test_test_all_with_coverage() -> None:
                 fail_key: 'y'
             })
 
-
 @pytest.mark.e2e
 @pytest.mark.slow
 def test_test_test_suite() -> None:
@@ -280,6 +282,40 @@ def test_test_test_case() -> None:
             'PROJ_TESTS_FAIL_LIB2_OTHER_LIB2': 'y',
         })
         check_cmd_fails(d, cmd, env={
+            'PROJ_TESTS_FAIL_LIB2_CALL_LIB2': 'y',
+        })
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_test_test_case_debug() -> None:
+    with cmade_project_instance() as d:
+        def cmd_succeeds(env: Mapping[str, str]) -> bool:
+            p = nclib.Process(
+                [
+                    'proj',
+                    'test',
+                    '-j1',
+                    '--debug',
+                    'lib2:call_lib2',
+                ],
+                cwd=d,
+                verbose=True,
+                env={**os.environ, **env},
+            )
+
+            p.recv_until('(gdb) ')
+            p.sendline('r')
+            p.recv_until(') exited normally]', timeout=0.1)
+            exited_normally = not p.timed_out
+            p.kill()
+            return exited_normally
+
+        assert cmd_succeeds({
+            'PROJ_TESTS_FAIL_LIB1_CALL_LIB1': 'y',
+            'PROJ_TESTS_FAIL_LIB1_OTHER_LIB1': 'y',
+            'PROJ_TESTS_FAIL_LIB2_OTHER_LIB2': 'y',
+        })
+        assert not cmd_succeeds({
             'PROJ_TESTS_FAIL_LIB2_CALL_LIB2': 'y',
         })
 

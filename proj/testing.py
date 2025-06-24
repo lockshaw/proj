@@ -140,19 +140,35 @@ def run_test_case(
 ) -> TestCaseResult:
     _l.info('Running test case %s', test_case)
 
-    completed_process = subprocess.run(
-        command=config.cmd_for_run_target(test_case.run_target),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=build_dir / test_case.run_target.executable_path.parent,
-        env=os.environ,
-    )
+    cmd = config.cmd_for_run_target(test_case.run_target)
+    cwd = build_dir / test_case.run_target.executable_path.parent
+    env = os.environ
 
-    return TestCaseResult(
-        did_pass=(completed_process.returncode == 0),
-        stderr=completed_process.stderr,
-        stdout=completed_process.stdout,
-    )
+    if debug:
+        subprocess.check_call(
+            command=[
+                'gdb',
+                '--args',
+                *cmd,
+            ],
+            cwd=cwd,
+            env=env,
+        )
+        sys.exit(0)
+    else:
+        completed_process = subprocess.run(
+            command=cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd,
+            env=env,
+        )
+
+        return TestCaseResult(
+            did_pass=(completed_process.returncode == 0),
+            stderr=completed_process.stderr,
+            stdout=completed_process.stdout,
+        )
 
 @dataclass(frozen=True, eq=True)
 class TestStatistics:
