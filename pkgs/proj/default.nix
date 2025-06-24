@@ -43,7 +43,6 @@ let
     compdb
     cmake
     lcov
-    gdb
   ];
 in 
 buildPythonApplication {
@@ -87,5 +86,6 @@ buildPythonApplication {
     pytest-skip-slow
     mypy
     nclib
+    gdb
   ] ++ bins;
 }
