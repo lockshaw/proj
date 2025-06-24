@@ -115,7 +115,6 @@ def resolve_test_case_target_using_build(
             all_test_cases_in_suite
             if isinstance(t, CudaTestCaseTarget)
         ]
-        print(cpu_test_case_names, cuda_test_case_names)
         has_cpu_test_with_matching_name = test_case.test_case_name in cpu_test_case_names
         has_cuda_test_with_matching_name = test_case.test_case_name in cuda_test_case_names
         assert has_cpu_test_with_matching_name or has_cuda_test_with_matching_name
