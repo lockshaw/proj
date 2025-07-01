@@ -595,9 +595,25 @@ def test_config_subcommand() -> None:
         }
 
 
+LIB1_QUERY_JSON_OUTPUT = {
+    'public_header': {
+        'path': 'lib/lib1/include/lib1/lib1.h',
+        'ifndef': '_TEST_PROJECT_1_LIB_LIB1_INCLUDE_LIB1_LIB1_H',
+    },
+    'private_header': {
+        'path': 'lib/lib1/src/lib1/lib1.h',
+        'ifndef': '_TEST_PROJECT_1_LIB_LIB1_SRC_LIB1_LIB1_H',
+    },
+    'header': 'lib/lib1/include/lib1/lib1.h',
+    'source': 'lib/lib1/src/lib1/lib1.cc',
+    'include': 'lib1/lib1.h',
+    'test_source': 'lib/lib1/test/src/lib1/lib1.cc',
+    'benchmark_source': 'lib/lib1/benchmark/src/lib1/lib1.cc',
+}
+
 @pytest.mark.e2e
 @pytest.mark.slow
-def test_query_path() -> None:
+def test_query_path_for_header() -> None:
     with project_instance() as d:
         result = require_successful(run(d, [
             'query-path',
@@ -605,21 +621,31 @@ def test_query_path() -> None:
         ]))
 
         out = json.loads(result.stdout)
-        assert out == {
-            'public_header': {
-                'path': 'lib/lib1/include/lib1/lib1.h',
-                'ifndef': '_TEST_PROJECT_1_LIB_LIB1_INCLUDE_LIB1_LIB1_H',
-            },
-            'private_header': {
-                'path': 'lib/lib1/src/lib1/lib1.h',
-                'ifndef': '_TEST_PROJECT_1_LIB_LIB1_SRC_LIB1_LIB1_H',
-            },
-            'header': 'lib/lib1/include/lib1/lib1.h',
-            'source': 'lib/lib1/src/lib1/lib1.cc',
-            'include': 'lib1/lib1.h',
-            'test_source': 'lib/lib1/test/src/lib1/lib1.cc',
-            'benchmark_source': 'lib/lib1/benchmark/src/lib1/lib1.cc',
-        }
+        assert out == LIB1_QUERY_JSON_OUTPUT
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_query_path_for_src() -> None:
+    with project_instance() as d:
+        result = require_successful(run(d, [
+            'query-path',
+            './lib/lib1/src/lib1/lib1.cc',
+        ]))
+
+        out = json.loads(result.stdout)
+        assert out == LIB1_QUERY_JSON_OUTPUT
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_query_path_for_test_src() -> None:
+    with project_instance() as d:
+        result = require_successful(run(d, [
+            'query-path',
+            './lib/lib1/test/src/lib1/lib1.cc',
+        ]))
+
+        out = json.loads(result.stdout)
+        assert out == LIB1_QUERY_JSON_OUTPUT
 
 @pytest.mark.e2e
 @pytest.mark.slow

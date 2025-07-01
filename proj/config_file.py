@@ -649,16 +649,28 @@ def get_subrelpath(p: Path, config: Optional[ProjectConfig] = None) -> Path:
 
     sublib_root = get_sublib_root(p)
     assert sublib_root is not None
+
     include_dir = sublib_root / 'include'
     assert include_dir.is_dir()
+
     src_dir = sublib_root / 'src'
     assert src_dir.is_dir()
+
+    test_src_dir = sublib_root / 'test/src'
+    if test_src_dir.exists():
+        assert test_src_dir.is_dir()
+
+    base_dir: Path
     if p.is_relative_to(src_dir):
-        return with_project_specific_extension_removed(p.relative_to(src_dir), config=config)
+        base_dir = src_dir
     elif p.is_relative_to(include_dir):
-        return with_project_specific_extension_removed(p.relative_to(include_dir), config=config)
+        base_dir = include_dir
+    elif p.is_relative_to(test_src_dir):
+        base_dir = test_src_dir
     else:
         raise ValueError(f'Path {p} not relative to either src or include')
+
+    return with_project_specific_extension_removed(p.relative_to(base_dir), config=config)
 
 def get_possible_spec_paths(p: Path) -> Iterator[Path]:
     p = Path(p).absolute()
