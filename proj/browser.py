@@ -6,6 +6,7 @@ from typing import (
     Union,
 )
 
+
 def open_in_browser(p: Union[str, Path], cwd: Optional[Path] = None) -> None:
     _p = Path(p)
     subprocess.run(

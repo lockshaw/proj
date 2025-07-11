@@ -16,6 +16,7 @@ from .json import (
     require_path,
 )
 
+
 @dataclass(frozen=True, order=True)
 class Entry:
     directory: Path
@@ -23,18 +24,20 @@ class Entry:
     file: Path
 
     @staticmethod
-    def from_json(j: Json) -> 'Entry':
+    def from_json(j: Json) -> "Entry":
         assert isinstance(j, dict)
 
         return Entry(
-            directory=require_path(j['path']),
-            command=require_str(j['command']),
-            file=require_path(j['path']),
+            directory=require_path(j["path"]),
+            command=require_str(j["command"]),
+            file=require_path(j["path"]),
         )
+
 
 @dataclass(frozen=True)
 class Template:
     apply: Callable[[Entry], Entry]
+
 
 @functools.cache
 def load_options_file(p: Path) -> List[str]:
@@ -52,9 +55,10 @@ def get_relpath(entry: Entry, base_dir: Path) -> Path:
 def apply_template(template: Entry, entry: Entry, base_dir: Path) -> Entry:
     template_relpath = get_relpath(template, base_dir)
     entry_relpath = get_relpath(entry, base_dir)
-    return replace(entry, command=template.command.replace(
-        str(template_relpath), str(entry_relpath)
-    ),)
+    return replace(
+        entry,
+        command=template.command.replace(str(template_relpath), str(entry_relpath)),
+    )
 
 
 def find_template(entries: Iterable[Entry], base_dir: Path) -> Template:
@@ -64,7 +68,10 @@ def find_template(entries: Iterable[Entry], base_dir: Path) -> Template:
             Path(command[0]).stem in ["clang++", "g++"]
             and Path(entry.directory).stem == "kernels"
         ):
-            def _apply(e: Entry, base_dir: Path=base_dir, template: Entry = entry) -> Entry:
+
+            def _apply(
+                e: Entry, base_dir: Path = base_dir, template: Entry = entry
+            ) -> Entry:
                 return apply_template(template, e, base_dir)
 
             return Template(_apply)

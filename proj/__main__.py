@@ -79,6 +79,7 @@ from .testing import (
     run_test_case,
     resolve_test_case_target_using_build,
     report_test_failure,
+    report_test_success,
 )
 from .checks import (
     Check,
@@ -94,32 +95,37 @@ from .target_resolution import (
     fully_resolve_run_target,
 )
 
-_l = logging.getLogger(name='proj')
+_l = logging.getLogger(name="proj")
 
 DIR = Path(__file__).resolve().parent
 
 STATUS_OK = 0
 STATUS_ERR = 1
 
+
 @dataclass(frozen=True)
 class MainRootArgs:
     path: Path
     verbosity: int
+
 
 def main_root(args: MainRootArgs) -> int:
     config_root = get_config_root(args.path)
     print(config_root)
     return STATUS_OK
 
+
 @dataclass(frozen=True)
 class MainConfigArgs:
     path: Path
     verbosity: int
 
+
 def main_config(args: MainConfigArgs) -> int:
     config = get_config(args.path)
     json.dump(dump_config(config), sort_keys=True, indent=2, fp=sys.stdout)
     return STATUS_OK
+
 
 @dataclass(frozen=True)
 class MainQueryPathArgs:
@@ -127,17 +133,20 @@ class MainQueryPathArgs:
     verbosity: int
     file: Path
 
+
 def main_query_path(args: MainQueryPathArgs) -> int:
     path_info = get_path_info(args.file)
     json.dump(path_info.json(), sort_keys=True, indent=2, fp=sys.stdout)
     return STATUS_OK
 
+
 def xdg_open(path: Path) -> None:
     subprocess.check_call(
-        ['xdg-open', str(path)],
+        ["xdg-open", str(path)],
         stderr=sys.stdout,
         env=os.environ,
     )
+
 
 @dataclass(frozen=True)
 class MainCmakeArgs:
@@ -146,6 +155,7 @@ class MainCmakeArgs:
     trace: bool
     dtgen_skip: bool
     verbosity: int
+
 
 def main_cmake(args: MainCmakeArgs) -> int:
     config = get_config(args.path)
@@ -160,6 +170,7 @@ def main_cmake(args: MainCmakeArgs) -> int:
     cmake_all(config=config, fast=args.fast, trace=args.trace)
     return 0
 
+
 @dataclass(frozen=True)
 class MainBuildArgs:
     path: Path
@@ -169,6 +180,7 @@ class MainBuildArgs:
     targets: Collection[BuildTarget]
     release: bool
 
+
 def main_build(args: MainBuildArgs) -> int:
     config = get_config(args.path)
 
@@ -176,7 +188,7 @@ def main_build(args: MainBuildArgs) -> int:
         build_dir = config.release_build_dir
     else:
         build_dir = config.debug_build_dir
-    
+
     if not build_dir.exists():
         cmake_all(config=config, fast=False, trace=False)
 
@@ -196,6 +208,7 @@ def main_build(args: MainBuildArgs) -> int:
     )
     return 0
 
+
 @dataclass(frozen=True)
 class MainBenchmarkArgs:
     path: Path
@@ -207,8 +220,9 @@ class MainBenchmarkArgs:
     upload: bool
     browser: bool
 
+
 def main_benchmark(args: MainBenchmarkArgs) -> int:
-    _l.debug('Running main_benchmark for args: %s', args)
+    _l.debug("Running main_benchmark for args: %s", args)
     config = get_config(args.path)
 
     requested_benchmark_targets: List[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]]
@@ -216,7 +230,9 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
         requested_benchmark_targets = list(config.default_benchmark_targets)
     else:
         requested_benchmark_targets = list(args.targets)
-    _l.debug('Determined requested benchmark targets to be: %s', requested_benchmark_targets)
+    _l.debug(
+        "Determined requested benchmark targets to be: %s", requested_benchmark_targets
+    )
 
     # build_run_plan = infer_build_run_plan(
     #     requested_targets=requested_benchmark_targets,
@@ -235,7 +251,7 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
     #     )
 
     if len(requested_benchmark_targets) == 0:
-        fail_with_error('No benchmark targets available to run')
+        fail_with_error("No benchmark targets available to run")
 
     build_targets(
         config=config,
@@ -246,12 +262,15 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
         build_dir=config.release_build_dir,
     )
 
-    benchmark_result = call_benchmarks(requested_benchmark_targets, config.release_build_dir)
+    benchmark_result = call_benchmarks(
+        requested_benchmark_targets, config.release_build_dir
+    )
     pretty_print_benchmark(benchmark_result, f=sys.stdout)
     if args.upload:
         upload_to_bencher(config, benchmark_result, browser=args.browser)
 
     return 0
+
 
 @dataclass(frozen=True)
 class MainRunArgs:
@@ -269,6 +288,7 @@ class MainRunArgs:
     skip_gpu: bool
     target_run_args: Sequence[str]
 
+
 def main_run(args: MainRunArgs) -> int:
     config = get_config(args.path)
 
@@ -278,10 +298,10 @@ def main_run(args: MainRunArgs) -> int:
         build_dir = config.release_build_dir
 
     run_target = fully_resolve_run_target(
-        config=config, 
-        build_dir=build_dir, 
-        unresolved_target=args.target, 
-        jobs=args.jobs, 
+        config=config,
+        build_dir=build_dir,
+        unresolved_target=args.target,
+        jobs=args.jobs,
         verbosity=args.verbosity,
         skip_gpu=args.skip_gpu,
     )
@@ -293,6 +313,7 @@ def main_run(args: MainRunArgs) -> int:
     result = subprocess.run(cmd)
     print(result)
     return result.returncode
+
 
 @dataclass(frozen=True)
 class MainProfileArgs:
@@ -312,21 +333,24 @@ class MainProfileArgs:
     ]
     target_run_args: Sequence[str]
 
+
 def main_profile(args: MainProfileArgs) -> int:
     config = get_config(args.path)
 
     build_dir = config.release_build_dir
 
     resolved_target = fully_resolve_run_target(
-        config=config, 
-        build_dir=build_dir, 
-        unresolved_target=args.target, 
-        jobs=args.jobs, 
-        verbosity=args.verbosity, 
+        config=config,
+        build_dir=build_dir,
+        unresolved_target=args.target,
+        jobs=args.jobs,
+        verbosity=args.verbosity,
         skip_gpu=args.skip_gpu,
     )
 
-    profile_file = profile_target(build_dir, resolved_target, dry_run=args.dry_run, tool=args.tool)
+    profile_file = profile_target(
+        build_dir, resolved_target, dry_run=args.dry_run, tool=args.tool
+    )
     if args.gui:
         visualize_profile(profile_file, tool=args.tool)
     else:
@@ -348,6 +372,7 @@ class MainTestArgs:
     skip_gpu_tests: bool
     targets: Collection[Union[GenericTestSuiteTarget, GenericTestCaseTarget]]
 
+
 def main_test(args: MainTestArgs) -> int:
     assert isinstance(args, MainTestArgs)
 
@@ -361,75 +386,106 @@ def main_test(args: MainTestArgs) -> int:
     if not build_dir.exists():
         cmake_all(config=config, fast=False, trace=False)
 
-    requested_test_targets: List[Union[
-        MixedTestSuiteTarget, 
-        CpuTestSuiteTarget, 
-        CudaTestSuiteTarget, 
-        CpuTestCaseTarget, 
-        CudaTestCaseTarget, 
-        GenericTestCaseTarget
-    ]]
+    requested_test_targets: List[
+        Union[
+            MixedTestSuiteTarget,
+            CpuTestSuiteTarget,
+            CudaTestSuiteTarget,
+            CpuTestCaseTarget,
+            CudaTestCaseTarget,
+            GenericTestCaseTarget,
+        ]
+    ]
     if len(args.targets) == 0:
         requested_test_targets = list(config.default_test_targets)
     else:
         requested_test_targets = [resolve_test_target(config, t) for t in args.targets]
 
-    def get_test_cases(x: Iterable[Any]) -> List[Union[CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]]:
+    def get_test_cases(
+        x: Iterable[Any],
+    ) -> List[Union[CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget]]:
         return [
-            t for t in x if isinstance(t, (CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget))
+            t
+            for t in x
+            if isinstance(
+                t, (CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget)
+            )
         ]
 
-    def get_test_suites(x: Iterable[Any]) -> List[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]]:
+    def get_test_suites(
+        x: Iterable[Any],
+    ) -> List[Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]]:
         return [
-            t for t in x if isinstance(t, (MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget))
+            t
+            for t in x
+            if isinstance(
+                t, (MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget)
+            )
         ]
 
     if args.skip_gpu_tests:
+
         def remove_gpu_tests(
             t: Union[
-                MixedTestSuiteTarget, 
+                MixedTestSuiteTarget,
                 CpuTestSuiteTarget,
                 CudaTestSuiteTarget,
                 CpuTestCaseTarget,
                 CudaTestCaseTarget,
                 GenericTestCaseTarget,
             ],
-        ) -> Optional[Union[CpuTestSuiteTarget, CpuTestCaseTarget, GenericTestCaseTarget]]:
-            if isinstance(t, (CpuTestSuiteTarget, CpuTestCaseTarget, GenericTestCaseTarget)):
+        ) -> Optional[
+            Union[CpuTestSuiteTarget, CpuTestCaseTarget, GenericTestCaseTarget]
+        ]:
+            if isinstance(
+                t, (CpuTestSuiteTarget, CpuTestCaseTarget, GenericTestCaseTarget)
+            ):
                 return t
             elif isinstance(t, MixedTestSuiteTarget):
                 return t.cpu_test_suite_target
             else:
                 return None
 
-        requested_test_targets_to_run = list(filtermap(requested_test_targets, remove_gpu_tests))
-        _l.info('Filtering test targets to remove gpu tests')
-        _l.info('  unfiltered: %s', requested_test_targets)
-        _l.info('  filtered:   %s', requested_test_targets_to_run)
+        requested_test_targets_to_run = list(
+            filtermap(requested_test_targets, remove_gpu_tests)
+        )
+        _l.info("Filtering test targets to remove gpu tests")
+        _l.info("  unfiltered: %s", requested_test_targets)
+        _l.info("  filtered:   %s", requested_test_targets_to_run)
     else:
-        _l.info('Skipping test target filtering as --skip-gpu-tests argument was not passed')
+        _l.info(
+            "Skipping test target filtering as --skip-gpu-tests argument was not passed"
+        )
         requested_test_targets_to_run = list(requested_test_targets)
 
     if len(get_test_cases(requested_test_targets_to_run)) == 0:
         pass
-    elif len(get_test_suites(requested_test_targets_to_run)) == 0 and len(get_test_cases(requested_test_targets_to_run)) == 1:
+    elif (
+        len(get_test_suites(requested_test_targets_to_run)) == 0
+        and len(get_test_cases(requested_test_targets_to_run)) == 1
+    ):
         pass
     else:
-        raise ValueError('Currently only n test suites or 1 test case is allowed. If you need this feature, let @lockshaw know.')
+        raise ValueError(
+            "Currently only n test suites or 1 test case is allowed. If you need this feature, let @lockshaw know."
+        )
 
     has_cuda = check_if_machine_supports_cuda()
 
     def cuda_failure():
         fail_with_error(
-            'Cannot run gpu tests as no gpus are available on the current machine. '
-            'Pass --skip-gpu-tests to skip running tests that require a GPU.'
+            "Cannot run gpu tests as no gpus are available on the current machine. "
+            "Pass --skip-gpu-tests to skip running tests that require a GPU."
         )
 
-    if (not has_cuda) and any(isinstance(t, (MixedTestSuiteTarget, CudaTestSuiteTarget, CudaTestCaseTarget)) for t in requested_test_targets_to_run):
+    if (not has_cuda) and any(
+        isinstance(t, (MixedTestSuiteTarget, CudaTestSuiteTarget, CudaTestCaseTarget))
+        for t in requested_test_targets_to_run
+    ):
         cuda_failure()
-    
+
     if len(requested_test_targets_to_run) == 0:
-        fail_with_error('No test targets available to run')
+        fail_with_error("No test targets available to run")
 
     requested_build_targets = set(t.build_target for t in requested_test_targets)
 
@@ -444,69 +500,98 @@ def main_test(args: MainTestArgs) -> int:
 
     def require_test_suite(
         t: Union[
-            MixedTestSuiteTarget, 
-            CpuTestSuiteTarget, 
-            CudaTestSuiteTarget, 
-            CpuTestCaseTarget, 
-            CudaTestCaseTarget, 
-            GenericTestCaseTarget
+            MixedTestSuiteTarget,
+            CpuTestSuiteTarget,
+            CudaTestSuiteTarget,
+            CpuTestCaseTarget,
+            CudaTestCaseTarget,
+            GenericTestCaseTarget,
         ],
     ) -> Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]:
-        assert isinstance(t, (MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget))
+        assert isinstance(
+            t, (MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget)
+        )
         return t
 
     if len(get_test_cases(requested_test_targets_to_run)) == 0:
+        test_suites = get_test_suites(requested_test_targets_to_run)
+        _l.debug("No testcases required, running test suites %s", test_suites)
         test_statistics = run_test_suites(
-            config=config, 
-            test_suites=get_test_suites(requested_test_targets_to_run), 
-            build_dir=build_dir, 
-            debug=args.debug
+            config=config,
+            test_suites=test_suites,
+            build_dir=build_dir,
+            debug=args.debug,
         )
         num_passed = len(test_statistics.passed)
         num_failed = len(test_statistics.failed)
-        print(f'Test results: {num_passed} passed / {num_failed} failed / {num_passed + num_failed} total')
+        print(
+            f"Test results: {num_passed} passed / {num_failed} failed / {num_passed + num_failed} total"
+        )
         if num_failed > 0:
-            fail_with_error('\n'.join([
-                'The following tests failed:',
-                *[
-                    '- ' + tc.full_name for tc in test_statistics.failed
-                ]
-            ]))
+            fail_with_error(
+                "\n".join(
+                    [
+                        "The following tests failed:",
+                        *["- " + tc.full_name for tc in test_statistics.failed],
+                    ]
+                )
+            )
 
     else:
         assert len(get_test_suites(requested_test_targets_to_run)) == 0
 
         only_to_run = get_only(get_test_cases(requested_test_targets_to_run))
-        assert isinstance(only_to_run, (MixedTestSuiteTarget, CpuTestCaseTarget, CudaTestCaseTarget, GenericTestCaseTarget))
+        _l.debug("No test suites required, running testcase %s", only_to_run)
+        assert isinstance(
+            only_to_run,
+            (
+                MixedTestSuiteTarget,
+                CpuTestCaseTarget,
+                CudaTestCaseTarget,
+                GenericTestCaseTarget,
+            ),
+        )
         if isinstance(only_to_run, GenericTestCaseTarget):
-            only_to_run = resolve_test_case_target_using_build(config, only_to_run, build_dir)
+            _l.debug("Type of test case %s is unknown, resolving using build...", only_to_run)
+            only_to_run = resolve_test_case_target_using_build(
+                config, only_to_run, build_dir
+            )
 
         if isinstance(only_to_run, CudaTestCaseTarget) and args.skip_gpu_tests:
+            _l.debug("Test %s requires CUDA but --skip-gpu-tests flag was passed. Skipping...", only_to_run)
             pass
         elif isinstance(only_to_run, CudaTestCaseTarget) and not has_cuda:
             cuda_failure()
         else:
             test_case_result = run_test_case(
-                config=config, 
-                test_case=only_to_run, 
-                build_dir=build_dir, 
+                config=config,
+                test_case=only_to_run,
+                build_dir=build_dir,
                 debug=args.debug,
             )
+            _l.debug("Test case %s returned result %s", only_to_run, test_case_result)
             if not test_case_result.did_pass:
                 report_test_failure(only_to_run, test_case_result)
+                _l.debug("Test case %s failed. Returning...", only_to_run)
                 return STATUS_ERR
+            else:
+                report_test_success(only_to_run, test_case_result)
 
     if args.coverage:
+        _l.debug("Generating requested coverage data...")
         postprocess_coverage_data(config=config)
         view_coverage_data(config=config, browser=args.browser)
 
+    _l.debug("Succesfully finished %s", main_test.__name__)
     return STATUS_OK
-    
+
+
 @dataclass(frozen=True)
 class MainCheckArgs:
     path: Path
     check: Check
     verbosity: int
+
 
 def main_check(args: MainCheckArgs) -> int:
     config = get_config(args.path)
@@ -515,12 +600,14 @@ def main_check(args: MainCheckArgs) -> int:
 
     return STATUS_OK
 
+
 @dataclass(frozen=True)
 class MainLintArgs:
     path: Path
     files: Sequence[Path]
     profile_checks: bool
     verbosity: int
+
 
 def main_lint(args: MainLintArgs) -> int:
     root = get_config_root(args.path)
@@ -534,11 +621,13 @@ def main_lint(args: MainLintArgs) -> int:
     run_linter(root, config, files, profile_checks=args.profile_checks)
     return STATUS_OK
 
+
 @dataclass(frozen=True)
 class MainFormatArgs:
     path: Path
     files: Sequence[Path]
     verbosity: int
+
 
 def main_format(args: Any) -> int:
     config = get_config(args.path)
@@ -551,12 +640,14 @@ def main_format(args: Any) -> int:
     run_formatter(config, files)
     return STATUS_OK
 
+
 @dataclass(frozen=True)
 class MainDtgenArgs:
     path: Path
     files: Sequence[Path]
     force: bool
     verbosity: int
+
 
 def main_dtgen(args: MainDtgenArgs) -> int:
     root = get_config_root(args.path)
@@ -576,11 +667,13 @@ def main_dtgen(args: MainDtgenArgs) -> int:
     )
     return STATUS_OK
 
+
 @dataclass(frozen=True)
 class MainDoxygenArgs:
     path: Path
     browser: bool
     verbosity: int
+
 
 def main_doxygen(args: MainDoxygenArgs) -> int:
     root = get_config_root(args.path)
@@ -588,22 +681,22 @@ def main_doxygen(args: MainDoxygenArgs) -> int:
 
     env = {
         **os.environ,
-        'FF_HOME': root,
+        "FF_HOME": root,
     }
     stderr: Union[int, TextIO] = sys.stderr
     stdout: Union[int, TextIO] = sys.stdout
 
     if args.verbosity > logging.INFO:
-        env['DOXYGEN_QUIET'] = 'YES'
+        env["DOXYGEN_QUIET"] = "YES"
     if args.verbosity > logging.WARN:
-        env['DOXYGEN_WARNINGS'] = 'NO'
+        env["DOXYGEN_WARNINGS"] = "NO"
     if args.verbosity > logging.CRITICAL:
         stderr = subprocess.DEVNULL
         stdout = subprocess.DEVNULL
 
     config.doxygen_dir.mkdir(exist_ok=True, parents=True)
     subprocess.check_call(
-        ['doxygen', 'docs/doxygen/Doxyfile'],
+        ["doxygen", "docs/doxygen/Doxyfile"],
         env=env,
         stdout=stdout,
         stderr=stderr,
@@ -611,12 +704,13 @@ def main_doxygen(args: MainDoxygenArgs) -> int:
     )
 
     if args.browser:
-        xdg_open(config.doxygen_dir / 'html/index.html') 
+        xdg_open(config.doxygen_dir / "html/index.html")
 
     return STATUS_OK
 
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
@@ -624,10 +718,25 @@ def make_parser() -> argparse.ArgumentParser:
 
     config = try_get_config(Path.cwd())
 
-    def set_main_signature(parser: argparse.ArgumentParser, func: Callable[[T], int], args_type: Type[T]) -> None:
-        def _f(args: argparse.Namespace, func: Callable[[T], int]=func, args_type: Type[T]=args_type) -> int:
-            setattr(args, 'path', Path.cwd())
-            return func(args_type(**{k.replace('-', '_'): v for k, v in vars(args).items() if k != 'func'}))
+    def set_main_signature(
+        parser: argparse.ArgumentParser, func: Callable[[T], int], args_type: Type[T]
+    ) -> None:
+        def _f(
+            args: argparse.Namespace,
+            func: Callable[[T], int] = func,
+            args_type: Type[T] = args_type,
+        ) -> int:
+            setattr(args, "path", Path.cwd())
+            return func(
+                args_type(
+                    **{
+                        k.replace("-", "_"): v
+                        for k, v in vars(args).items()
+                        if k != "func"
+                    }
+                )
+            )
+
         parser.set_defaults(func=_f)
 
     root_p = subparsers.add_parser("root")
@@ -640,21 +749,21 @@ def make_parser() -> argparse.ArgumentParser:
 
     query_path_p = subparsers.add_parser("query-path")
     set_main_signature(query_path_p, main_query_path, MainQueryPathArgs)
-    query_path_p.add_argument('file', type=Path)
+    query_path_p.add_argument("file", type=Path)
     add_verbosity_args(query_path_p)
 
     test_p = subparsers.add_parser("test")
     set_main_signature(test_p, main_test, MainTestArgs)
     test_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
-    test_p.add_argument("--coverage", "-c", action="store_true")   
-    test_p.add_argument("--dtgen-force", action="store_true")   
+    test_p.add_argument("--coverage", "-c", action="store_true")
+    test_p.add_argument("--dtgen-force", action="store_true")
     test_p.add_argument("--dtgen-skip", action="store_true")
     test_p.add_argument(
         "--browser", "-b", action="store_true", help="open coverage info in browser"
     )
     test_p.add_argument("--skip-gpu-tests", action="store_true")
     test_p.add_argument("--debug", action="store_true")
-    test_p.add_argument('targets', nargs='*', type=parse_generic_test_target)
+    test_p.add_argument("targets", nargs="*", type=parse_generic_test_target)
     add_verbosity_args(test_p)
 
     build_p = subparsers.add_parser("build")
@@ -662,37 +771,49 @@ def make_parser() -> argparse.ArgumentParser:
     build_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
     build_p.add_argument("--dtgen-skip", action="store_true")
     build_p.add_argument("--release", action="store_true")
-    build_p.add_argument('targets', nargs='*', type=lambda p: BuildTarget.from_str(require_nonnull(config).configured_names, p))
+    build_p.add_argument(
+        "targets",
+        nargs="*",
+        type=lambda p: BuildTarget.from_str(
+            require_nonnull(config).configured_names, p
+        ),
+    )
     add_verbosity_args(build_p)
 
-    benchmark_p = subparsers.add_parser('benchmark')
+    benchmark_p = subparsers.add_parser("benchmark")
     set_main_signature(benchmark_p, main_benchmark, MainBenchmarkArgs)
-    benchmark_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
-    benchmark_p.add_argument('--dtgen-skip', action='store_true')
+    benchmark_p.add_argument(
+        "--jobs", "-j", type=int, default=multiprocessing.cpu_count()
+    )
+    benchmark_p.add_argument("--dtgen-skip", action="store_true")
     benchmark_p.add_argument("--skip-gpu-benchmarks", action="store_true")
-    benchmark_p.add_argument('--upload', action='store_true')
-    benchmark_p.add_argument('--browser', action='store_true')
-    benchmark_p.add_argument('targets', nargs='*', type=parse_generic_benchmark_target)
+    benchmark_p.add_argument("--upload", action="store_true")
+    benchmark_p.add_argument("--browser", action="store_true")
+    benchmark_p.add_argument("targets", nargs="*", type=parse_generic_benchmark_target)
     add_verbosity_args(benchmark_p)
 
-    run_p = subparsers.add_parser('run')
+    run_p = subparsers.add_parser("run")
     set_main_signature(run_p, main_run, MainRunArgs)
-    run_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
-    run_p.add_argument('target', type=parse_generic_run_target)
-    run_p.add_argument('--skip-gpu', action='store_true')
-    run_p.add_argument('--debug-build', action='store_true')
-    run_p.add_argument('target-run-args', nargs='*')
+    run_p.add_argument("--jobs", "-j", type=int, default=multiprocessing.cpu_count())
+    run_p.add_argument("target", type=parse_generic_run_target)
+    run_p.add_argument("--skip-gpu", action="store_true")
+    run_p.add_argument("--debug-build", action="store_true")
+    run_p.add_argument("target-run-args", nargs="*")
     add_verbosity_args(run_p)
-    
-    profile_p = subparsers.add_parser('profile')
+
+    profile_p = subparsers.add_parser("profile")
     set_main_signature(profile_p, main_profile, MainProfileArgs)
-    profile_p.add_argument('--jobs', '-j', type=int, default=multiprocessing.cpu_count())
-    profile_p.add_argument('--dry-run', action='store_true')
-    profile_p.add_argument('--tool', choices=list(sorted(ProfilingTool)), default=ProfilingTool.CALLGRIND)
-    profile_p.add_argument('--skip-gpu', action='store_true')
-    profile_p.add_argument('-g', '--gui', action='store_true')
-    profile_p.add_argument('target', type=parse_generic_run_target)
-    profile_p.add_argument('target-run-args', nargs='*')
+    profile_p.add_argument(
+        "--jobs", "-j", type=int, default=multiprocessing.cpu_count()
+    )
+    profile_p.add_argument("--dry-run", action="store_true")
+    profile_p.add_argument(
+        "--tool", choices=list(sorted(ProfilingTool)), default=ProfilingTool.CALLGRIND
+    )
+    profile_p.add_argument("--skip-gpu", action="store_true")
+    profile_p.add_argument("-g", "--gui", action="store_true")
+    profile_p.add_argument("target", type=parse_generic_run_target)
+    profile_p.add_argument("target-run-args", nargs="*")
     add_verbosity_args(profile_p)
 
     cmake_p = subparsers.add_parser("cmake")
@@ -702,36 +823,42 @@ def make_parser() -> argparse.ArgumentParser:
     cmake_p.add_argument("--dtgen-skip", action="store_true")
     add_verbosity_args(cmake_p)
 
-    dtgen_p = subparsers.add_parser('dtgen')
+    dtgen_p = subparsers.add_parser("dtgen")
     set_main_signature(dtgen_p, main_dtgen, MainDtgenArgs)
-    dtgen_p.add_argument('--force', action='store_true', help='Disable incremental toml->c++ generation')
-    dtgen_p.add_argument('files', nargs='*', type=Path)
+    dtgen_p.add_argument(
+        "--force", action="store_true", help="Disable incremental toml->c++ generation"
+    )
+    dtgen_p.add_argument("files", nargs="*", type=Path)
     add_verbosity_args(dtgen_p)
 
-    format_p = subparsers.add_parser('format')
+    format_p = subparsers.add_parser("format")
     set_main_signature(format_p, main_format, MainFormatArgs)
-    format_p.add_argument('files', nargs='*', type=Path)
+    format_p.add_argument("files", nargs="*", type=Path)
     add_verbosity_args(format_p)
 
-    check_p = subparsers.add_parser('check')
+    check_p = subparsers.add_parser("check")
     set_main_signature(check_p, main_check, MainCheckArgs)
-    check_p.add_argument('check', choices=list(sorted(Check)))
+    check_p.add_argument("check", choices=list(sorted(Check)))
     add_verbosity_args(check_p)
 
-    lint_p = subparsers.add_parser('lint')
+    lint_p = subparsers.add_parser("lint")
     set_main_signature(lint_p, main_lint, MainLintArgs)
-    lint_p.add_argument('--profile-checks', action='store_true')
-    lint_p.add_argument('files', nargs='*', type=Path)
+    lint_p.add_argument("--profile-checks", action="store_true")
+    lint_p.add_argument("files", nargs="*", type=Path)
     add_verbosity_args(lint_p)
 
-    doxygen_p = subparsers.add_parser('doxygen')
+    doxygen_p = subparsers.add_parser("doxygen")
     set_main_signature(doxygen_p, main_doxygen, MainDoxygenArgs)
     doxygen_p.add_argument(
-        "--browser", "-b", action="store_true", help="open generated documentation in browser"
+        "--browser",
+        "-b",
+        action="store_true",
+        help="open generated documentation in browser",
     )
     add_verbosity_args(doxygen_p)
 
     return p
+
 
 def main(argv: Sequence[str]) -> int:
     p = make_parser()
@@ -749,8 +876,10 @@ def main(argv: Sequence[str]) -> int:
         p.print_help()
         return 1
 
+
 def entrypoint() -> None:
     sys.exit(main(sys.argv[1:]))
+
 
 if __name__ == "__main__":
     entrypoint()

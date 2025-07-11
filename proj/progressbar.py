@@ -24,7 +24,7 @@ except ImportError:
 EnlightenPB = Any
 
 
-class ProgressBar(contextlib.AbstractContextManager['ProgressBar']):
+class ProgressBar(contextlib.AbstractContextManager["ProgressBar"]):
     @abstractmethod
     def update(self, incr: int = 1, force: bool = False) -> None:
         ...
@@ -38,7 +38,7 @@ class FakeProgressBar(ProgressBar):
         return self
 
     def __exit__(
-        self, 
+        self,
         exc_type: Optional[Type[BaseException]],
         exec_value: Optional[BaseException],
         traceback: Optional[TracebackType],
@@ -55,8 +55,8 @@ class EnlightenProgressBar(ProgressBar):
         return self
 
     def __exit__(
-        self, 
-        exc_type: Optional[Type[BaseException]], 
+        self,
+        exc_type: Optional[Type[BaseException]],
         exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> Optional[bool]:
@@ -71,7 +71,7 @@ class EnlightenProgressBar(ProgressBar):
         self._enlighten_bar.update(incr=incr, force=force)
 
 
-class ProgressBarManager(contextlib.AbstractContextManager['ProgressBarManager']):
+class ProgressBarManager(contextlib.AbstractContextManager["ProgressBarManager"]):
     @abstractmethod
     def counter(self, total: int, desc: str, unit: Optional[str] = None) -> ProgressBar:
         ...
@@ -89,7 +89,7 @@ class FakeManager(ProgressBarManager):
         return self
 
     def __exit__(
-        self, 
+        self,
         exc_type: Optional[Type[BaseException]],
         exec_value: Optional[BaseException],
         traceback: Optional[TracebackType],
@@ -106,8 +106,8 @@ class EnlightenManager(ProgressBarManager):
         return self
 
     def __exit__(
-        self, 
-        exc_type: Optional[Type[BaseException]], 
+        self,
+        exc_type: Optional[Type[BaseException]],
         exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> Optional[bool]:
@@ -119,7 +119,9 @@ class EnlightenManager(ProgressBarManager):
             return result
 
     def counter(self, total: int, desc: str, unit: Optional[str] = None) -> ProgressBar:
-        return EnlightenProgressBar(self._enlighten_mgr.counter(total=total, desc=desc, unit=unit))
+        return EnlightenProgressBar(
+            self._enlighten_mgr.counter(total=total, desc=desc, unit=unit)
+        )
 
 
 def get_progress_manager() -> ProgressBarManager:

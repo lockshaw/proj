@@ -12,14 +12,24 @@ import logging
 
 _l = logging.getLogger(__name__)
 
+
 class ProfilingTool(StrEnum):
-    PERF = 'perf'
-    CALLGRIND = 'callgrind'
+    PERF = "perf"
+    CALLGRIND = "callgrind"
 
-def output_file_for_target(target: Union[CpuRunTarget, CudaRunTarget], tool: ProfilingTool) -> Path:
-    return target.executable_path.parent / (target.executable_path.name + '.' + tool)
 
-def profile_target(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], dry_run: bool, tool: ProfilingTool) -> Path:
+def output_file_for_target(
+    target: Union[CpuRunTarget, CudaRunTarget], tool: ProfilingTool
+) -> Path:
+    return target.executable_path.parent / (target.executable_path.name + "." + tool)
+
+
+def profile_target(
+    build_dir: Path,
+    target: Union[CpuRunTarget, CudaRunTarget],
+    dry_run: bool,
+    tool: ProfilingTool,
+) -> Path:
     output_file = build_dir / output_file_for_target(target, tool)
 
     if tool == ProfilingTool.PERF:
@@ -30,21 +40,27 @@ def profile_target(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], 
 
     return output_file
 
-def profile_target_with_perf(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], output_file: Path, dry_run: bool) -> None:
+
+def profile_target_with_perf(
+    build_dir: Path,
+    target: Union[CpuRunTarget, CudaRunTarget],
+    output_file: Path,
+    dry_run: bool,
+) -> None:
     extra_flags = []
     if dry_run:
-        extra_flags.append('--dry-run')
+        extra_flags.append("--dry-run")
 
     cmd = [
-        'perf', 
-        'record',
-        '--call-graph=dwarf', 
-        '-F',
-        '100',
+        "perf",
+        "record",
+        "--call-graph=dwarf",
+        "-F",
+        "100",
         *extra_flags,
-        '--output',
+        "--output",
         str(output_file),
-        '--',
+        "--",
         str(build_dir / target.executable_path),
         *target.args,
     ]
@@ -54,11 +70,14 @@ def profile_target_with_perf(build_dir: Path, target: Union[CpuRunTarget, CudaRu
     if not dry_run:
         assert output_file.is_file()
 
-def profile_target_with_callgrind(build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], output_file: Path) -> None:
+
+def profile_target_with_callgrind(
+    build_dir: Path, target: Union[CpuRunTarget, CudaRunTarget], output_file: Path
+) -> None:
     cmd = [
-        'valgrind', 
-        '--tool=callgrind',
-        f'--callgrind-out-file={output_file}',
+        "valgrind",
+        "--tool=callgrind",
+        f"--callgrind-out-file={output_file}",
         str(build_dir / target.executable_path),
         *target.args,
     ]
@@ -75,18 +94,24 @@ def visualize_profile(profile_path: Path, tool: ProfilingTool) -> None:
         assert tool == ProfilingTool.CALLGRIND
         visualize_profile_with_kcachegrind(profile_path)
 
+
 def visualize_profile_with_hotspot(profile_path: Path) -> None:
     assert profile_path.is_file()
 
-    subprocess.check_call([
-        'hotspot',
-        str(profile_path),
-    ])
+    subprocess.check_call(
+        [
+            "hotspot",
+            str(profile_path),
+        ]
+    )
+
 
 def visualize_profile_with_kcachegrind(profile_path: Path) -> None:
     assert profile_path.is_file()
 
-    subprocess.check_call([
-        'kcachegrind',
-        str(profile_path),
-    ])
+    subprocess.check_call(
+        [
+            "kcachegrind",
+            str(profile_path),
+        ]
+    )

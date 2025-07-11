@@ -23,6 +23,7 @@ from pathlib import Path
 
 _l = logging.getLogger(__name__)
 
+
 def check_call(command, **kwargs):
     if kwargs.get("shell", False):
         pretty_cmd = " ".join(command)
@@ -44,10 +45,11 @@ def check_output(command, **kwargs):
         _l.info(f"+++ $ {pretty_cmd}")
         return subprocess.check_output(command, **kwargs)
 
+
 def tee_output_bytes(
-    command: Union[str, Sequence[str]], 
+    command: Union[str, Sequence[str]],
     *,
-    stdout: Optional[IO[bytes]] = None, 
+    stdout: Optional[IO[bytes]] = None,
     stderr: Optional[IO[bytes]] = None,
     shell: bool = False,
 ) -> Tuple[bytes, bytes]:
@@ -56,11 +58,12 @@ def tee_output_bytes(
     assert isinstance(result[1], bytes)
     return result
 
+
 def tee_output_str(
-    command: Union[str, Sequence[str]], 
+    command: Union[str, Sequence[str]],
     *,
-    stdout: Optional[IO[str]] = None, 
-    stderr: Optional[IO[str]] = None, 
+    stdout: Optional[IO[str]] = None,
+    stderr: Optional[IO[str]] = None,
     shell: bool = False,
 ) -> Tuple[str, str]:
     result = _tee_output(command, stdout=stdout, stderr=stderr, text=True, shell=shell)
@@ -68,7 +71,15 @@ def tee_output_str(
     assert isinstance(result[1], str)
     return result
 
-def _tee_output(command: Union[str, Sequence[str]], *, stdout: Optional[Union[IO[bytes], IO[str]]]=None, stderr: Optional[Union[IO[bytes], IO[str]]]=None, text: bool=False, shell: bool = False) -> Union[Tuple[bytes, bytes], Tuple[str, str]]:
+
+def _tee_output(
+    command: Union[str, Sequence[str]],
+    *,
+    stdout: Optional[Union[IO[bytes], IO[str]]] = None,
+    stderr: Optional[Union[IO[bytes], IO[str]]] = None,
+    text: bool = False,
+    shell: bool = False,
+) -> Union[Tuple[bytes, bytes], Tuple[str, str]]:
     if isinstance(command, str):
         _l.info(f"+++ $ {command}")
     else:
@@ -79,7 +90,9 @@ def _tee_output(command: Union[str, Sequence[str]], *, stdout: Optional[Union[IO
             pretty_cmd = shlex.join(command)
             _l.info(f"+++ $ {pretty_cmd}")
 
-    proc = subprocess.Popen(command, stdout=PIPE, stderr=PIPE, bufsize=0, text=text, shell=shell)
+    proc = subprocess.Popen(
+        command, stdout=PIPE, stderr=PIPE, bufsize=0, text=text, shell=shell
+    )
     stderrs: Any
     stdouts: Any
     if text:
@@ -137,11 +150,11 @@ def hook_stdout(command, *, stdout_hook, **kwargs):
         pretty_cmd = shlex.join(command)
     _l.info("+++ $ %s", pretty_cmd)
 
-    assert isinstance(command, str) == kwargs.get('shell', False)
+    assert isinstance(command, str) == kwargs.get("shell", False)
 
     proc = subprocess.Popen(command, stdout=PIPE, text=True, bufsize=1, **kwargs)
 
-    output = ''
+    output = ""
 
     def process(s: str) -> None:
         nonlocal output
@@ -167,11 +180,30 @@ def hook_stdout(command, *, stdout_hook, **kwargs):
             cmd=command,
         )
 
-def run(command: Sequence[str], stdout: Optional[Union[IO[bytes], IO[str], int]]=None, stderr: Optional[Union[IO[bytes], IO[str], int]]=None, text: bool=False, shell: bool = False, env: Optional[Mapping[str, str]] = None, cwd: Optional[Path] = None, check: bool = False) -> CompletedProcess:
+
+def run(
+    command: Sequence[str],
+    stdout: Optional[Union[IO[bytes], IO[str], int]] = None,
+    stderr: Optional[Union[IO[bytes], IO[str], int]] = None,
+    text: bool = False,
+    shell: bool = False,
+    env: Optional[Mapping[str, str]] = None,
+    cwd: Optional[Path] = None,
+    check: bool = False,
+) -> CompletedProcess:
     if not shell:
         pretty_cmd = " ".join(command)
         _l.info(f"+++ $ {pretty_cmd} (cwd = {cwd})")
     else:
         pretty_cmd = shlex.join(command)
         _l.info(f"+++ $ {pretty_cmd} (cwd = {cwd})")
-    return subprocess.run(command, stdout=stdout, stderr=stderr, text=text, shell=shell, env=env, cwd=cwd, check=check)
+    return subprocess.run(
+        command,
+        stdout=stdout,
+        stderr=stderr,
+        text=text,
+        shell=shell,
+        env=env,
+        cwd=cwd,
+        check=check,
+    )

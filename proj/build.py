@@ -15,6 +15,7 @@ from .targets import (
 
 _l = logging.getLogger(__name__)
 
+
 def build_targets(
     config: ProjectConfig,
     targets: Iterable[BuildTarget],
@@ -24,9 +25,9 @@ def build_targets(
     build_dir: Path,
 ) -> None:
     _targets = list(sorted(set([t.name for t in targets])))
-    _l.info('Building targets: %s', _targets)
+    _l.info("Building targets: %s", _targets)
     if len(_targets) == 0:
-        fail_with_error('No build targets selected')
+        fail_with_error("No build targets selected")
 
     if not dtgen_skip:
         run_dtgen(

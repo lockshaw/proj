@@ -7,6 +7,7 @@ from .browser import open_in_browser
 
 _l = logging.getLogger(__name__)
 
+
 def postprocess_coverage_data(config: ProjectConfig) -> None:
     cwd = config.coverage_build_dir
 
@@ -23,11 +24,11 @@ def postprocess_coverage_data(config: ProjectConfig) -> None:
         cwd=cwd,
         env=os.environ,
     )
-    
+
     # only keep the coverage info of the lib directory
     subprocess.run(
         [
-            "lcov", 
+            "lcov",
             "--extract",
             "main_coverage.info",
             f"{config.base}/lib/*",
@@ -38,7 +39,7 @@ def postprocess_coverage_data(config: ProjectConfig) -> None:
         cwd=cwd,
         env=os.environ,
     )
-    
+
     # filter out .dtg.h, .dtg.cc, and test code
     subprocess.run(
         [
@@ -55,7 +56,7 @@ def postprocess_coverage_data(config: ProjectConfig) -> None:
         cwd=cwd,
         env=os.environ,
     )
-    
+
 
 def view_coverage_data(config: ProjectConfig, browser: bool) -> None:
     cwd = config.coverage_build_dir
@@ -74,7 +75,7 @@ def view_coverage_data(config: ProjectConfig, browser: bool) -> None:
             env=os.environ,
         )
 
-        open_in_browser('code_coverage/index.html', cwd=cwd)
+        open_in_browser("code_coverage/index.html", cwd=cwd)
     else:
         subprocess.run(
             [

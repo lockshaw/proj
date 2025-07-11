@@ -11,6 +11,7 @@ from pathlib import Path
 import proj.toml as toml
 from proj.json import Json
 
+
 class Feature(Enum):
     JSON = auto()
     HASH = auto()
@@ -19,6 +20,7 @@ class Feature(Enum):
 
     def json(self) -> Json:
         return self.value
+
 
 @dataclass(frozen=True)
 class ValueSpec:
@@ -35,10 +37,11 @@ class ValueSpec:
 
     def json(self) -> Json:
         return {
-            'name': self.name,
-            'docstring': self.docstring,
-            'json_key': self.json_key,
+            "name": self.name,
+            "docstring": self.docstring,
+            "json_key": self.json_key,
         }
+
 
 @dataclass(frozen=True)
 class EnumSpec:
@@ -50,48 +53,55 @@ class EnumSpec:
 
     def json(self) -> Json:
         return {
-            'namespace': self.namespace,
-            'name': self.name,
-            'values': [v.json() for v in self.values],
-            'features': [feature.json() for feature in sorted(self.features, key=lambda f: f.name)],
-            'docstring': self.docstring,
+            "namespace": self.namespace,
+            "name": self.name,
+            "values": [v.json() for v in self.values],
+            "features": [
+                feature.json()
+                for feature in sorted(self.features, key=lambda f: f.name)
+            ],
+            "docstring": self.docstring,
         }
 
+
 def parse_feature(raw: str) -> Feature:
-    if raw == 'json':
+    if raw == "json":
         return Feature.JSON
-    elif raw == 'rapidcheck':
+    elif raw == "rapidcheck":
         return Feature.RAPIDCHECK
-    elif raw == 'fmt':
+    elif raw == "fmt":
         return Feature.FMT
-    elif raw == 'hash':
+    elif raw == "hash":
         return Feature.HASH
     else:
-        raise ValueError(f'Unknown feature: {raw}')
+        raise ValueError(f"Unknown feature: {raw}")
+
 
 def parse_value_spec(raw: Mapping[str, Any]) -> ValueSpec:
     return ValueSpec(
-        name=raw['name'],
-        docstring=raw.get('docstring', None),
-        _json_key=raw.get('json_key'),
+        name=raw["name"],
+        docstring=raw.get("docstring", None),
+        _json_key=raw.get("json_key"),
     )
+
 
 def parse_enum_spec(raw: Mapping[str, Any]) -> EnumSpec:
     return EnumSpec(
-        namespace=raw.get('namespace', None),
-        name=raw['name'],
-        values=[parse_value_spec(value) for value in raw['values']],
-        features=frozenset([parse_feature(feature) for feature in raw['features']]),
-        docstring=raw.get('docstring', None),
+        namespace=raw.get("namespace", None),
+        name=raw["name"],
+        values=[parse_value_spec(value) for value in raw["values"]],
+        features=frozenset([parse_feature(feature) for feature in raw["features"]]),
+        docstring=raw.get("docstring", None),
     )
+
 
 def load_spec(path: Path) -> EnumSpec:
     try:
-        with path.open('r') as f:
+        with path.open("r") as f:
             raw = toml.loads(f.read())
     except toml.TOMLDecodeError as e:
-        raise RuntimeError(f'Failed to load spec {path}') from e
+        raise RuntimeError(f"Failed to load spec {path}") from e
     try:
         return parse_enum_spec(raw)
     except KeyError as e:
-        raise RuntimeError(f'Failed to parse spec {path}') from e
+        raise RuntimeError(f"Failed to parse spec {path}") from e

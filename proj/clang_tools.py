@@ -68,7 +68,10 @@ class ClangToolsConfig:
 
     def clang_tool_binary_path(self, tool: Tool) -> Path:
         tool_config = self.get_tool_config(tool)
-        return self.tools_dir / f"clang-{tool}-{tool_config.llvm_version}-{tool_config.release}"
+        return (
+            self.tools_dir
+            / f"clang-{tool}-{tool_config.llvm_version}-{tool_config.release}"
+        )
 
     def get_tool_config(self, tool: Tool) -> ToolConfig:
         return self.tool_configs[tool]
@@ -122,7 +125,7 @@ def download(url: str, path: Path) -> None:
         _l.debug("wget command failed")
         pass
     except FileNotFoundError:
-        _l.debug('Could not find wget in $PATH')
+        _l.debug("Could not find wget in $PATH")
         pass
 
     try:
@@ -133,10 +136,12 @@ def download(url: str, path: Path) -> None:
         _l.debug("curl command failed")
         pass
     except FileNotFoundError:
-        _l.debug('Could not find curl in $PATH')
+        _l.debug("Could not find curl in $PATH")
         pass
 
-    _l.critical(f"Failed to download {url} with both wget and curl. Is at least one of wget and curl installed?")
+    _l.critical(
+        f"Failed to download {url} with both wget and curl. Is at least one of wget and curl installed?"
+    )
 
 
 def get_clang_tool_url(tool: Tool, config: ClangToolsConfig) -> str:

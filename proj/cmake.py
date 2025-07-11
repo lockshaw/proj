@@ -22,9 +22,10 @@ import logging
 
 _l = logging.getLogger(__name__)
 
+
 def run_cmake(cmake_args: Iterable[str], require_shell: bool, cwd: Path) -> None:
     cmake_args = list(cmake_args)
-    _l.debug('Running cmake command: %s', cmake_args)
+    _l.debug("Running cmake command: %s", cmake_args)
     subprocess.check_call(
         [
             "cmake",
@@ -37,11 +38,13 @@ def run_cmake(cmake_args: Iterable[str], require_shell: bool, cwd: Path) -> None
         shell=require_shell,
     )
 
+
 TARGET = re.compile(r"^\.\.\. (?P<target>.*)$")
+
 
 def get_target_names_list(build_dir: Path) -> Iterator[str]:
     lines = subprocess.check_output(
-        ['cmake', '--build', '.', '--target', 'help'],
+        ["cmake", "--build", ".", "--target", "help"],
         stderr=sys.stderr,
         text=True,
         cwd=build_dir,
@@ -51,7 +54,8 @@ def get_target_names_list(build_dir: Path) -> Iterator[str]:
     for line in lines:
         match = TARGET.fullmatch(line)
         if match is not None:
-            yield match.group('target')
+            yield match.group("target")
+
 
 def get_targets_list(names: ConfiguredNames, build_dir: Path) -> Iterator[BuildTarget]:
     for target_name in get_target_names_list(build_dir):
@@ -67,10 +71,12 @@ def render_args(arg_map: Mapping[str, str], trace: bool) -> List[str]:
         cmake_args += ["--trace", "--trace-expand", "--trace-redirect=trace.log"]
     return cmake_args
 
+
 class BuildMode(StrEnum):
-    RELEASE = 'release'
-    DEBUG = 'debug'
-    COVERAGE = 'coverage'
+    RELEASE = "release"
+    DEBUG = "debug"
+    COVERAGE = "coverage"
+
 
 def get_arg_map(config: ProjectConfig, mode: BuildMode) -> Mapping[str, str]:
     if mode == BuildMode.RELEASE:
@@ -81,6 +87,7 @@ def get_arg_map(config: ProjectConfig, mode: BuildMode) -> Mapping[str, str]:
         assert mode == BuildMode.COVERAGE
         return config.coverage_cmake_flags
 
+
 def get_build_dir(config: ProjectConfig, mode: BuildMode) -> Path:
     if mode == BuildMode.RELEASE:
         return config.release_build_dir
@@ -89,6 +96,7 @@ def get_build_dir(config: ProjectConfig, mode: BuildMode) -> Path:
     else:
         assert mode == BuildMode.COVERAGE
         return config.coverage_build_dir
+
 
 def cmake(config: ProjectConfig, mode: BuildMode, fast: bool, trace: bool) -> None:
     arg_map = get_arg_map(config, mode)
@@ -122,6 +130,7 @@ def cmake(config: ProjectConfig, mode: BuildMode, fast: bool, trace: bool) -> No
                 cwd=config.debug_build_dir,
                 env=os.environ,
             )
+
 
 def cmake_all(config: ProjectConfig, fast: bool, trace: bool) -> None:
     for mode in BuildMode:
