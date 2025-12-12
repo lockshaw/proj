@@ -1,4 +1,5 @@
-{ buildPythonApplication
+{ pkgs
+, buildPythonApplication
 , pytestCheckHook
 , typing-extensions
 , enlighten
@@ -34,17 +35,21 @@
 }:
 
 let
+  lib = pkgs.lib;
+  stdenv = pkgs.stdenv;
+
   bins = [
-    valgrind
-    kcachegrind
     ff-clang-format
-    bencher-cli
-    hotspot
-    perf
     ccache
     compdb
     cmake
     lcov
+  ] ++ lib.optionals stdenv.isLinux [
+    bencher-cli
+    hotspot
+    valgrind
+    kcachegrind
+    perf
   ];
 in 
 buildPythonApplication {

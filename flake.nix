@@ -15,8 +15,6 @@
         config.allowUnfree = true;
       };
 
-      lib = pkgs.lib;
-
       packages = rec {
         proj = pkgs.python3Packages.callPackage ./pkgs/proj { 
           inherit pytest-skip-slow;
