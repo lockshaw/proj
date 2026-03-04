@@ -2,9 +2,10 @@
 name = "proj"
 version = "0.1.0"
 description = "Project management for FlexFlow"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "immutables>=0.21",
+    "typing-extensions>=4.15.0",
 ]
 
 [tool.mypy]
