@@ -39,7 +39,7 @@ class Template:
     apply: Callable[[Entry], Entry]
 
 
-@functools.cache
+@functools.lru_cache()
 def load_options_file(p: Path) -> List[str]:
     with p.open("r") as f:
         loaded = shlex.split(f.read())

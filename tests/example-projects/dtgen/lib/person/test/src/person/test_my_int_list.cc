@@ -11,7 +11,7 @@ using namespace ::FlexFlow;
 using ::nlohmann::json;
 
 TEST_SUITE(TP_TEST_SUITE) {
-  TEST_CASE("MyList<T>") {
+  TEST_CASE("MyIntList") {
     SUBCASE("make empty list") {
       MyIntList l = MyIntList{MyListEmpty{}};
     }
@@ -219,22 +219,22 @@ TEST_SUITE(TP_TEST_SUITE) {
           "MyList",
         },
         {
-          "type", 
+          "type",
           "cons",
         },
         {
-          "value", 
+          "value",
           {
             {
               "__type",
               "MyListCons",
             },
             {
-              "head", 
+              "head",
               2,
             },
             {
-              "tail", 
+              "tail",
               {
                 {
                   "type",
@@ -293,8 +293,9 @@ TEST_SUITE(TP_TEST_SUITE) {
     }
 
     SUBCASE("to_string") {
-      MyIntList l = cons(2, cons(1, empty));       
-      std::string correct = "<MyIntList cons=<MyIntListCons head=2 tail=<MyIntList cons=<MyIntListCons head=1 tail=<MyIntList empty=<MyListEmpty>>>>>>";
+      MyIntList l = cons(2, cons(1, empty));
+      std::string correct = "{\"__type\":\"MyIntList\",\"type\":\"cons\",\"value\":{\"__type\":\"MyIntListCons\",\"head\":2,\"tail\":{\"__type\":\"MyIntList\",\"type\":\"cons\",\"value\":{\"__type\":\"MyIntListCons\",\"head\":1,\"tail\":{\"__type\":\"MyIntList\",\"type\":\"empty\",\"value\":{\"__type\":\"MyListEmpty\"}}}}}}";
+
       SUBCASE("fmt") {
         std::string result = fmt::to_string(l);
 

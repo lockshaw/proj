@@ -7,6 +7,7 @@ from typing import (
     Optional,
     Union,
     List,
+    Dict,
 )
 from pathlib import (
     Path,
@@ -56,7 +57,7 @@ from proj.trees import (
     MutableFileTreeWithMtime,
 )
 import io
-import tomllib
+import proj.toml as toml
 from ..unparse_project import (
     get_repo_rel_path,
 )
@@ -67,6 +68,7 @@ from proj.includes import (
     get_generated_include_path,
 )
 from proj.ifndef import get_correct_ifndef_for_path
+from proj.utils import is_relative_to
 
 _l = logging.getLogger(__name__)
 
@@ -80,7 +82,7 @@ def find_dtgen_spec_in_repo(path_tree: PathTree, extension_config: ExtensionConf
 
     def is_blacklisted(p: PurePath) -> bool:
         for blacklisted in blacklist:
-            if found.is_relative_to(blacklisted):
+            if is_relative_to(found, blacklisted):
                 return True
         return False
 
@@ -90,6 +92,18 @@ def find_dtgen_spec_in_repo(path_tree: PathTree, extension_config: ExtensionConf
             parsed = parse_file_path(RepoRelPath(found), extension_config)
             assert parsed is not None, found
             result.append(parsed)
+    return result
+
+def load_dtgen_specs_in_repo(
+    file_tree: FileTree,
+    extension_config: ExtensionConfig,
+) -> Dict[File, Union[StructSpec, EnumSpec, VariantSpec]]:
+
+    result = {}
+    for found_file in find_dtgen_spec_in_repo(file_tree, extension_config):
+        spec_path = get_repo_rel_path(found_file, extension_config)
+
+        result[found_file] = load_spec_file(spec_path.path, file_tree)
     return result
 
 
@@ -198,7 +212,7 @@ def generate_header_contents(
         f.write("\n")
         f.write(f"#endif // {ifndef}\n")
         return f.getvalue()
- 
+
 def generate_header(
     file_tree: MutableFileTreeWithMtime,
     spec: Union[StructSpec, EnumSpec, VariantSpec],
@@ -220,7 +234,7 @@ def generate_header(
 
     if not (force or needs_generate_to_path(
             file_tree=file_tree,
-            spec_path=spec_repo_rel.path, 
+            spec_path=spec_repo_rel.path,
             out=out_repo_rel.path)):
         _l.debug(
             f"No generation needed for {spec_repo_rel.path} -> {out_repo_rel.path}"
@@ -296,13 +310,13 @@ def generate_source(
         return None
 
     _l.info(f"Regenerating {spec_repo_rel.path} -> {out_repo_rel.path}")
-    
+
     spec_hash = get_file_hash(file_tree, spec_repo_rel.path)
     assert spec_hash is not None
 
     file_tree.mkdir(out_repo_rel.path.parent, exist_ok=True, parents=True)
     contents = generate_source_contents(
-        spec=spec, 
+        spec=spec,
         file_group=file_group,
         spec_hash=spec_hash,
         extension_config=extension_config,
@@ -312,13 +326,14 @@ def generate_source(
 
 def load_spec_file(p: PurePath, repo_file_tree: FileTree) -> Union[StructSpec, EnumSpec, VariantSpec]:
     try:
-        raw = tomllib.loads(repo_file_tree.get_file_contents(p))
-    except tomllib.TOMLDecodeError as e:
+        raw = toml.loads(repo_file_tree.get_file_contents(p))
+    except toml.TOMLDecodeError as e:
         raise RuntimeError(f"Failed to load spec {p}") from e
 
-    spec_type = raw['type']
-    del raw['type']
     try:
+        spec_type = raw['type']
+        del raw['type']
+
         if spec_type == 'struct':
             return parse_struct_spec(raw)
         elif spec_type == 'variant':
@@ -329,11 +344,13 @@ def load_spec_file(p: PurePath, repo_file_tree: FileTree) -> Union[StructSpec, E
             raise RuntimeError()
     except KeyError as e:
         raise RuntimeError(f"Failed to parse spec {p}") from e
+    except ValueError as e:
+        raise RuntimeError(f"Failed to parse spec {p}") from e
 
 def generate_files(
-    file_group: FileGroup, 
-    force: bool, 
-    extension_config: ExtensionConfig, 
+    file_group: FileGroup,
+    force: bool,
+    extension_config: ExtensionConfig,
     ifndef_base: str,
     file_tree: MutableFileTreeWithMtime,
 ) -> List[PurePath]:
@@ -345,11 +362,11 @@ def generate_files(
 
     _l.debug('Generating header file for %s', file_group)
     header_path = generate_header(
-        file_tree, 
-        spec=spec, 
-        file_group=file_group, 
-        force=force, 
-        extension_config=extension_config, 
+        file_tree,
+        spec=spec,
+        file_group=file_group,
+        force=force,
+        extension_config=extension_config,
         ifndef_base=ifndef_base,
     )
 

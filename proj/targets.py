@@ -176,7 +176,6 @@ def parse_generic_run_target(
     s: str,
 ) -> Union[
     "GenericBinTarget",
-    "BenchmarkSuiteTarget",
     "BenchmarkCaseTarget",
     "GenericTestSuiteTarget",
     "GenericTestCaseTarget",
@@ -184,8 +183,6 @@ def parse_generic_run_target(
     pieces = s.split(":")
     if len(pieces) == 1:
         return GenericBinTarget(pieces[0])
-    elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], "benchmarks"):
-        return LibTarget(pieces[0]).benchmark_target
     elif len(pieces) == 3 and is_nonempty_prefix_of(pieces[1], "benchmarks"):
         return LibTarget(pieces[0]).benchmark_target.get_benchmark_case(pieces[2])
     elif len(pieces) == 2 and is_nonempty_prefix_of(pieces[1], "tests"):
@@ -460,6 +457,14 @@ def get_test_suite_names(
         )
 
 
+def escape_test_case_name(test_case_name: str) -> str:
+    return (
+        test_case_name
+        .replace('\\', '\\\\')
+        .replace(',', '\\,')
+        .replace('*', '\\*')
+    )
+
 @dataclass(frozen=True, order=True)
 class GenericTestCaseTarget:
     test_suite: GenericTestSuiteTarget
@@ -486,9 +491,10 @@ class GenericTestCaseTarget:
     @property
     def run_target(self) -> GenericRunTarget:
         generic_run_target = self.test_suite.run_target
+
         return dataclasses.replace(
             generic_run_target,
-            args=tuple([f"--test-case={self.test_case_name}"]),
+            args=tuple([f"--test-case={escape_test_case_name(self.test_case_name)}"]),
         )
 
 
@@ -511,7 +517,7 @@ class CpuTestCaseTarget:
         return CpuRunTarget(
             dataclasses.replace(
                 generic_run_target,
-                args=tuple([f"--test-case={self.test_case_name}"]),
+                args=tuple([f"--test-case={escape_test_case_name(self.test_case_name)}"]),
             ),
         )
 
@@ -535,7 +541,7 @@ class CudaTestCaseTarget:
         return CudaRunTarget(
             dataclasses.replace(
                 generic_run_target,
-                args=tuple([f"--test-case={self.test_case_name}"]),
+                args=tuple([f"--test-case={escape_test_case_name(self.test_case_name)}"]),
             ),
         )
 
@@ -593,7 +599,7 @@ class BenchmarkSuiteTarget:
                 / self.lib_name
                 / "benchmark"
                 / self.benchmark_binary_name,
-                args=tuple(),
+                args=tuple(['--list']),
             ),
         )
 
@@ -619,7 +625,7 @@ class BenchmarkCaseTarget:
         return CpuRunTarget(
             dataclasses.replace(
                 generic_run_target,
-                args=tuple([f"--benchmark_filter=^{re.escape(self.case_name)}$"]),
+                args=tuple(["--benchmark", self.case_name]),
             ),
         )
 

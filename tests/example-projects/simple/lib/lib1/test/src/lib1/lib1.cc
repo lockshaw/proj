@@ -6,6 +6,9 @@ using namespace TestProject;
 
 TEST_SUITE(TP_TEST_SUITE) {
   TEST_CASE("call_lib1") {
+#ifdef LIB1_TESTS_FAIL_BUILD
+  some_function_that_does_not_exist();
+#endif
     char const *should_fail = std::getenv("PROJ_TESTS_FAIL_LIB1_CALL_LIB1");
     CHECK(should_fail == nullptr);
   }

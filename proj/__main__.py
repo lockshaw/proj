@@ -3,7 +3,7 @@ from typing import (
     Any,
     Sequence,
     Union,
-    TextIO,
+    BinaryIO,
     Collection,
     List,
     TypeVar,
@@ -45,8 +45,7 @@ from .build import (
 from .failure import fail_with_error
 from .benchmarks import (
     call_benchmarks,
-    upload_to_bencher,
-    pretty_print_benchmark,
+    pretty_name_for_benchmark_case,
 )
 from .cmake import (
     cmake_all,
@@ -57,6 +56,7 @@ from .targets import (
     MixedTestSuiteTarget,
     CpuTestSuiteTarget,
     CudaTestSuiteTarget,
+    CudaRunTarget,
     BenchmarkSuiteTarget,
     BenchmarkCaseTarget,
     BuildTarget,
@@ -78,7 +78,9 @@ from .testing import (
     run_test_case,
     resolve_test_case_target_using_build,
     report_test_failure,
+    report_test_timeout,
     report_test_success,
+    TerminationType,
 )
 from .checks import (
     Check,
@@ -107,7 +109,7 @@ from .parse_project import find_repo, parse_repo_path, parse_file_path
 from .utils import map_optional
 from .file_group_info import get_file_group_info
 from .paths import (
-    RepoRelPath, 
+    RepoRelPath,
     File,
 )
 from .unparse_project import get_repo_rel_path
@@ -115,6 +117,10 @@ from .includes import (
     parse_include_spec,
     find_occurrences_of_include,
 )
+from .doxygen import (
+    run_doxygen,
+)
+from .tags import generate_tag_file
 
 _l = logging.getLogger(name="proj")
 
@@ -171,7 +177,11 @@ def main_query_path(args: MainQueryPathArgs) -> int:
     file_group_info = get_file_group_info(
         file.group, config.ifndef_name, config.extension_config
     )
-    json.dump(file_group_info.json(), sort_keys=True, indent=2, fp=sys.stdout)
+
+    output = file_group_info.json()
+    output['role'] = file.role.shortname
+
+    json.dump(output, sort_keys=True, indent=2, fp=sys.stdout)
     return STATUS_OK
 
 
@@ -270,6 +280,7 @@ def main_build(args: MainBuildArgs) -> int:
         jobs=args.jobs,
         verbosity=args.verbosity,
         build_dir=build_dir,
+        redirect_build_stdout_to_stderr=False,
     )
     return 0
 
@@ -281,10 +292,7 @@ class MainBenchmarkArgs:
     jobs: int
     dtgen_skip: bool
     skip_gpu_benchmarks: bool
-    targets: Collection[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]]
-    upload: bool
-    browser: bool
-
+    targets: Sequence[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]]
 
 def main_benchmark(args: MainBenchmarkArgs) -> int:
     _l.debug("Running main_benchmark for args: %s", args)
@@ -293,11 +301,9 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
     repo = config.repo
     repo_file_tree = load_filesystem_for_repo(repo)
 
-    requested_benchmark_targets: List[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]]
-    if len(args.targets) == 0:
+    requested_benchmark_targets = args.targets
+    if len(requested_benchmark_targets) == 0:
         requested_benchmark_targets = list(config.default_benchmark_targets)
-    else:
-        requested_benchmark_targets = list(args.targets)
     _l.debug(
         "Determined requested benchmark targets to be: %s", requested_benchmark_targets
     )
@@ -338,14 +344,51 @@ def main_benchmark(args: MainBenchmarkArgs) -> int:
         jobs=args.jobs,
         verbosity=args.verbosity,
         build_dir=config.release_build_dir,
+        redirect_build_stdout_to_stderr=True,
     )
 
-    benchmark_result = call_benchmarks(
-        requested_benchmark_targets, config.release_build_dir
+    summary = call_benchmarks(
+        config=config,
+        benchmarks=requested_benchmark_targets,
+        build_dir=config.release_build_dir,
+        num_jobs=args.jobs,
     )
-    pretty_print_benchmark(benchmark_result, f=sys.stdout)
-    if args.upload:
-        upload_to_bencher(config, benchmark_result, browser=args.browser)
+    num_passed = len(summary.passed)
+    num_failed = len(summary.failed)
+    num_timed_out = len(summary.timed_out)
+    num_errored = len(summary.errored)
+
+    print(''.join([
+        f"Benchmark results: ",
+        " / ".join([
+            f"{num_passed} passed",
+            f"{num_failed} failed",
+            f"{num_timed_out} timed out",
+            f"{num_errored} errored",
+        ])
+    ]))
+    if (num_failed + num_timed_out + num_errored) > 0:
+        lines = []
+
+        if num_failed > 0:
+            lines += [
+                "The following benchmarks failed:",
+                *["- " + pretty_name_for_benchmark_case(bm) for bm in summary.failed],
+            ]
+
+        if num_timed_out > 0:
+            lines += [
+                "The following benchmarks timed out:",
+                *["- " + pretty_name_for_benchmark_case(bm) for bm in summary.timed_out],
+            ]
+
+        if num_timed_out > 0:
+            lines += [
+                "The following benchmarks encountered an error:",
+                *["- " + pretty_name_for_benchmark_case(bm) for bm in summary.errored],
+            ]
+
+        fail_with_error("\n".join(lines))
 
     return 0
 
@@ -357,7 +400,6 @@ class MainRunArgs:
     jobs: int
     target: Union[
         GenericBinTarget,
-        BenchmarkSuiteTarget,
         BenchmarkCaseTarget,
         GenericTestSuiteTarget,
         GenericTestCaseTarget,
@@ -368,6 +410,7 @@ class MainRunArgs:
 
 
 def main_run(args: MainRunArgs) -> int:
+    _l.debug('Starting to execute %s', main_run.__name__)
     config = get_config(args.path)
 
     if args.debug_build:
@@ -382,14 +425,22 @@ def main_run(args: MainRunArgs) -> int:
         jobs=args.jobs,
         verbosity=args.verbosity,
         skip_gpu=args.skip_gpu,
+        redirect_build_stdout_to_stderr=True,
     )
+
+    has_cuda = check_if_machine_supports_cuda()
+    if not has_cuda and isinstance(run_target, CudaRunTarget):
+        fail_with_error(
+            f"Cannot run target {args.target} as no gpus are available on the current machine."
+        )
 
     binary_path = build_dir / run_target.executable_path
     assert binary_path.is_file()
 
     cmd = [str(binary_path), *run_target.args, *args.target_run_args]
     result = subprocess.run(cmd)
-    print(result)
+    _l.info('Command completed with exit code %d', result.returncode)
+    _l.debug('Finished executing %s', main_run.__name__)
     return result.returncode
 
 
@@ -404,7 +455,6 @@ class MainProfileArgs:
     tool: ProfilingTool
     target: Union[
         GenericBinTarget,
-        BenchmarkSuiteTarget,
         BenchmarkCaseTarget,
         GenericTestSuiteTarget,
         GenericTestCaseTarget,
@@ -424,7 +474,14 @@ def main_profile(args: MainProfileArgs) -> int:
         jobs=args.jobs,
         verbosity=args.verbosity,
         skip_gpu=args.skip_gpu,
+        redirect_build_stdout_to_stderr=True,
     )
+
+    has_cuda = check_if_machine_supports_cuda()
+    if not has_cuda and isinstance(resolved_target, CudaRunTarget):
+        fail_with_error(
+            f"Cannot profile target {args.target} as no gpus are available on the current machine."
+        )
 
     profile_file = profile_target(
         build_dir, resolved_target, dry_run=args.dry_run, tool=args.tool
@@ -448,6 +505,7 @@ class MainTestArgs:
     browser: bool
     debug: bool
     skip_gpu_tests: bool
+    force_assume_cuda_support: bool
     targets: Collection[Union[GenericTestSuiteTarget, GenericTestCaseTarget]]
 
 
@@ -539,11 +597,14 @@ def main_test(args: MainTestArgs) -> int:
         )
         requested_test_targets_to_run = list(requested_test_targets)
 
-    if len(get_test_cases(requested_test_targets_to_run)) == 0:
+    test_cases = get_test_cases(requested_test_targets_to_run)
+    test_suites = get_test_suites(requested_test_targets_to_run)
+    if (
+        len(test_cases) == 0 and len(test_suites) > 0
+    ):
         pass
     elif (
-        len(get_test_suites(requested_test_targets_to_run)) == 0
-        and len(get_test_cases(requested_test_targets_to_run)) == 1
+        len(test_suites) == 0 and len(test_cases) == 1
     ):
         pass
     else:
@@ -551,7 +612,10 @@ def main_test(args: MainTestArgs) -> int:
             "Currently only n test suites or 1 test case is allowed. If you need this feature, let @lockshaw know."
         )
 
-    has_cuda = check_if_machine_supports_cuda()
+    if args.force_assume_cuda_support:
+        has_cuda = True
+    else:
+        has_cuda = check_if_machine_supports_cuda()
 
     def cuda_failure():
         fail_with_error(
@@ -587,6 +651,7 @@ def main_test(args: MainTestArgs) -> int:
         jobs=args.jobs,
         verbosity=args.verbosity,
         build_dir=build_dir,
+        redirect_build_stdout_to_stderr=True,
     )
 
     def require_test_suite(
@@ -607,26 +672,36 @@ def main_test(args: MainTestArgs) -> int:
     if len(get_test_cases(requested_test_targets_to_run)) == 0:
         test_suites = get_test_suites(requested_test_targets_to_run)
         _l.debug("No testcases required, running test suites %s", test_suites)
+        assert args.debug is False
         test_statistics = run_test_suites(
             config=config,
             test_suites=test_suites,
             build_dir=build_dir,
-            debug=args.debug,
+            num_jobs=args.jobs,
         )
         num_passed = len(test_statistics.passed)
         num_failed = len(test_statistics.failed)
+        num_timed_out = len(test_statistics.timed_out)
+        num_total = num_passed + num_failed + num_timed_out
         print(
-            f"Test results: {num_passed} passed / {num_failed} failed / {num_passed + num_failed} total"
+            f"Test results: {num_passed} passed / {num_failed} failed / {num_timed_out} timed out / {num_total} total"
         )
-        if num_failed > 0:
-            fail_with_error(
-                "\n".join(
-                    [
-                        "The following tests failed:",
-                        *["- " + tc.full_name for tc in test_statistics.failed],
-                    ]
-                )
-            )
+        if (num_failed + num_timed_out) > 0:
+            lines = []
+
+            if num_failed > 0:
+                lines += [
+                    "The following tests failed:",
+                    *["- " + tc.full_name for tc in test_statistics.failed],
+                ]
+
+            if num_timed_out > 0:
+                lines += [
+                    "The following tests timed out:",
+                    *["- " + tc.full_name for tc in test_statistics.timed_out],
+                ]
+
+            fail_with_error("\n".join(lines))
 
     else:
         assert len(get_test_suites(requested_test_targets_to_run)) == 0
@@ -649,11 +724,11 @@ def main_test(args: MainTestArgs) -> int:
             )
 
         if isinstance(only_to_run, CudaTestCaseTarget) and args.skip_gpu_tests:
-            _l.debug("Test %s requires CUDA but --skip-gpu-tests flag was passed. Skipping...", only_to_run)
-            pass
+            fail_with_error(f"Test {only_to_run} requires CUDA but --skip-gpu-tests flag was passed.")
         elif isinstance(only_to_run, CudaTestCaseTarget) and not has_cuda:
             cuda_failure()
         else:
+            _l.debug('Determined that test %s is runnable for has_cuda=%s', only_to_run, has_cuda)
             test_case_result = run_test_case(
                 config=config,
                 test_case=only_to_run,
@@ -661,12 +736,17 @@ def main_test(args: MainTestArgs) -> int:
                 debug=args.debug,
             )
             _l.debug("Test case %s returned result %s", only_to_run, test_case_result)
-            if not test_case_result.did_pass:
+            if test_case_result.termination == TerminationType.SUCCESS:
+                report_test_success(only_to_run, test_case_result)
+            elif test_case_result.termination == TerminationType.TIMEOUT:
+                report_test_timeout(only_to_run, test_case_result)
+                _l.debug("Test case %s timed out. Returning...", only_to_run)
+                return STATUS_ERR
+            else:
+                assert test_case_result.termination == TerminationType.FAILURE
                 report_test_failure(only_to_run, test_case_result)
                 _l.debug("Test case %s failed. Returning...", only_to_run)
                 return STATUS_ERR
-            else:
-                report_test_success(only_to_run, test_case_result)
 
     if args.coverage:
         _l.debug("Generating requested coverage data...")
@@ -681,12 +761,13 @@ def main_test(args: MainTestArgs) -> int:
 class MainCheckArgs:
     path: Path
     check: Check
+    jobs: int
     verbosity: int
 
 def main_check(args: MainCheckArgs) -> int:
     config = get_config(args.path)
 
-    run_check(config, args.check, verbosity=args.verbosity)
+    run_check(config, args.check, verbosity=args.verbosity, num_jobs=args.jobs)
 
     return STATUS_OK
 
@@ -713,7 +794,7 @@ def main_move(args: MainMoveArgs) -> int:
     repo_file_tree = load_filesystem_for_repo(config.repo)
 
     assert args.src.is_file()
-    perform_file_group_move_with_include_and_ifndef_update( 
+    perform_file_group_move_with_include_and_ifndef_update(
         repo_file_tree=repo_file_tree,
         src=src_repo_rel,
         dst=dst_repo_rel,
@@ -744,7 +825,7 @@ def main_rm(args: MainRmArgs) -> int:
     repo_file_tree = load_filesystem_for_repo(config.repo)
 
     assert args.target.is_file()
-    rm_file_group( 
+    rm_file_group(
         repo_path_tree=repo_file_tree,
         target=target_repo_rel,
         extension_config=config.extension_config,
@@ -771,7 +852,7 @@ def main_find_include(args: MainFindIncludeArgs) -> int:
     for file in found:
         repo_rel_path = get_repo_rel_path(file, config.extension_config)
         print(str(repo_rel_path.path))
-    
+
     if len(found) == 0:
         fail_with_error('No matches found.')
 
@@ -803,10 +884,28 @@ def main_lint(args: MainLintArgs) -> int:
     run_linter(
         repo=config.repo,
         repo_path_tree=repo_tree,
-        extension_config=config.extension_config, 
-        files=files, 
+        extension_config=config.extension_config,
+        files=files,
         profile_checks=args.profile_checks
     )
+    return STATUS_OK
+
+
+@dataclass(frozen=True)
+class MainTagArgs:
+    path: Path
+    verbosity: int
+
+
+def main_tag(args: MainTagArgs) -> int:
+    fs = load_root_filesystem()
+    repo = find_repo(args.path, fs)
+    assert repo is not None
+    config = load_repo_config(repo, fs)
+    assert repo is not None
+
+    generate_tag_file(config)
+
     return STATUS_OK
 
 
@@ -886,29 +985,28 @@ class MainDoxygenArgs:
 def main_doxygen(args: MainDoxygenArgs) -> int:
     config = get_config(args.path)
 
-    env = {
-        **os.environ,
-        "FF_HOME": config.base,
-    }
-    stderr: Union[int, TextIO] = sys.stderr
-    stdout: Union[int, TextIO] = sys.stdout
+    stderr: Optional[BinaryIO] = sys.stderr.buffer
+    stdout: Optional[BinaryIO] = sys.stdout.buffer
 
+    env = dict(os.environ)
     if args.verbosity > logging.INFO:
         env["DOXYGEN_QUIET"] = "YES"
     if args.verbosity > logging.WARN:
         env["DOXYGEN_WARNINGS"] = "NO"
     if args.verbosity > logging.CRITICAL:
-        stderr = subprocess.DEVNULL
-        stdout = subprocess.DEVNULL
+        stderr = None
+        stdout = None
 
-    config.doxygen_dir.mkdir(exist_ok=True, parents=True)
-    subprocess.check_call(
-        ["doxygen", "docs/doxygen/Doxyfile"],
-        env=env,
+    did_succeed = run_doxygen(
+        config=config,
+        log_level=args.verbosity,
         stdout=stdout,
         stderr=stderr,
-        cwd=config.base,
+        env=env,
     )
+
+    if not did_succeed:
+        return STATUS_ERR
 
     if args.browser:
         xdg_open(config.doxygen_dir / "html/index.html")
@@ -925,9 +1023,9 @@ def make_parser() -> argparse.ArgumentParser:
 
     root_fs = load_root_filesystem()
     repo = find_repo(Path.cwd(), root_fs)
-    
+
     config = map_optional(repo, lambda r: load_repo_config(r, root_fs))
-    
+
     def set_main_signature(
         parser: argparse.ArgumentParser, func: Callable[[T], int], args_type: Type[T]
     ) -> None:
@@ -973,6 +1071,7 @@ def make_parser() -> argparse.ArgumentParser:
     )
     test_p.add_argument("--skip-gpu-tests", action="store_true")
     test_p.add_argument("--debug", action="store_true")
+    test_p.add_argument("--force-assume-cuda-support", action="store_true", help=argparse.SUPPRESS)
     test_p.add_argument("targets", nargs="*", type=parse_generic_test_target)
     add_verbosity_args(test_p)
 
@@ -997,8 +1096,6 @@ def make_parser() -> argparse.ArgumentParser:
     )
     benchmark_p.add_argument("--dtgen-skip", action="store_true")
     benchmark_p.add_argument("--skip-gpu-benchmarks", action="store_true")
-    benchmark_p.add_argument("--upload", action="store_true")
-    benchmark_p.add_argument("--browser", action="store_true")
     benchmark_p.add_argument("targets", nargs="*", type=parse_generic_benchmark_target)
     add_verbosity_args(benchmark_p)
 
@@ -1053,6 +1150,9 @@ def make_parser() -> argparse.ArgumentParser:
 
     check_p = subparsers.add_parser("check")
     set_main_signature(check_p, main_check, MainCheckArgs)
+    check_p.add_argument(
+        "--jobs", "-j", type=int, default=multiprocessing.cpu_count()
+    )
     check_p.add_argument("check", choices=list(sorted(Check)))
     add_verbosity_args(check_p)
 
@@ -1082,6 +1182,10 @@ def make_parser() -> argparse.ArgumentParser:
     lint_p.add_argument("files", nargs="*", type=Path)
     add_verbosity_args(lint_p)
 
+    tag_p = subparsers.add_parser("tag")
+    set_main_signature(tag_p, main_tag, MainTagArgs)
+    add_verbosity_args(tag_p)
+
     doxygen_p = subparsers.add_parser("doxygen")
     set_main_signature(doxygen_p, main_doxygen, MainDoxygenArgs)
     doxygen_p.add_argument(
@@ -1102,6 +1206,7 @@ def main(argv: Sequence[str]) -> int:
     logging.basicConfig(
         level=calculate_log_level(args),
     )
+    _l.debug('Running for argv=%s', argv)
 
     if hasattr(args, "func") and args.func is not None:
         result = args.func(args)

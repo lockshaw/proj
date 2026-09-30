@@ -21,7 +21,7 @@ EXTENSION_CONFIG = ExtensionConfig(
 
 def test_rm_file_group() -> None:
     repo_path_tree = EmulatedPathTree.from_map({
-        PurePath(p): PathType.FILE 
+        PurePath(p): PathType.FILE
         for p in [
             'CMakeLists.txt',
             '.proj.toml',
@@ -34,7 +34,8 @@ def test_rm_file_group() -> None:
             'lib/person/include/person/example_struct.h',
             'lib/person/src/person/example_struct.cc',
             'lib/person/test/src/person/example_struct.cc',
-            'lib/person/benchmark/src/person/example_struct.cc',
+            'lib/person/benchmark/include/benchmark/person/example_struct.h',
+            'lib/person/benchmark/src/benchmark/person/example_struct.cc',
         ]
     })
 
@@ -61,7 +62,8 @@ def test_rm_file_group() -> None:
             'lib/person/include/person/',
             'lib/person/src/person/',
             'lib/person/test/src/person/',
-            'lib/person/benchmark/src/person/',
+            'lib/person/benchmark/include/benchmark/person/',
+            'lib/person/benchmark/src/benchmark/person/',
         ]
     )
 
@@ -69,7 +71,7 @@ def test_rm_file_group() -> None:
 
 def test_dry_run_rm_file_group() -> None:
     repo_path_tree = EmulatedPathTree.from_map({
-        PurePath(p): PathType.FILE 
+        PurePath(p): PathType.FILE
         for p in [
             'CMakeLists.txt',
             '.proj.toml',
@@ -82,7 +84,8 @@ def test_dry_run_rm_file_group() -> None:
             'lib/person/include/person/example_struct.h',
             'lib/person/src/person/example_struct.cc',
             'lib/person/test/src/person/example_struct.cc',
-            'lib/person/benchmark/src/person/example_struct.cc',
+            'lib/person/benchmark/include/benchmark/person/example_struct.h',
+            'lib/person/benchmark/src/benchmark/person/example_struct.cc',
         ]
     })
 

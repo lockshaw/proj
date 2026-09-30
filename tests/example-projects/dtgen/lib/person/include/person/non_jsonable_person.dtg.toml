@@ -1,0 +1,28 @@
+namespace = "FlexFlow"
+name = "NonJsonablePerson"
+type = "struct"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "rapidcheck",
+  "fmt",
+]
+
+includes = [
+  "<string>"
+]
+
+[[fields]]
+name = "first_name"
+type = "std::string"
+
+[[fields]]
+name = "last_name"
+type = "std::string"
+
+[[fields]]
+name = "age"
+type = "int"
+json_key = "age_in_years"
+docstring = "The Person's age (in years)"

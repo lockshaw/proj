@@ -1,17 +1,21 @@
 from typing import (
     Iterator,
-    Self,
     Sequence,
     Union,
     Iterable,
+    TYPE_CHECKING,
 )
+
+if TYPE_CHECKING:
+    from typing import Self
+
 from pathlib import (
     PurePath,
 )
 import abc
 from dataclasses import dataclass
 
-class PathTree(abc.ABC): 
+class PathTree(abc.ABC):
     @abc.abstractmethod
     def has_path(self, p: PurePath) -> bool:
         ...
@@ -21,11 +25,11 @@ class PathTree(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def ls_dir(self, p: PurePath) -> Iterator[PurePath]: 
+    def ls_dir(self, p: PurePath) -> Iterator[PurePath]:
         ...
 
     @abc.abstractmethod
-    def restrict_to_subdir(self, p: PurePath) -> Self:
+    def restrict_to_subdir(self, p: PurePath) -> 'Self':
         ...
 
     @abc.abstractmethod
@@ -47,9 +51,9 @@ class PathTree(abc.ABC):
 class MutablePathTree(PathTree):
     @abc.abstractmethod
     def mkdir(
-        self, 
-        p: PurePath, 
-        exist_ok: bool = False, 
+        self,
+        p: PurePath,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         ...
@@ -82,19 +86,18 @@ def execute_trace_element_on_path_tree(
         MkDirTrace,
         RmFileTrace,
     ],
-    path_tree: MutablePathTree, 
+    path_tree: MutablePathTree,
 ) -> None:
-    match trace_element:
-        case MoveTrace(src, dst): 
-            path_tree.rename(src=src, dst=dst)
-        case MkDirTrace(path):
-            path_tree.mkdir(path, exist_ok=False, parents=False)
-        case RmFileTrace(path):
-            path_tree.rm_file(path)
+    if isinstance(trace_element, MoveTrace):
+        path_tree.rename(src=trace_element.src, dst=trace_element.dst)
+    elif isinstance(trace_element, MkDirTrace):
+        path_tree.mkdir(trace_element.path, exist_ok=False, parents=False)
+    elif isinstance(trace_element, RmFileTrace):
+        path_tree.rm_file(trace_element.path)
 
 def replay_trace_on_path_tree(
     path_trace: Iterable[Union[MoveTrace, MkDirTrace, RmFileTrace]],
-    path_tree: MutablePathTree, 
+    path_tree: MutablePathTree,
 ) -> None:
     for trace_elem in path_trace:
         execute_trace_element_on_path_tree(trace_elem, path_tree)

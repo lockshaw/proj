@@ -25,6 +25,10 @@ has-cpu-only-benchmarks = false
 has-cuda-tests = false
 has-cuda-benchmarks = false
 
+[[benchmarks.lib1]]
+name = "example_benchmark"
+budget = 3400000
+
 # default_build_targets = [
 #   "bin1",
 #   "bin2",

@@ -1,0 +1,19 @@
+namespace = "FlexFlow"
+name = "NonJsonableVariant"
+type = "variant"
+docstring = "An int or a bool"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "rapidcheck",
+  "fmt",
+]
+includes = []
+
+[[values]]
+type = "int"
+docstring = "Could be negative"
+
+[[values]]
+type = "bool"

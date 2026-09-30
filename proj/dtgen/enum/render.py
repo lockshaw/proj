@@ -11,6 +11,8 @@ from proj.dtgen.render_utils import (
     commad,
     parens,
     render_doxygen_docstring,
+    doxygen_ignore,
+    sline,
 )
 from contextlib import contextmanager
 from typing import (
@@ -24,7 +26,7 @@ from pathlib import PurePath
 def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
         return [IncludeSpec(path=PurePath("functional"), system=True)]
-    elif feature == Feature.JSON:
+    elif feature in [Feature.JSON_DESERIALIZE, Feature.JSON_SERIALIZE]:
         return [IncludeSpec(path=PurePath("nlohmann/json.hpp"), system=True)]
     elif feature == Feature.RAPIDCHECK:
         return [IncludeSpec(path=PurePath("rapidcheck.h"), system=True)]
@@ -38,7 +40,7 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
 
 
 def source_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
-    if feature in [Feature.FMT, Feature.JSON]:
+    if feature in [Feature.FMT, Feature.JSON_SERIALIZE, Feature.JSON_DESERIALIZE]:
         return [
             IncludeSpec(path=PurePath("stdexcept"), system=True),
             IncludeSpec(path=PurePath("sstream"), system=True),
@@ -73,37 +75,47 @@ def render_enum_block(name: str, f: TextIO) -> Iterator[None]:
             yield
 
 
-def render_fmt_decl(name: str, f: TextIO) -> None:
-    f.write(f"std::string format_as({name});\n")
-    f.write(f"std::ostream &operator<<(std::ostream &, {name});\n")
+def render_fmt_decl(spec: EnumSpec, f: TextIO) -> None:
+    f.write(f"std::string format_as({spec.name});\n")
+    f.write(f"std::ostream &operator<<(std::ostream &, {spec.name});\n")
 
 
 def render_fmt_impl(spec: EnumSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
-        f.write(f"std::string format_as({spec.name} x)")
-        with braces(f):
-            f.write("switch (x)")
+        if Feature.JSON_SERIALIZE in spec.features:
+            f.write(f"std::string format_as({spec.name} x)")
             with braces(f):
-                for value in spec.values:
-                    f.write(f"case {spec.name}::{value.name}:\n")
-                    f.write(f'return "{value.name}";\n')
-                f.write("default:\n")
-                f.write("std::ostringstream oss;\n")
-                f.write(
-                    f'oss << "Unknown {spec.name} value " << static_cast<int>(x);\n'
-                )
-                f.write("throw std::runtime_error(oss.str());\n")
+                with sline(f):
+                    f.write("::nlohmann::json j = x")
+                with sline(f):
+                    f.write("return j.dump()")
+        else:
+            f.write(f"std::string format_as({spec.name} x)")
+            with braces(f):
+                f.write("switch (x)")
+                with braces(f):
+                    for value in spec.values:
+                        f.write(f"case {spec.name}::{value.name}:\n")
+                        f.write(f'return "{value.name}";\n')
+                    f.write("default:\n")
+                    f.write("std::ostringstream oss;\n")
+                    f.write(
+                        f'oss << "Unknown {spec.name} value " << static_cast<int>(x);\n'
+                    )
+                    f.write("throw std::runtime_error(oss.str());\n")
+
         f.write(f"std::ostream &operator<<(std::ostream &s, {spec.name} x)")
         with braces(f):
             f.write("return s << fmt::to_string(x);")
 
 
-def render_json_decl(name: str, f: TextIO) -> None:
+def render_json_serialize_decl(name: str, f: TextIO) -> None:
     f.write(f"void to_json(::nlohmann::json &, {name});\n")
+
+def render_json_deserialize_decl(name: str, f: TextIO) -> None:
     f.write(f"void from_json(::nlohmann::json const &, {name} &);\n")
 
-
-def render_json_impl(spec: EnumSpec, f: TextIO) -> None:
+def render_json_serialize_impl(spec: EnumSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
         f.write(f"void to_json(::nlohmann::json &j, {spec.name} x)")
         with braces(f):
@@ -119,6 +131,9 @@ def render_json_impl(spec: EnumSpec, f: TextIO) -> None:
                     f'oss << "Unknown {spec.name} value " << static_cast<int>(x);\n'
                 )
                 f.write("throw std::runtime_error(oss.str());\n")
+
+def render_json_deserialize_impl(spec: EnumSpec, f: TextIO) -> None:
+    with render_namespace_block(spec.namespace, f):
         f.write(f"void from_json(::nlohmann::json const &j, {spec.name} &x)")
         with braces(f):
             f.write("std::string as_str = j.get<std::string>();\n")
@@ -156,21 +171,23 @@ def render_rapidcheck_impl(spec: EnumSpec, f: TextIO) -> None:
 
 
 def render_hash_decl(spec: EnumSpec, f: TextIO) -> None:
-    with render_namespace_block("std", f):
-        with semicolon(f):
-            f.write("template <>\n")
-            f.write(f"struct hash<{spec.namespace}::{spec.name}> ")
-            with braces(f):
-                f.write(f"size_t operator()({spec.namespace}::{spec.name}) const;\n")
+    with doxygen_ignore(f):
+        with render_namespace_block("std", f):
+            with semicolon(f):
+                f.write("template <>\n")
+                f.write(f"struct hash<{spec.namespace}::{spec.name}> ")
+                with braces(f):
+                    f.write(f"size_t operator()({spec.namespace}::{spec.name}) const;\n")
 
 
 def render_hash_impl(spec: EnumSpec, f: TextIO) -> None:
-    with render_namespace_block("std", f):
-        f.write(
-            f"size_t hash<{spec.namespace}::{spec.name}>::operator()({spec.namespace}::{spec.name} x) const"
-        )
-        with braces(f):
-            f.write("return std::hash<int>{}(static_cast<int>(x));\n")
+    with doxygen_ignore(f):
+        with render_namespace_block("std", f):
+            f.write(
+                f"size_t hash<{spec.namespace}::{spec.name}>::operator()({spec.namespace}::{spec.name} x) const"
+            )
+            with braces(f):
+                f.write("return std::hash<int>{}(static_cast<int>(x));\n")
 
 
 def render_header(spec: EnumSpec, f: TextIO) -> None:
@@ -186,9 +203,11 @@ def render_header(spec: EnumSpec, f: TextIO) -> None:
                     f.write("\n\n" + render_doxygen_docstring(value.docstring))
                 f.write(value.name)
         if Feature.FMT in spec.features:
-            render_fmt_decl(spec.name, f)
-        if Feature.JSON in spec.features:
-            render_json_decl(spec.name, f)
+            render_fmt_decl(spec, f)
+        if Feature.JSON_SERIALIZE in spec.features:
+            render_json_serialize_decl(spec.name, f)
+        if Feature.JSON_DESERIALIZE in spec.features:
+            render_json_deserialize_decl(spec.name, f)
     if Feature.HASH in spec.features:
         render_hash_decl(spec, f)
     if Feature.RAPIDCHECK in spec.features:
@@ -203,7 +222,9 @@ def render_source(spec: EnumSpec, f: TextIO) -> None:
         render_hash_impl(spec, f)
     if Feature.FMT in spec.features:
         render_fmt_impl(spec, f)
-    if Feature.JSON in spec.features:
-        render_json_impl(spec, f)
+    if Feature.JSON_SERIALIZE in spec.features:
+        render_json_serialize_impl(spec, f)
+    if Feature.JSON_DESERIALIZE in spec.features:
+        render_json_deserialize_impl(spec, f)
     if Feature.RAPIDCHECK in spec.features:
         render_rapidcheck_impl(spec, f)

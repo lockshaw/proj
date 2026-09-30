@@ -17,8 +17,8 @@ from pathlib import PurePath
 class MutableTracedFileTreeByWrapping(TracedMutableFileTree):
     _wrapped: MutableFileTree
     _trace: List[Union[
-        MoveTrace, 
-        MkDirTrace, 
+        MoveTrace,
+        MkDirTrace,
         RmFileTrace,
         CreateFileTrace,
         ModifyFileTrace,
@@ -48,7 +48,7 @@ class MutableTracedFileTreeByWrapping(TracedMutableFileTree):
     def has_dir(self, p: PurePath) -> bool:
         return self._wrapped.has_dir(p=p)
 
-    def ls_dir(self, p: PurePath) -> Iterator[PurePath]: 
+    def ls_dir(self, p: PurePath) -> Iterator[PurePath]:
         return self._wrapped.ls_dir(p=p)
 
     def restrict_to_subdir(self, p: PurePath) -> 'MutableTracedFileTreeByWrapping':
@@ -69,7 +69,7 @@ class MutableTracedFileTreeByWrapping(TracedMutableFileTree):
         return self._wrapped.dirs()
 
     def _mkdir_in_trace(self, p: PurePath) -> None:
-        for parent in p.parents[::-1]:
+        for parent in list(p.parents)[::-1]:
             if not self._wrapped.has_dir(parent):
                 self._trace.append(
                     MkDirTrace(
@@ -84,9 +84,9 @@ class MutableTracedFileTreeByWrapping(TracedMutableFileTree):
             )
 
     def mkdir(
-        self, 
-        p: PurePath, 
-        exist_ok: bool = False, 
+        self,
+        p: PurePath,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         self._mkdir_in_trace(p)
@@ -126,10 +126,10 @@ class MutableTracedFileTreeByWrapping(TracedMutableFileTree):
         )
 
     def set_file_contents(
-        self, 
-        p: PurePath, 
-        contents: str, 
-        exist_ok: bool = False, 
+        self,
+        p: PurePath,
+        contents: str,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         self._mkdir_in_trace(p.parent)

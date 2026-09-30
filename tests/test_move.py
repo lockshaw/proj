@@ -32,10 +32,11 @@ def test_get_move_plan() -> None:
     header = 'lib/person/include/person/example_struct.h'
     src_f = 'lib/person/src/person/example_struct.cc'
     test_src = 'lib/person/test/src/person/example_struct.cc'
-    benchmark_src = 'lib/person/benchmark/src/person/example_struct.cc'
+    benchmark_hdr = 'lib/person/benchmark/include/benchmark/person/example_struct.h'
+    benchmark_src = 'lib/person/benchmark/src/benchmark/person/example_struct.cc'
 
     repo_path_tree = EmulatedPathTree.from_map({
-        PurePath(p): PathType.FILE 
+        PurePath(p): PathType.FILE
         for p in [
             'CMakeLists.txt',
             '.proj.toml',
@@ -48,6 +49,7 @@ def test_get_move_plan() -> None:
             header,
             src_f,
             test_src,
+            benchmark_hdr,
             benchmark_src,
         ]
     })
@@ -78,14 +80,15 @@ def test_get_move_plan() -> None:
         move(header, 'lib/airplane/include/airplane/my_other_airplane.h'),
         move(src_f, 'lib/airplane/src/airplane/my_other_airplane.cc'),
         move(test_src, 'lib/airplane/test/src/airplane/my_other_airplane.cc'),
-        move(benchmark_src, 'lib/airplane/benchmark/src/airplane/my_other_airplane.cc'),
+        move(benchmark_src, 'lib/airplane/benchmark/src/benchmark/airplane/my_other_airplane.cc'),
+        move(benchmark_hdr, 'lib/airplane/benchmark/include/benchmark/airplane/my_other_airplane.h'),
     }
 
     assert result == correct
 
 def test_perform_file_group_move() -> None:
     repo_path_tree = EmulatedPathTree.from_map({
-        PurePath(p): PathType.FILE 
+        PurePath(p): PathType.FILE
         for p in [
             'CMakeLists.txt',
             '.proj.toml',
@@ -98,7 +101,8 @@ def test_perform_file_group_move() -> None:
             'lib/person/include/person/example_struct.h',
             'lib/person/src/person/example_struct.cc',
             'lib/person/test/src/person/example_struct.cc',
-            'lib/person/benchmark/src/person/example_struct.cc',
+            'lib/person/benchmark/include/benchmark/person/example_struct.h',
+            'lib/person/benchmark/src/benchmark/person/example_struct.cc',
         ]
     })
 
@@ -125,13 +129,15 @@ def test_perform_file_group_move() -> None:
             'lib/airplane/include/airplane/example_airplane.h',
             'lib/airplane/src/airplane/example_airplane.cc',
             'lib/airplane/test/src/airplane/example_airplane.cc',
-            'lib/airplane/benchmark/src/airplane/example_airplane.cc',
+            'lib/airplane/benchmark/include/benchmark/airplane/example_airplane.h',
+            'lib/airplane/benchmark/src/benchmark/airplane/example_airplane.cc',
         ],
         dirs=[
             'lib/person/include/person/',
             'lib/person/src/person/',
             'lib/person/test/src/person/',
-            'lib/person/benchmark/src/person/',
+            'lib/person/benchmark/src/benchmark/person/',
+            'lib/person/benchmark/include/benchmark/person/',
         ]
     )
 
@@ -139,7 +145,7 @@ def test_perform_file_group_move() -> None:
 
 def test_perform_file_group_move_to_directory() -> None:
     repo_path_tree = EmulatedPathTree.from_map({
-        PurePath(p): PathType.FILE 
+        PurePath(p): PathType.FILE
         for p in [
             'CMakeLists.txt',
             '.proj.toml',
@@ -152,7 +158,8 @@ def test_perform_file_group_move_to_directory() -> None:
             'lib/person/include/person/example_struct.h',
             'lib/person/src/person/example_struct.cc',
             'lib/person/test/src/person/example_struct.cc',
-            'lib/person/benchmark/src/person/example_struct.cc',
+            'lib/person/benchmark/include/benchmark/person/example_struct.h',
+            'lib/person/benchmark/src/benchmark/person/example_struct.cc',
         ]
     })
 
@@ -178,13 +185,15 @@ def test_perform_file_group_move_to_directory() -> None:
             'lib/airplane/include/airplane/example_struct.h',
             'lib/airplane/src/airplane/example_struct.cc',
             'lib/airplane/test/src/airplane/example_struct.cc',
-            'lib/airplane/benchmark/src/airplane/example_struct.cc',
+            'lib/airplane/benchmark/include/benchmark/airplane/example_struct.h',
+            'lib/airplane/benchmark/src/benchmark/airplane/example_struct.cc',
         ],
         dirs=[
             'lib/person/include/person/',
             'lib/person/src/person/',
             'lib/person/test/src/person/',
-            'lib/person/benchmark/src/person/',
+            'lib/person/benchmark/src/benchmark/person/',
+            'lib/person/benchmark/include/benchmark/person/',
         ]
     )
 
@@ -192,7 +201,7 @@ def test_perform_file_group_move_to_directory() -> None:
 
 def test_perform_file_group_move_to_existing_directory() -> None:
     repo_path_tree = EmulatedPathTree.from_map({
-        PurePath(p): PathType.FILE 
+        PurePath(p): PathType.FILE
         for p in [
             'CMakeLists.txt',
             '.proj.toml',
@@ -205,7 +214,8 @@ def test_perform_file_group_move_to_existing_directory() -> None:
             'lib/person/include/person/example_struct.h',
             'lib/person/src/person/example_struct.cc',
             'lib/person/test/src/person/example_struct.cc',
-            'lib/person/benchmark/src/person/example_struct.cc',
+            'lib/person/benchmark/include/benchmark/person/example_struct.h',
+            'lib/person/benchmark/src/benchmark/person/example_struct.cc',
         ]
     })
 
@@ -231,13 +241,15 @@ def test_perform_file_group_move_to_existing_directory() -> None:
             'lib/airplane/include/airplane/example_struct.h',
             'lib/airplane/src/airplane/example_struct.cc',
             'lib/airplane/test/src/airplane/example_struct.cc',
-            'lib/airplane/benchmark/src/airplane/example_struct.cc',
+            'lib/airplane/benchmark/include/benchmark/airplane/example_struct.h',
+            'lib/airplane/benchmark/src/benchmark/airplane/example_struct.cc',
         ],
         dirs=[
             'lib/person/include/person/',
             'lib/person/src/person/',
             'lib/person/test/src/person/',
-            'lib/person/benchmark/src/person/',
+            'lib/person/benchmark/src/benchmark/person/',
+            'lib/person/benchmark/include/benchmark/person/',
         ]
     )
 
@@ -246,7 +258,7 @@ def test_perform_file_group_move_to_existing_directory() -> None:
 
 def test_perform_file_group_move_to_current_location() -> None:
     repo_path_tree = EmulatedPathTree.from_map({
-        PurePath(p): PathType.FILE 
+        PurePath(p): PathType.FILE
         for p in [
             'CMakeLists.txt',
             '.proj.toml',
@@ -259,7 +271,8 @@ def test_perform_file_group_move_to_current_location() -> None:
             'lib/person/include/person/example_struct.h',
             'lib/person/src/person/example_struct.cc',
             'lib/person/test/src/person/example_struct.cc',
-            'lib/person/benchmark/src/person/example_struct.cc',
+            'lib/person/benchmark/include/benchmark/person/example_struct.h',
+            'lib/person/benchmark/src/benchmark/include/person/example_struct.cc',
         ]
     })
 
@@ -325,7 +338,7 @@ def test_perform_file_group_move_with_include_and_ifndef_update() -> None:
         header_extension='.h',
         src_extension='.cc',
     )
-    
+
     ifndef_base = '_BASE_'
 
     perform_file_group_move_with_include_and_ifndef_update(
@@ -443,7 +456,7 @@ def test_perform_file_group_move_with_include_and_ifndef_update_is_atomic() -> N
         header_extension='.h',
         src_extension='.cc',
     )
-    
+
     ifndef_base = '_BASE_'
 
     correct = copy.deepcopy(file_tree)

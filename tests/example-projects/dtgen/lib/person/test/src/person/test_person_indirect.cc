@@ -51,7 +51,7 @@ TEST_SUITE(TP_TEST_SUITE) {
       CHECK(p.first_name == first_name);
       CHECK(p.last_name == last_name);
       CHECK(p.age == age);
-      CHECK(p.get_spouse() == spouse);  
+      CHECK(p.get_spouse() == spouse);
     }
 
     SUBCASE("no default constructor") {
@@ -79,7 +79,7 @@ TEST_SUITE(TP_TEST_SUITE) {
 
       json j = p;
       PersonIndirect p2 = j.get<PersonIndirect>();
-      
+
       CHECK(p2 == p);
     }
 
@@ -127,13 +127,13 @@ TEST_SUITE(TP_TEST_SUITE) {
 
     SUBCASE("fmt") {
       PersonIndirect p = PersonIndirect{ first_name, last_name, age, spouse };
-      std::string correct = "<PersonIndirect first_name=first last_name=last age=15 spouse=<PersonIndirect first_name=a last_name=b age=121 spouse=nullopt>>";
+      std::string correct = "{\"__type\":\"PersonIndirect\",\"age_in_years\":15,\"first_name\":\"first\",\"last_name\":\"last\",\"spouse\":{\"__type\":\"PersonIndirect\",\"age_in_years\":121,\"first_name\":\"a\",\"last_name\":\"b\",\"spouse\":null}}";
       CHECK(fmt::to_string(p) == correct);
     }
 
     SUBCASE("ostream") {
       PersonIndirect p = PersonIndirect{ first_name, last_name, age, spouse };
-      std::string correct = "<PersonIndirect first_name=first last_name=last age=15 spouse=<PersonIndirect first_name=a last_name=b age=121 spouse=nullopt>>";
+      std::string correct = "{\"__type\":\"PersonIndirect\",\"age_in_years\":15,\"first_name\":\"first\",\"last_name\":\"last\",\"spouse\":{\"__type\":\"PersonIndirect\",\"age_in_years\":121,\"first_name\":\"a\",\"last_name\":\"b\",\"spouse\":null}}";
       std::ostringstream oss;
       oss << p;
       CHECK(oss.str() == correct);

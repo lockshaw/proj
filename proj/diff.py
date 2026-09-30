@@ -35,18 +35,17 @@ def render_file_diff(
 ) -> str:
     f = io.StringIO()
     for trace_elem in file_diff:
-        match trace_elem:
-            case MoveTrace(src, dst):
-                ancestor = nearest_common_ancestor(src, dst)
-                src_rel = src.relative_to(ancestor)
-                dst_rel = dst.relative_to(ancestor)
-                f.write(f'm {ancestor}/{{{src_rel} -> {dst_rel}}}\n')
-            case MkDirTrace(path):
-                f.write(f'c {path}/\n')
-            case RmFileTrace(path):
-                f.write(f'd {path}\n')
-            case CreateFileTrace(path, content):
-                f.write(f'c {path}\n' + textwrap.indent(content, '  ') + '\n') 
-            case ModifyFileTrace(path):
-                f.write(f'm {path}\n' + textwrap.indent(trace_elem.diff, '  ') + '\n') 
+        if isinstance(trace_elem, MoveTrace):
+            ancestor = nearest_common_ancestor(trace_elem.src, trace_elem.dst)
+            src_rel = trace_elem.src.relative_to(ancestor)
+            dst_rel = trace_elem.dst.relative_to(ancestor)
+            f.write(f'm {ancestor}/{{{src_rel} -> {dst_rel}}}\n')
+        elif isinstance(trace_elem, MkDirTrace):
+            f.write(f'c {trace_elem.path}/\n')
+        elif isinstance(trace_elem, RmFileTrace):
+            f.write(f'd {trace_elem.path}\n')
+        elif isinstance(trace_elem, CreateFileTrace):
+            f.write(f'c {trace_elem.path}\n' + textwrap.indent(trace_elem.contents, '  ') + '\n')
+        elif isinstance(trace_elem, ModifyFileTrace):
+            f.write(f'm {trace_elem.path}\n' + textwrap.indent(trace_elem.diff, '  ') + '\n')
     return f.getvalue()

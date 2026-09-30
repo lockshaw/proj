@@ -7,17 +7,22 @@ from typing import (
     TypeVar,
     cast,
     Optional,
+    TYPE_CHECKING,
 )
-from typing_extensions import (
-    TypeAlias,
-    Protocol,
-)
+
+if TYPE_CHECKING:
+    from typing_extensions import (
+        TypeAlias,
+        Protocol,
+    )
+else:
+    Protocol = object
+
 import hashlib
 import json
 from pathlib import Path
-from immutables import Map
 
-Json: TypeAlias = Union[
+Json: 'TypeAlias' = Union[
     Mapping[str, "Json"], Sequence["Json"], str, int, float, bool, None
 ]
 
@@ -40,6 +45,11 @@ def require_bool(x: object) -> bool:
     return x
 
 
+def require_int(x: object) -> int:
+    assert isinstance(x, int)
+    return x
+
+
 def require_path(x: object) -> Path:
     s = require_str(x)
     return Path(s)
@@ -47,6 +57,9 @@ def require_path(x: object) -> Path:
 
 T = TypeVar("T")
 
+def require_not_none(x: Optional[T]) -> T:
+    assert x is not None
+    return x
 
 def require_list_of(x: object, check_element: Callable[[object], T]) -> Tuple[T, ...]:
     assert isinstance(x, list)
@@ -59,10 +72,10 @@ V = TypeVar("V")
 
 def require_dict_of(
     x: object, check_key: Callable[[object], K], check_value: Callable[[object], V]
-) -> Map[K, V]:
+) -> Mapping[K, V]:
     assert isinstance(x, dict)
 
-    return Map({check_key(k): check_value(v) for k, v in x.items()})
+    return {check_key(k): check_value(v) for k, v in x.items()}
 
 
 class SupportsJson(Protocol):

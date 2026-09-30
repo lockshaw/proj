@@ -16,10 +16,6 @@ def test_parse_generic_run_target() -> None:
 
     lib1_benchmarks = LibTarget('lib1').benchmark_target
 
-    assert parse_generic_run_target('lib1:b') == lib1_benchmarks
-    assert parse_generic_run_target('lib1:benchmark') == lib1_benchmarks
-    assert parse_generic_run_target('lib1:benchmarks') == lib1_benchmarks
-
     lib1_tests = LibTarget('lib1').generic_test_target
 
     assert parse_generic_run_target('lib1:t') == lib1_tests

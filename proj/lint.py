@@ -24,6 +24,7 @@ from .config_file import (
 )
 from .trees import PathTree
 from .subprocess_invocation import SubprocessInvocation
+from proj.utils import is_relative_to
 
 _l = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def _run_clang_tidy(
     root: Path,
     config: ClangToolsConfig,
     args: Sequence[str],
-    files: Sequence[PathLike[str]],
+    files: Sequence['PathLike[str]'],
     use_default_config: bool = False,
     profile_checks: bool = False,
 ) -> SubprocessInvocation:
@@ -93,7 +94,7 @@ def run_linter(
     repo: Repo,
     repo_path_tree: PathTree,
     extension_config: ExtensionConfig,
-    files: Optional[Sequence[PathLike[str]]] = None,
+    files: Optional[Sequence['PathLike[str]']] = None,
     profile_checks: bool = False,
 ) -> None:
     if files is None:

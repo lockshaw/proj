@@ -10,6 +10,7 @@ from typing import (
     Tuple,
     Union,
 )
+from proj.utils import is_relative_to
 
 @dataclass(eq=True)
 class EmulatedFileTree(MutableFileTree):
@@ -28,7 +29,7 @@ class EmulatedFileTree(MutableFileTree):
             return False
         return self._m[p] is not None
 
-    def ls_dir(self, p: PurePath) -> Iterator[PurePath]: 
+    def ls_dir(self, p: PurePath) -> Iterator[PurePath]:
         assert self.has_dir(p)
         for path in self._m:
             if path == (p / path.name):
@@ -41,15 +42,15 @@ class EmulatedFileTree(MutableFileTree):
         del self._m[src]
 
     def mkdir(
-        self, 
-        p: PurePath, 
-        exist_ok: bool = False, 
+        self,
+        p: PurePath,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         if not exist_ok:
             assert not self.has_dir(p)
         if parents:
-            for parent in p.parents[::-1]:
+            for parent in list(p.parents)[::-1]:
                 self.mkdir(parent, exist_ok=True, parents=False)
         self._m[p] = None
 
@@ -65,8 +66,8 @@ class EmulatedFileTree(MutableFileTree):
     def set_file_contents(
         self,
         p: PurePath,
-        contents: str, 
-        exist_ok: bool = False, 
+        contents: str,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         if not exist_ok:
@@ -80,7 +81,7 @@ class EmulatedFileTree(MutableFileTree):
         return EmulatedFileTree(
             {
                 k.relative_to(p): v for k, v in self._m.items()
-                if k.is_relative_to(p)
+                if is_relative_to(k, p)
             },
         )
 
@@ -109,12 +110,12 @@ class EmulatedFileTree(MutableFileTree):
         expanded: Dict[PurePath, Optional[str]] = {}
         for p, contents in m.items():
             for parent in p.parents:
-                if parent is expanded:
+                if parent in expanded:
                     assert expanded[parent] is None
                 else:
                     expanded[parent] = None
             expanded[p] = contents
-        return EmulatedFileTree(expanded) 
+        return EmulatedFileTree(expanded)
 
     @staticmethod
     def from_lists(

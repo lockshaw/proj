@@ -3,7 +3,7 @@ sources:
   - git@git.sr.ht:~lockshaw/proj
 secrets:
   - 9663ab31-69a3-45c1-aeae-9cf9a8513539
-  - 5dfdaabc-d659-4e7b-8a40-4626e8cbea2b
+  - 02dbd5e5-8977-407a-9886-760f528900fa
 environment:
   NIX_CONFIG: "experimental-features = nix-command flakes"
 

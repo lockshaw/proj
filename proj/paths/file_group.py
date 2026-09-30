@@ -28,8 +28,12 @@ class FileGroup:
         return File(self, RoleInGroup.TEST)
 
     @property
-    def benchmark(self) -> 'File':
-        return File(self, RoleInGroup.BENCHMARK)
+    def benchmark_header(self) -> 'File':
+        return File(self, RoleInGroup.BENCHMARK_HEADER)
+
+    @property
+    def benchmark_source(self) -> 'File':
+        return File(self, RoleInGroup.BENCHMARK_SOURCE)
 
     @property
     def generated_header(self) -> 'File':

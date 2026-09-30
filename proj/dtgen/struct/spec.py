@@ -1,27 +1,33 @@
 from dataclasses import dataclass
-from enum import Enum, auto
+from proj.strenum import StrEnum
+from enum import (
+    Enum,
+    auto,
+)
 from typing import (
     Sequence,
     Optional,
     FrozenSet,
     Any,
     Mapping,
+    List,
 )
 from proj.includes import (
     IncludeSpec,
     parse_include_spec,
 )
 from proj.json import Json
+import itertools
 
 
 class Feature(Enum):
-    JSON = auto()
+    JSON_SERIALIZE = auto()
+    JSON_DESERIALIZE = auto()
     EQ = auto()
     ORD = auto()
     HASH = auto()
     FMT = auto()
     RAPIDCHECK = auto()
-    # SERIALIZE = auto()
 
     def json(self) -> Json:
         return self.name
@@ -83,53 +89,80 @@ class StructSpec:
         }
 
 
-def parse_feature(raw: str) -> Feature:
+def parse_feature(raw: str) -> List[Feature]:
     if raw == "json":
-        return Feature.JSON
+        return [Feature.JSON_SERIALIZE, Feature.JSON_DESERIALIZE]
+    elif raw == "json_serialize":
+        return [Feature.JSON_SERIALIZE]
     elif raw == "eq":
-        return Feature.EQ
+        return [Feature.EQ]
     elif raw == "ord":
-        return Feature.ORD
+        return [Feature.ORD]
     elif raw == "hash":
-        return Feature.HASH
+        return [Feature.HASH]
     elif raw == "rapidcheck":
-        return Feature.RAPIDCHECK
+        return [Feature.RAPIDCHECK]
     elif raw == "fmt":
-        return Feature.FMT
-    # elif raw == 'serialize':
-    #     return Feature.SERIALIZE
+        return [Feature.FMT]
     else:
         raise ValueError(f"Unknown feature: {raw}")
 
+class FieldSpecKeys(StrEnum):
+    NAME = 'name'
+    TYPE = 'type'
+    DOCSTRING = 'docstring'
+    INDIRECT = 'indirect'
+    JSON_KEY = 'json_key'
 
 def parse_field_spec(raw: Mapping[str, Any]) -> FieldSpec:
+    invalid_keys = set(raw.keys()) - set(FieldSpecKeys)
+    if len(invalid_keys) > 0:
+        invalid_keys_str = ', '.join(map(repr, invalid_keys))
+        raise ValueError(f'Unexpected keys encountered: {invalid_keys_str}')
+
     return FieldSpec(
-        name=raw["name"],
-        type_=raw["type"],
-        docstring=raw.get("docstring", None),
-        indirect=raw.get("indirect", False),
-        _json_key=raw.get("json_key"),
+        name=raw[FieldSpecKeys.NAME],
+        type_=raw[FieldSpecKeys.TYPE],
+        docstring=raw.get(FieldSpecKeys.DOCSTRING, None),
+        indirect=raw.get(FieldSpecKeys.INDIRECT, False),
+        _json_key=raw.get(FieldSpecKeys.JSON_KEY, None),
     )
 
+class StructSpecKeys(StrEnum):
+    NAMESPACE = 'namespace'
+    INCLUDES = 'includes'
+    SRC_INCLUDES = 'src_includes'
+    POST_INCLUDES = 'post_includes'
+    FWD_DECLS = 'fwd_decls'
+    TEMPLATE_PARAMS = 'template_params'
+    NAME = 'name'
+    FIELDS = 'fields'
+    FEATURES = 'features'
+    DOCSTRING = 'docstring'
 
 def parse_struct_spec(raw: Mapping[str, Any]) -> StructSpec:
+    invalid_keys = set(raw.keys()) - set(StructSpecKeys)
+    if len(invalid_keys) > 0:
+        invalid_keys_str = ', '.join(map(repr, invalid_keys))
+        raise ValueError(f'Unexpected keys encountered: {invalid_keys_str}')
+
     return StructSpec(
-        namespace=raw.get("namespace", None),
-        includes=[parse_include_spec(include) for include in raw.get("includes", ())],
+        namespace=raw.get(StructSpecKeys.NAMESPACE, None),
+        includes=[parse_include_spec(include) for include in raw.get(StructSpecKeys.INCLUDES, ())],
         src_includes=[
             parse_include_spec(src_include)
-            for src_include in raw.get("src_includes", ())
+            for src_include in raw.get(StructSpecKeys.SRC_INCLUDES, ())
         ],
         post_includes=[
             parse_include_spec(post_include)
-            for post_include in raw.get("post_includes", ())
+            for post_include in raw.get(StructSpecKeys.POST_INCLUDES, ())
         ],
-        fwd_decls=raw.get("fwd_decls", ()),
-        template_params=raw.get("template_params", ()),
-        name=raw["name"],
-        fields=[parse_field_spec(field) for field in raw["fields"]],
-        features=frozenset([parse_feature(feature) for feature in raw["features"]]),
-        docstring=raw.get("docstring", None),
+        fwd_decls=raw.get(StructSpecKeys.FWD_DECLS, ()),
+        template_params=raw.get(StructSpecKeys.TEMPLATE_PARAMS, ()),
+        name=raw[StructSpecKeys.NAME],
+        fields=[parse_field_spec(field) for field in raw[StructSpecKeys.FIELDS]],
+        features=frozenset(itertools.chain(*[parse_feature(feature) for feature in raw[StructSpecKeys.FEATURES]])),
+        docstring=raw.get(StructSpecKeys.DOCSTRING, None),
     )
 
 

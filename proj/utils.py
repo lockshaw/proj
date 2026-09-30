@@ -53,8 +53,14 @@ def map_optional(x: Optional[T1], f: Callable[[T1], T2]) -> Optional[T2]:
     else:
         return f(x)
 
+def default_to(x: Optional[T], y: T) -> T:
+    if x is None:
+        return y
+    else:
+        return x
+
 def common_ancestors(lhs: PurePath, rhs: PurePath) -> Iterator[PurePath]:
-    for l, r in zip(lhs.parents[::-1], rhs.parents[::-1]):
+    for l, r in zip(list(lhs.parents)[::-1], list(rhs.parents)[::-1]):
         if l == r:
             yield l
         else:
@@ -89,11 +95,18 @@ def with_suffix_removed(p: P, n: int = 1) -> P:
 
 def saturating_relative_to(child: PurePath, parent: PurePath) -> Optional[PurePath]:
     result: Optional[PurePath]
-    if parent.is_relative_to(child):
+    if is_relative_to(parent, child):
         result = PurePath('.')
-    elif child.is_relative_to(parent):
+    elif is_relative_to(child, parent):
         result = child.relative_to(parent)
     else:
         result = None
     _l.debug('saturating_relative_to(%s, %s) -> %s', child, parent, result)
     return result
+
+def is_relative_to(child: PurePath, parent: PurePath) -> bool:
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False

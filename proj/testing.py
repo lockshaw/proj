@@ -4,6 +4,9 @@ from typing import (
     Union,
     Iterable,
     Tuple,
+    List,
+    Dict,
+    Optional,
 )
 from .targets import (
     CpuTestSuiteTarget,
@@ -27,16 +30,22 @@ from .config_file import (
 )
 from .utils import (
     concatmap,
+    default_to,
 )
 import itertools
 from dataclasses import (
     dataclass,
 )
-from .progressbar import (
-    get_progress_manager,
-)
 from .terminal_colors import (
     TermColor,
+)
+from .failure import fail_with_error
+from .executor import (
+    execute_tasks,
+    Task,
+    TerminationType,
+    execute_task,
+    TaskResult,
 )
 
 _l = logging.getLogger(__name__)
@@ -111,6 +120,10 @@ def list_test_cases_in_test_suites(
     ],
     build_dir: Path,
 ) -> Iterator[Union[CpuTestCaseTarget, CudaTestCaseTarget]]:
+    _l.debug(
+        'Listing all test cases in test suites %s using build_dir %s',
+        test_suites, build_dir,
+    )
     yield from itertools.chain.from_iterable(
         [list_test_cases_in_suite(suite, build_dir) for suite in test_suites]
     )
@@ -128,9 +141,9 @@ def resolve_test_case_target_using_build(
         _l.debug("Was able to resolve type of test case %s to be %s without build. Returning...", test_case, result_without_build)
         return result_without_build
     else:
-        all_test_cases_in_suite = list_test_cases_in_suite(
+        all_test_cases_in_suite = tuple(list_test_cases_in_suite(
             test_case.test_suite, build_dir
-        )
+        ))
         cpu_test_case_names = [
             t.test_case_name
             for t in all_test_cases_in_suite
@@ -159,22 +172,87 @@ def resolve_test_case_target_using_build(
             _l.debug("Test case %s found to be a CUDA test. Returning...", test_case)
             return test_case.cuda_test_case
 
+_DOCTEST_TEST_OUTPUT_SUFFIX_RE = re.compile(
+    (
+        br'^\[doctest\] test cases:\s+(?P<test_cases_executed>\d+) '
+        br'\|\s+(?P<test_cases_passed>\d+) passed '
+        br'\|\s+(?P<test_cases_failed>\d+) failed '
+        br'\|\s+(?P<test_cases_skipped>\d+) skipped\n'
+        br'^\[doctest\] assertions:\s+(?P<assertions_total>\d+) '
+        br'\|\s+(?P<assertions_passed>\d+) passed '
+        br'\|\s+(?P<assertions_failed>\d+) failed \|\n'
+        br'^\[doctest\] Status: (?P<status>SUCCESS|FAILURE)!'
+    ),
+    re.MULTILINE,
+)
 
 @dataclass(frozen=True, eq=True)
-class TestCaseResult:
-    did_pass: bool
-    stderr: bytes
-    stdout: bytes
+class DoctestTestCaseExecutionSuffix:
+    test_cases_passed: int
+    test_cases_failed: int
+    test_cases_skipped: int
+    assertions_passed: int
+    assertions_failed: int
+    succeeded: bool
 
+def strip_terminal_escapes(b: bytes) -> bytes:
+    return re.sub(b'\x1b[^m]+m', b'', b)
+
+def parse_test_case_output(output: bytes) -> Optional[DoctestTestCaseExecutionSuffix]:
+    doctest_lines = strip_terminal_escapes(
+        b'\n'.join(output.strip().splitlines()[-3:])
+    )
+
+    m = _DOCTEST_TEST_OUTPUT_SUFFIX_RE.fullmatch(doctest_lines)
+    if m is None:
+        return None
+
+    test_cases_executed = int(m.group('test_cases_executed'))
+    test_cases_passed = int(m.group('test_cases_passed'))
+    test_cases_failed = int(m.group('test_cases_failed'))
+    test_cases_skipped = int(m.group('test_cases_skipped'))
+
+    assert test_cases_executed == (test_cases_passed + test_cases_failed)
+
+    assertions_total = int(m.group('assertions_total'))
+    assertions_passed = int(m.group('assertions_passed'))
+    assertions_failed = int(m.group('assertions_failed'))
+
+    assert assertions_total == (assertions_passed + assertions_failed)
+
+    STATUS_MAP = {
+        b'SUCCESS': True,
+        b'FAILURE': False,
+    }
+    succeeded = STATUS_MAP[m.group('status')]
+
+    return DoctestTestCaseExecutionSuffix(
+        test_cases_passed=test_cases_passed,
+        test_cases_failed=test_cases_failed,
+        test_cases_skipped=test_cases_skipped,
+        assertions_passed=assertions_passed,
+        assertions_failed=assertions_failed,
+        succeeded=succeeded,
+    )
+
+def test_case_to_task(
+    config: ProjectConfig,
+    test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget],
+    build_dir: Path,
+) -> Task:
+    return Task(
+        cmd=list(config.cmd_for_run_target(test_case.run_target)),
+        cwd=build_dir / test_case.run_target.executable_path.parent,
+        env=dict(os.environ),
+        timeout_seconds=config.test_case_timeout_seconds,
+    )
 
 def run_test_case(
     config: ProjectConfig,
     test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget],
     build_dir: Path,
     debug: bool,
-) -> TestCaseResult:
-    _l.info("Running test case %s", test_case)
-
+) -> TaskResult:
     cmd = config.cmd_for_run_target(test_case.run_target)
     cwd = build_dir / test_case.run_target.executable_path.parent
     env = os.environ
@@ -191,32 +269,22 @@ def run_test_case(
         )
         sys.exit(0)
     else:
-        completed_process = subprocess.run(
-            command=cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd,
-            env=env,
+        return execute_task(
+            test_case_to_task(config, test_case, build_dir),
         )
-
-        return TestCaseResult(
-            did_pass=(completed_process.returncode == 0),
-            stderr=completed_process.stderr,
-            stdout=completed_process.stdout,
-        )
-
 
 @dataclass(frozen=True, eq=True)
 class TestStatistics:
     passed: Tuple[Union[CpuTestCaseTarget, CudaTestCaseTarget], ...]
     failed: Tuple[Union[CpuTestCaseTarget, CudaTestCaseTarget], ...]
+    timed_out: Tuple[Union[CpuTestCaseTarget, CudaTestCaseTarget], ...]
 
 
 def report_test_success(
     test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget],
-    test_case_result: TestCaseResult,
+    test_case_result: TaskResult,
 ) -> None:
-    assert test_case_result.did_pass
+    assert test_case_result.termination == TerminationType.SUCCESS
     test_name_pretty = f"{test_case.test_suite.lib_name}:{test_case.test_case_name}"
     print("".join(
         [
@@ -226,11 +294,25 @@ def report_test_success(
         ]
     ))
 
+def report_test_timeout(
+    test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget],
+    test_case_result: TaskResult,
+) -> None:
+    assert test_case_result.termination == TerminationType.TIMEOUT
+    test_name_pretty = f"{test_case.test_suite.lib_name}:{test_case.test_case_name}"
+    print("".join(
+        [
+            TermColor.BLUE,
+            f"----TIMED OUT {test_name_pretty}",
+            TermColor.END,
+        ]
+    ))
+
 def report_test_failure(
     test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget],
-    test_case_result: TestCaseResult,
+    test_case_result: TaskResult,
 ) -> None:
-    assert not test_case_result.did_pass
+    assert test_case_result.termination == TerminationType.FAILURE
 
     test_name_pretty = f"{test_case.test_suite.lib_name}:{test_case.test_case_name}"
     header_line = "".join(
@@ -266,7 +348,7 @@ def run_test_suites(
         Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]
     ],
     build_dir: Path,
-    debug: bool,
+    num_jobs: int,
 ) -> TestStatistics:
     _l.info("Running test suites %s", test_suites)
 
@@ -278,26 +360,66 @@ def run_test_suites(
     )
 
     passed = []
+    timed_out = []
     failed = []
 
-    manager = get_progress_manager()
-    with manager.counter(total=len(test_cases), desc="Running tests") as pbar:
-        for test_case in test_cases:
-            test_case_result = run_test_case(
-                config=config,
-                test_case=test_case,
-                build_dir=build_dir,
-                debug=debug,
-            )
-            pbar.update()
-            if test_case_result.did_pass:
-                passed.append(test_case)
-            else:
-                failed.append(test_case)
+    def _test_case_to_task(test_case: Union[CpuTestCaseTarget, CudaTestCaseTarget]) -> Task:
+        return test_case_to_task(config, test_case, build_dir)
 
-                report_test_failure(test_case, test_case_result)
+    for test_case, test_case_result in execute_tasks(
+        'testcases',
+        _test_case_to_task,
+        test_cases,
+        num_jobs,
+    ):
+        if test_case_result.termination == TerminationType.TIMEOUT:
+            timed_out.append(test_case)
+            report_test_timeout(test_case, test_case_result)
+        else:
+            parsed_suffix = parse_test_case_output(test_case_result.stdout)
+            if parsed_suffix is None:
+                fail_with_error('\n'.join([
+                    f'Failed to parse doctest output of testcase {test_case}.',
+                    'stdout:',
+                    test_case_result.stdout.decode('utf8'),
+                    'stderr:',
+                    test_case_result.stderr.decode('utf8'),
+                ]))
+            assert parsed_suffix.succeeded == (test_case_result.termination == TerminationType.SUCCESS)
+
+            if test_case_result.termination == TerminationType.SUCCESS:
+                if parsed_suffix.test_cases_passed != 1:
+                    fail_with_error(
+                        f'Test case {test_case} had unexpected test_cases_passed count '
+                        f'in the doctest output: expected 1, but found {parsed_suffix.test_cases_passed}'
+                    )
+                elif parsed_suffix.test_cases_failed != 0:
+                    fail_with_error(
+                        f'Test case {test_case} had unexpected test_cases_failed count '
+                        f'in the doctest output: expected 0, but found {parsed_suffix.test_cases_failed}'
+                    )
+                else:
+                    passed.append(test_case)
+            else:
+                assert test_case_result.termination == TerminationType.FAILURE
+
+                if parsed_suffix.test_cases_passed != 0:
+                    fail_with_error(
+                        f'Test case {test_case} had unexpected test_cases_passed count '
+                        f'in the doctest output: expected 0, but found {parsed_suffix.test_cases_passed}'
+                    )
+                elif parsed_suffix.test_cases_failed != 1:
+                    fail_with_error(
+                        f'Test case {test_case} had unexpected test_cases_failed count '
+                        f'in the doctest output: expected 1, but found {parsed_suffix.test_cases_failed}'
+                    )
+                else:
+                    failed.append(test_case)
+
+                    report_test_failure(test_case, test_case_result)
 
     return TestStatistics(
         passed=tuple(passed),
         failed=tuple(failed),
+        timed_out=tuple(timed_out),
     )

@@ -5,7 +5,7 @@ from ..project_utils import (
 from .e2e_utils import (
     check_cmd_succeeds,
 )
-from enum import (
+from proj.strenum import (
     StrEnum,
 )
 

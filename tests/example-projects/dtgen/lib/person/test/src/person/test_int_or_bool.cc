@@ -160,7 +160,7 @@ TEST_SUITE(TP_TEST_SUITE) {
 
       json j = correct;
       IntOrBool result = j.get<IntOrBool>();
-      
+
       CHECK(result == correct);
     }
 
@@ -169,21 +169,21 @@ TEST_SUITE(TP_TEST_SUITE) {
 
       json j = correct;
       IntOrBool result = j.get<IntOrBool>();
-      
+
       CHECK(result == correct);
     }
 
     SUBCASE("fmt (bool)") {
       IntOrBool x = IntOrBool{b};
 
-      std::string correct = "<IntOrBool bool=1>";
+      std::string correct = "{\"__type\":\"IntOrBool\",\"type\":\"bool\",\"value\":true}";
       CHECK(fmt::to_string(x) == correct);
     }
 
     SUBCASE("fmt (int)") {
       IntOrBool x = IntOrBool{i};
 
-      std::string correct = "<IntOrBool int=5>";
+      std::string correct = "{\"__type\":\"IntOrBool\",\"type\":\"int\",\"value\":5}";
       CHECK(fmt::to_string(x) == correct);
     }
 
@@ -194,7 +194,7 @@ TEST_SUITE(TP_TEST_SUITE) {
       oss << x;
       std::string result = oss.str();
 
-      std::string correct = "<IntOrBool bool=1>";
+      std::string correct = "{\"__type\":\"IntOrBool\",\"type\":\"bool\",\"value\":true}";
       CHECK(result == correct);
     }
 
@@ -205,7 +205,25 @@ TEST_SUITE(TP_TEST_SUITE) {
       oss << x;
       std::string result = oss.str();
 
-      std::string correct = "<IntOrBool int=5>";
+      std::string correct = "{\"__type\":\"IntOrBool\",\"type\":\"int\",\"value\":5}";
+      CHECK(result == correct);
+    }
+
+    SUBCASE("debug_to_string (bool)") {
+      IntOrBool x = IntOrBool{b};
+
+      std::string result = x.debug_to_string();
+      std::string correct = "{\"__type\":\"IntOrBool\",\"type\":\"bool\",\"value\":true}";
+
+      CHECK(result == correct);
+    }
+
+    SUBCASE("ostream operator<< (int)") {
+      IntOrBool x = IntOrBool{i};
+
+      std::string result = x.debug_to_string();
+      std::string correct = "{\"__type\":\"IntOrBool\",\"type\":\"int\",\"value\":5}";
+
       CHECK(result == correct);
     }
 

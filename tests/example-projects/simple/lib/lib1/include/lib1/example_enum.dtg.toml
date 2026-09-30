@@ -3,8 +3,6 @@ name = "ExampleEnum"
 type = "enum"
 features = []
 
-includes = []
-
 [[values]]
 name = "OPTION_A"
 

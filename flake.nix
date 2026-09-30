@@ -4,12 +4,12 @@
   };
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-23.11";
+    nixpkgs.url = "nixpkgs/nixos-26.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils, ... }: flake-utils.lib.eachDefaultSystem (system: 
-    let 
+  outputs = { self, nixpkgs, flake-utils, ... }: flake-utils.lib.eachDefaultSystem (system:
+    let
       pkgs = import nixpkgs {
         inherit system;
         config.allowUnfree = true;
@@ -18,21 +18,17 @@
       lib = pkgs.lib;
 
       packages = rec {
-        proj = pkgs.python3Packages.callPackage ./pkgs/proj { 
+        proj = pkgs.python3Packages.callPackage ./pkgs/proj {
           inherit pytest-skip-slow;
-          inherit bencher-cli;
           inherit ff-clang-format;
           inherit rapidcheckFull;
-          inherit doctest;
           inherit libassert;
 
           # for perf the kernel version doesn't matter as it's entirely in perl
           # see https://discourse.nixos.org/t/which-perf-package/22399
           perf = pkgs.linuxPackages_latest.perf;
         };
-        bencher-cli = pkgs.callPackage ./pkgs/bencher.nix { };
         ff-clang-format = pkgs.callPackage ./pkgs/ff-clang-format.nix { };
-        doctest = pkgs.callPackage ./pkgs/doctest { };
         pytest-skip-slow = pkgs.python3Packages.callPackage ./pkgs/pytest-skip-slow.nix { };
         proj-nvim = pkgs.callPackage ./pkgs/proj-nvim.nix { inherit proj; };
         libdwarf-lite = pkgs.callPackage ./pkgs/libdwarf-lite.nix { };
@@ -63,8 +59,8 @@
         };
 
         default = pkgs.mkShell {
-          inputsFrom = [ 
-            self.packages.${system}.proj 
+          inputsFrom = [
+            self.packages.${system}.proj
           ];
 
           buildInputs = builtins.concatLists [
@@ -72,30 +68,27 @@
               cmake
               ccache
               nlohmann_json
-              fmt
+              fmt_10
               cmake
-              gbenchmark
               lcov
               gdb
+              doctest
+              doxygen
+              ninja
+              universal-ctags
             ])
             (with pkgs.python3Packages; [
               pip
               ipython
-              ipdb
+              # ipdb
               mypy
-              python-lsp-server
-              pylsp-mypy
-              python-lsp-ruff
-              black
-              toml
-              pytest
+              tox
               pytest-xdist
               nclib
             ])
             (with self.packages.${system}; [
               rapidcheckFull
               pytest-skip-slow
-              doctest
               libassert
             ])
           ];

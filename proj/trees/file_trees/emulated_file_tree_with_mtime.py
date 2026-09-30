@@ -12,6 +12,7 @@ from ..path_trees import EmulatedPathTree, PathType
 from .emulated_file_tree import EmulatedFileTree
 from pathlib import PurePath
 from typing import Tuple
+from proj.utils import is_relative_to
 
 @dataclass(eq=True)
 class PathRecord:
@@ -20,7 +21,7 @@ class PathRecord:
 
     def is_dir(self) -> bool:
         return self.contents is None
-    
+
     def is_file(self) -> bool:
         return self.contents is not None
 
@@ -42,7 +43,7 @@ class EmulatedFileTreeWithMtime(MutableFileTreeWithMtime):
             return False
         return self._m[p].is_file()
 
-    def ls_dir(self, p: PurePath) -> Iterator[PurePath]: 
+    def ls_dir(self, p: PurePath) -> Iterator[PurePath]:
         assert self.has_dir(p)
         for path in self._m:
             if path == (p / path.name):
@@ -55,15 +56,15 @@ class EmulatedFileTreeWithMtime(MutableFileTreeWithMtime):
         del self._m[src]
 
     def mkdir(
-        self, 
-        p: PurePath, 
-        exist_ok: bool = False, 
+        self,
+        p: PurePath,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         if not exist_ok:
             assert not self.has_dir(p)
         if parents:
-            for parent in p.parents[::-1]:
+            for parent in list(p.parents)[::-1]:
                 self.mkdir(parent, exist_ok=True, parents=False)
         self._m[p] = PathRecord(
             contents=None,
@@ -80,10 +81,10 @@ class EmulatedFileTreeWithMtime(MutableFileTreeWithMtime):
         return contents
 
     def set_file_contents(
-        self, 
-        p: PurePath, 
-        contents: str, 
-        exist_ok: bool = False, 
+        self,
+        p: PurePath,
+        contents: str,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         if not exist_ok:
@@ -108,7 +109,7 @@ class EmulatedFileTreeWithMtime(MutableFileTreeWithMtime):
         return self._mtime
 
     def get_mtime(
-        self, 
+        self,
         p: PurePath,
     ) -> float:
         assert self.has_path(p)
@@ -123,7 +124,7 @@ class EmulatedFileTreeWithMtime(MutableFileTreeWithMtime):
         return EmulatedFileTreeWithMtime(
             {
                 k.relative_to(p): v for k, v in self._m.items()
-                if k.is_relative_to(p)
+                if is_relative_to(k, p)
             },
             self._curr_time,
         )
@@ -177,7 +178,7 @@ class EmulatedFileTreeWithMtime(MutableFileTreeWithMtime):
                 else:
                     assert new_parent == existing_parent
             expanded[p] = record
-        return EmulatedFileTreeWithMtime(expanded, curr_time) 
+        return EmulatedFileTreeWithMtime(expanded, curr_time)
 
     @staticmethod
     def from_lists(
@@ -189,11 +190,11 @@ class EmulatedFileTreeWithMtime(MutableFileTreeWithMtime):
             curr_time,
             {
                 **{
-                    PurePath(p): PathRecord(contents=c, mtime=t) 
+                    PurePath(p): PathRecord(contents=c, mtime=t)
                     for p, t, c in files
                 },
                 **{
-                    PurePath(p): PathRecord(contents=None, mtime=t) 
+                    PurePath(p): PathRecord(contents=None, mtime=t)
                     for p, t in dirs
                 },
             },

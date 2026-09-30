@@ -1,0 +1,23 @@
+namespace = "FlexFlow"
+name = "IndirectVariant"
+type = "variant"
+features = [
+  "eq",
+  "ord",
+  "hash",
+  "json",
+  "fmt",
+]
+
+includes = [
+  "<string>",
+]
+
+[[values]]
+type = "int"
+key = "num"
+
+[[values]]
+type = "std::string"
+key = "str"
+indirect = true

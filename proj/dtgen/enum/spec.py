@@ -5,15 +5,21 @@ from typing import (
     Any,
     Mapping,
     FrozenSet,
+    List,
 )
-from enum import Enum, auto
+from proj.strenum import StrEnum
+from enum import (
+    Enum,
+    auto,
+)
 from pathlib import Path
 import proj.toml as toml
 from proj.json import Json
-
+import itertools
 
 class Feature(Enum):
-    JSON = auto()
+    JSON_DESERIALIZE = auto()
+    JSON_SERIALIZE = auto()
     HASH = auto()
     FMT = auto()
     RAPIDCHECK = auto()
@@ -64,36 +70,57 @@ class EnumSpec:
         }
 
 
-def parse_feature(raw: str) -> Feature:
+def parse_feature(raw: str) -> List[Feature]:
     if raw == "json":
-        return Feature.JSON
+        return [Feature.JSON_SERIALIZE, Feature.JSON_DESERIALIZE]
+    elif raw == "json_serialize":
+        return [Feature.JSON_SERIALIZE]
     elif raw == "rapidcheck":
-        return Feature.RAPIDCHECK
+        return [Feature.RAPIDCHECK]
     elif raw == "fmt":
-        return Feature.FMT
+        return [Feature.FMT]
     elif raw == "hash":
-        return Feature.HASH
+        return [Feature.HASH]
     else:
         raise ValueError(f"Unknown feature: {raw}")
 
+class ValueSpecKeys(StrEnum):
+    NAME = 'name'
+    DOCSTRING = 'docstring'
+    JSON_KEY = 'json_key'
 
 def parse_value_spec(raw: Mapping[str, Any]) -> ValueSpec:
+    invalid_keys = set(raw.keys()) - set(ValueSpecKeys)
+    if len(invalid_keys) > 0:
+        invalid_keys_str = ', '.join(map(repr, invalid_keys))
+        raise ValueError(f'Unexpected keys encountered: {invalid_keys_str}')
+
     return ValueSpec(
-        name=raw["name"],
-        docstring=raw.get("docstring", None),
-        _json_key=raw.get("json_key"),
+        name=raw[ValueSpecKeys.NAME],
+        docstring=raw.get(ValueSpecKeys.DOCSTRING, None),
+        _json_key=raw.get(ValueSpecKeys.JSON_KEY, None),
     )
 
+class EnumSpecKeys(StrEnum):
+    NAMESPACE = 'namespace'
+    NAME = 'name'
+    VALUES = 'values'
+    FEATURES = 'features'
+    DOCSTRING = 'docstring'
 
 def parse_enum_spec(raw: Mapping[str, Any]) -> EnumSpec:
-    return EnumSpec(
-        namespace=raw.get("namespace", None),
-        name=raw["name"],
-        values=[parse_value_spec(value) for value in raw["values"]],
-        features=frozenset([parse_feature(feature) for feature in raw["features"]]),
-        docstring=raw.get("docstring", None),
-    )
+    invalid_keys = set(raw.keys()) - set(EnumSpecKeys)
+    if len(invalid_keys) > 0:
+        invalid_keys_str = ', '.join(map(repr, invalid_keys))
+        raise ValueError(f'Unexpected keys encountered: {invalid_keys_str}')
 
+    return EnumSpec(
+        namespace=raw.get(EnumSpecKeys.NAMESPACE, None),
+        name=raw[EnumSpecKeys.NAME],
+        values=[parse_value_spec(value) for value in raw[EnumSpecKeys.VALUES]],
+        features=frozenset(itertools.chain(*[parse_feature(feature) for feature in raw[EnumSpecKeys.FEATURES]])),
+        docstring=raw.get(EnumSpecKeys.DOCSTRING, None),
+    )
 
 def load_spec(path: Path) -> EnumSpec:
     try:
@@ -101,7 +128,10 @@ def load_spec(path: Path) -> EnumSpec:
             raw = toml.loads(f.read())
     except toml.TOMLDecodeError as e:
         raise RuntimeError(f"Failed to load spec {path}") from e
+
     try:
         return parse_enum_spec(raw)
     except KeyError as e:
+        raise RuntimeError(f"Failed to parse spec {path}") from e
+    except ValueError as e:
         raise RuntimeError(f"Failed to parse spec {path}") from e

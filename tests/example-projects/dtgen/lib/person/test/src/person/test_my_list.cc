@@ -218,22 +218,22 @@ TEST_SUITE(TP_TEST_SUITE) {
           "MyList",
         },
         {
-          "type", 
+          "type",
           "cons",
         },
         {
-          "value", 
+          "value",
           {
             {
               "__type",
               "MyListCons",
             },
             {
-              "head", 
+              "head",
               2,
             },
             {
-              "tail", 
+              "tail",
               {
                 {
                   "type",
@@ -292,8 +292,9 @@ TEST_SUITE(TP_TEST_SUITE) {
     }
 
     SUBCASE("to_string") {
-      MyList<int> l = cons(2, cons(1, empty));       
-      std::string correct = "<MyList cons=<MyListCons head=2 tail=<MyList cons=<MyListCons head=1 tail=<MyList empty=<MyListEmpty>>>>>>";
+      MyList<int> l = cons(2, cons(1, empty));
+      std::string correct = "{\"__type\":\"MyList\",\"type\":\"cons\",\"value\":{\"__type\":\"MyListCons\",\"head\":2,\"tail\":{\"__type\":\"MyList\",\"type\":\"cons\",\"value\":{\"__type\":\"MyListCons\",\"head\":1,\"tail\":{\"__type\":\"MyList\",\"type\":\"empty\",\"value\":{\"__type\":\"MyListEmpty\"}}}}}}";
+
       SUBCASE("fmt") {
         std::string result = fmt::to_string(l);
 

@@ -3,10 +3,11 @@ from proj.trees import (
     PathType,
     MaskedPathTree,
     IgnoreMask,
+    AllowMask,
 )
 from pathlib import PurePath
 
-def test_masked_path_tree():
+def test_masked_path_tree() -> None:
     example_variant_path = PurePath('include/example/example_variant.dtg.toml')
     cmakelists_path = PurePath('CMakeLists.txt')
     example_struct_toml_path = PurePath('include/example/something/example_struct.dtg.toml')
@@ -26,7 +27,7 @@ def test_masked_path_tree():
 
     masked_path_tree = MaskedPathTree(
         path_tree, 
-        IgnoreMask.from_iter(['include/example']),
+        IgnoreMask.from_iter(paths=['include/example']),
     )
 
     assert path_tree.has_path(example_variant_path)
@@ -40,6 +41,28 @@ def test_masked_path_tree():
     sub_masked_path_tree2 = masked_path_tree.restrict_to_subdir(PurePath('include/example/something'))
     assert set(sub_masked_path_tree2.files()) == set()
 
+def test_ignore_mask() -> None:
+    mask = IgnoreMask.from_iter(
+        paths=[],
+        extensions=[
+            '.swp',
+        ],
+    )
+
+    assert mask.is_allowed(PurePath('hello/world/.x.swp')) is False
+    assert mask.is_allowed(PurePath('hello/world/.x.swp.hi')) is True
+    
+def test_allow_mask() -> None:
+    mask = AllowMask.from_iter(
+        paths=[],
+        extensions=[
+            '.swp',
+        ],
+    )
+
+    assert mask.is_allowed(PurePath('hello/world/.x.swp')) is True
+    assert mask.is_allowed(PurePath('hello/world/.x.swp.hi')) is False
+
 def test_masked_path_tree_subdir_restriction() -> None:
     path_tree = EmulatedPathTree.from_lists(
         files=[
@@ -50,20 +73,23 @@ def test_masked_path_tree_subdir_restriction() -> None:
 
     masked_path_tree = MaskedPathTree(
         path_tree, 
-        IgnoreMask.from_iter([
-            'include/example',
-            'include/example2',
-        ]),
+        IgnoreMask.from_iter(
+            paths=[
+                'include/example',
+                'include/example2',
+            ],
+            extensions=[],
+        ),
     )
 
     sub_masked_path_tree = masked_path_tree.restrict_to_subdir(PurePath('include'))
-    assert sub_masked_path_tree.mask == IgnoreMask.from_iter([
+    assert sub_masked_path_tree.mask == IgnoreMask.from_iter(paths=[
         'example',
         'example2',
     ])
 
     sub_masked_path_tree2 = masked_path_tree.restrict_to_subdir(PurePath('include/example'))
-    assert sub_masked_path_tree2.mask == IgnoreMask.from_iter([
+    assert sub_masked_path_tree2.mask == IgnoreMask.from_iter(paths=[
         PurePath('.'),
     ])
     assert set(sub_masked_path_tree2.files()) == set()

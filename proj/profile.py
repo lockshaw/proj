@@ -7,7 +7,7 @@ from .targets import (
 )
 from . import subprocess_trace as subprocess
 from pathlib import Path
-from enum import StrEnum
+from proj.strenum import StrEnum
 import logging
 
 _l = logging.getLogger(__name__)

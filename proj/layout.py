@@ -13,6 +13,7 @@ from proj.trees import (
     IgnoreMask,
 )
 from typing import (
+    Union,
     Dict,
     Tuple,
     Set,
@@ -34,12 +35,14 @@ from collections import (
 )
 from .config_file import ExtensionConfig
 import logging
+from proj.utils import is_relative_to
 
 _l = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class IncompleteGroup:
     file_group: FileGroup
+    present: FrozenSet[RoleInGroup]
     missing: FrozenSet[RoleInGroup]
 
 @dataclass(frozen=True)
@@ -55,22 +58,29 @@ def _scan_component_for_files(
     component: Component,
     component_path_tree: PathTree,
     extension_config: ExtensionConfig,
-) -> Iterator[KnownFile | File | UnrecognizedFile]:
+) -> Iterator[Union[KnownFile, File, UnrecognizedFile]]:
     _l.info('Scanning component %s', component)
 
     def try_to_recognize(
         p: PurePath
-    ) -> KnownFile | File | UnrecognizedFile:
+    ) -> Union[KnownFile, File, UnrecognizedFile]:
         component_rel_path = ComponentRelPath(p, component)
 
-        if p.name == 'README.md':
-            return KnownFile(component_rel_path)
         allowed_cmake_files = [
             PurePath('CMakeLists.txt'),
             PurePath('test/CMakeLists.txt'),
             PurePath('benchmark/CMakeLists.txt'),
         ]
-        if p in allowed_cmake_files:
+
+        if (p.name == 'README.md' or
+            p.suffix in ['.dox'] or
+            is_relative_to(p, PurePath('test/src/internal')) or
+            is_relative_to(p, PurePath('benchmark/src/internal')) or
+            is_relative_to(p, PurePath('benchmark/include/internal')) or
+            p == PurePath('benchmark/src/main.cc') or
+            (is_relative_to(p, PurePath('test/src')) and p.name == 'test_e2e.cc') or
+            p in allowed_cmake_files
+        ):
             return KnownFile(component_rel_path)
 
         file = parse_file_path(ComponentRelPath(p, component), extension_config)
@@ -78,7 +88,7 @@ def _scan_component_for_files(
             return file
         else:
             return UnrecognizedFile(component_rel_path)
-    
+
     for file in map(try_to_recognize, component_path_tree.files()):
         _l.debug('Scanning component %s found file %s', component, file)
         yield file
@@ -87,7 +97,7 @@ def scan_component_for_files(
     component: Component,
     component_path_tree: PathTree,
     extension_config: ExtensionConfig,
-) -> Set[KnownFile | File | UnrecognizedFile]:
+) -> Set[Union[KnownFile, File, UnrecognizedFile]]:
     return set(_scan_component_for_files(component, component_path_tree, extension_config))
 
 def _scan_repo_for_components(
@@ -120,7 +130,7 @@ def scan_repo_for_components(
 def scan_repo_for_files(
     repo_path_tree: PathTree,
     extension_config: ExtensionConfig,
-) -> Iterator[KnownFile | File | UnrecognizedFile]:
+) -> Iterator[Union[KnownFile, File, UnrecognizedFile]]:
     for component, component_tree in scan_repo_for_components(repo_path_tree, extension_config):
         for file in scan_component_for_files(component, component_tree, extension_config):
             yield file
@@ -130,7 +140,8 @@ def detect_missing_roles(present: Collection[RoleInGroup]) -> Set[RoleInGroup]:
         RoleInGroup.PUBLIC_HEADER: {RoleInGroup.SOURCE},
         RoleInGroup.SOURCE: {RoleInGroup.PUBLIC_HEADER},
         RoleInGroup.TEST: {RoleInGroup.SOURCE, RoleInGroup.PUBLIC_HEADER},
-        RoleInGroup.BENCHMARK: {RoleInGroup.SOURCE, RoleInGroup.PUBLIC_HEADER},
+        RoleInGroup.BENCHMARK_HEADER: {RoleInGroup.SOURCE, RoleInGroup.PUBLIC_HEADER, RoleInGroup.BENCHMARK_SOURCE},
+        RoleInGroup.BENCHMARK_SOURCE: {RoleInGroup.SOURCE, RoleInGroup.PUBLIC_HEADER, RoleInGroup.BENCHMARK_HEADER},
     }
 
     necessary: Set[RoleInGroup] = set()
@@ -150,6 +161,7 @@ def detect_incomplete_groups(m: Mapping[FileGroup, Collection[RoleInGroup]]) -> 
         if len(missing_roles) > 0 and file_group.group_path not in allowlist:
             yield IncompleteGroup(
                 file_group=file_group,
+                present=frozenset(path_roles),
                 missing=missing_roles,
             )
 
@@ -157,13 +169,13 @@ def run_layout_check(
     repo_path_tree: PathTree,
     extension_config: ExtensionConfig,
     ignore_paths: Iterable[RepoRelPath],
-) -> Iterator[IncompleteGroup | UnrecognizedFile]:
+) -> Iterator[Union[IncompleteGroup, UnrecognizedFile]]:
     _ignore_paths = list(ignore_paths)
     _l.debug("Layout check ignoring paths: %s", ignore_paths)
 
     masked_path_tree: PathTree = MaskedPathTree(
         repo_path_tree,
-        IgnoreMask.from_iter([p.path for p in ignore_paths]),
+        IgnoreMask.from_iter(paths=[p.path for p in ignore_paths]),
     )
 
     file_groups: Dict[FileGroup, Set[RoleInGroup]] = defaultdict(set)

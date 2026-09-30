@@ -160,7 +160,7 @@ TEST_SUITE(TP_TEST_SUITE) {
 
       json j = correct;
       MyTemplateVariant<int, bool> result = j.get<MyTemplateVariant<int, bool>>();
-      
+
       CHECK(result == correct);
     }
 
@@ -169,21 +169,21 @@ TEST_SUITE(TP_TEST_SUITE) {
 
       json j = correct;
       MyTemplateVariant<int, bool> result = j.get<MyTemplateVariant<int, bool>>();
-      
+
       CHECK(result == correct);
     }
 
     SUBCASE("fmt (bool)") {
       MyTemplateVariant<int, bool> x = MyTemplateVariant<int, bool>{b};
 
-      std::string correct = "<MyTemplateVariant T2=1>";
+      std::string correct = "{\"__type\":\"MyTemplateVariant\",\"type\":\"T2\",\"value\":true}";
       CHECK(fmt::to_string(x) == correct);
     }
 
     SUBCASE("fmt (int)") {
       MyTemplateVariant<int, bool> x = MyTemplateVariant<int, bool>{i};
 
-      std::string correct = "<MyTemplateVariant T1=5>";
+      std::string correct = "{\"__type\":\"MyTemplateVariant\",\"type\":\"T1\",\"value\":5}";
       CHECK(fmt::to_string(x) == correct);
     }
 
@@ -194,7 +194,7 @@ TEST_SUITE(TP_TEST_SUITE) {
       oss << x;
       std::string result = oss.str();
 
-      std::string correct = "<MyTemplateVariant T2=1>";
+      std::string correct = "{\"__type\":\"MyTemplateVariant\",\"type\":\"T2\",\"value\":true}";
       CHECK(result == correct);
     }
 
@@ -205,7 +205,7 @@ TEST_SUITE(TP_TEST_SUITE) {
       oss << x;
       std::string result = oss.str();
 
-      std::string correct = "<MyTemplateVariant T1=5>";
+      std::string correct = "{\"__type\":\"MyTemplateVariant\",\"type\":\"T1\",\"value\":5}";
       CHECK(result == correct);
     }
 

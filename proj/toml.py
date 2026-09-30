@@ -9,7 +9,7 @@ if sys.version_info[:2] >= (3, 11):
         TOMLDecodeError as TOMLDecodeError,
     )
 else:
-    from toml import (
+    from tomli import (
         loads as _loads,
         TOMLDecodeError as TOMLDecodeError,
     )

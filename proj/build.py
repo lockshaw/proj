@@ -1,4 +1,7 @@
-from .config_file import ProjectConfig
+from .config_file import (
+    ProjectConfig,
+    BuildTool,
+)
 from typing import (
     Iterable,
 )
@@ -26,15 +29,27 @@ def build_targets(
     jobs: int,
     verbosity: int,
     build_dir: Path,
+    redirect_build_stdout_to_stderr: bool,
 ) -> None:
     _targets = list(sorted(set([t.name for t in targets])))
     _l.info("Building targets: %s", _targets)
     if len(_targets) == 0:
         fail_with_error("No build targets selected")
-    
+
+    cmd_bin: str
+    if config.build_tool == BuildTool.MAKE:
+        cmd_bin = 'make'
+    elif config.build_tool == BuildTool.NINJA:
+        cmd_bin = 'ninja'
+    else:
+        raise ValueError(f'Unrecognized build tool {config.build_tool!r}')
+
+    stdout = sys.stderr if redirect_build_stdout_to_stderr else sys.stdout
+    stderr = sys.stderr
+
     result = subprocess.run(
         [
-            "make",
+            cmd_bin,
             "-C",
             str(build_dir),
             "-j",
@@ -46,7 +61,8 @@ def build_targets(
             "CCACHE_BASEDIR": str(config.base),
             **({"VERBOSE": "1"} if verbosity <= logging.DEBUG else {}),
         },
-        # stderr=sys.stdout,
+        stdout=stdout,
+        stderr=stderr,
     )
     # sys.stdout.flush()
     result.check_returncode()

@@ -4,6 +4,10 @@ from proj.config_file import (
     ConfigKey,
     ProjectConfig,
 )
+from proj.targets import (
+    BenchmarkCaseTarget,
+    BenchmarkSuiteTarget,
+)
 from proj.utils import (
     with_suffix_appended,
     with_suffixes,
@@ -14,7 +18,6 @@ from typing import (
 )
 from pathlib import Path, PurePath
 import dataclasses
-from immutables import Map
 from proj.paths import Repo
 
 def get_example_config() -> Dict[str, Any]:
@@ -37,6 +40,24 @@ def get_example_config() -> Dict[str, Any]:
             '/example/ignore/me.h',
             '/example/ignore_us/',
         ],
+        ConfigKey.BENCHMARKS: {
+            'a': [
+                {
+                    'name': 'hello',
+                    'budget': 50,
+                },
+            ],
+            'b': [
+                {
+                    'name': 'bye',
+                    'budget': 25,
+                },
+                {
+                    'name': 'goodbye',
+                    'budget': 30,
+                },
+            ],
+        },
     }
 
 REPO = Repo(PurePath('/config/root'))
@@ -44,14 +65,14 @@ REPO = Repo(PurePath('/config/root'))
 LOADED_CONFIG = ProjectConfig(
     project_name='test',
     base=Path(REPO.path),
-    _targets=Map({}),
+    _targets={},
     _default_build_targets=tuple(),
     _default_test_targets=tuple(),
     _default_benchmark_targets=tuple(),
     _testsuite_macro='MY_MACRO',
     _ifndef_name='MY_IFNDEF',
     _namespace_name='MyNamespace',
-    _cmake_flags_extra=Map({}),
+    _cmake_flags_extra={},
     _cmake_require_shell=False,
     _header_extension='.hhh',
     _fix_compile_commands=False,
@@ -61,6 +82,11 @@ LOADED_CONFIG = ProjectConfig(
         Path('/example/ignore/me.h'),
         Path('/example/ignore_us/'),
     ),
+    _benchmark_instruction_budgets={
+        BenchmarkCaseTarget(BenchmarkSuiteTarget('a'), 'hello'): 50,
+        BenchmarkCaseTarget(BenchmarkSuiteTarget('b'), 'bye'): 25,
+        BenchmarkCaseTarget(BenchmarkSuiteTarget('b'), 'goodbye'): 30,
+    },
 )
 
 def test_load_parsed_config_loads_complete_value() -> None:

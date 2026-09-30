@@ -1,476 +1,243 @@
-from . import subprocess_trace as subprocess
-import json
-from .json import Json
-from typing import (
-    Sequence,
-    Tuple,
-    Dict,
-    Any,
-    IO,
-    Optional,
-    List,
-    Union,
-    TypeVar,
-)
 from dataclasses import dataclass
-from datetime import datetime
-import statistics
-from tempfile import NamedTemporaryFile
-import logging
-import re
-from .browser import open_in_browser
+from typing import (
+    Tuple,
+    Union,
+    Sequence,
+    Iterator,
+)
+from .terminal_colors import (
+    TermColor,
+)
+import math
+from pathlib import Path
+from .json import (
+    Json,
+    require_int,
+)
 from .config_file import ProjectConfig
+import os
+from .executor import (
+    execute_tasks,
+    Task,
+    TaskResult,
+    TerminationType,
+)
 from .targets import (
     BenchmarkSuiteTarget,
     BenchmarkCaseTarget,
 )
-from pathlib import Path
-from .progressbar import (
-    get_progress_manager,
-    ProgressBar,
-)
+import re
+import sys
+import logging
+from . import subprocess_trace as subprocess
+import itertools
 
 _l = logging.getLogger(__name__)
 
-
-def require_float(x: Any) -> float:
-    assert isinstance(x, (int, float)), x
-    return x
-
-
-@dataclass(frozen=True)
-class BenchmarkCache:
-    type_: str
-    level: int
-    size: int
-    num_sharing: int
-
-    @staticmethod
-    def from_json(json: Json) -> "BenchmarkCache":
-        assert isinstance(json, dict)
-        assert isinstance(json["type"], str)
-        assert isinstance(json["level"], int)
-        assert isinstance(json["size"], int)
-        assert isinstance(json["num_sharing"], int)
-        return BenchmarkCache(
-            type_=json["type"],
-            level=json["level"],
-            size=json["size"],
-            num_sharing=json["num_sharing"],
-        )
-
-    def to_json(self) -> Dict[str, Json]:
-        return {
-            "type": self.type_,
-            "level": self.level,
-            "size": self.size,
-            "num_sharing": self.num_sharing,
-        }
-
-
-@dataclass(frozen=True)
-class BenchmarkContext:
-    date: datetime
-    mhz_per_cpu: int
-    load_avg: Tuple[float, float, float]
-    num_cpus: int
-    caches: Tuple[BenchmarkCache, ...]
-    executable: str
-    rest: Dict[str, Json]
-
-    @staticmethod
-    def from_json(json: Json) -> "BenchmarkContext":
-        assert isinstance(json, dict)
-        assert isinstance(json["date"], str)
-        assert isinstance(json["mhz_per_cpu"], int)
-        assert isinstance(json["load_avg"], list)
-        assert isinstance(json["num_cpus"], int)
-        assert isinstance(json["caches"], list)
-        assert isinstance(json["executable"], str)
-        assert len(json["load_avg"]) == 3
-        load_avg = json["load_avg"]
-
-        removed = [
-            "date",
-            "mhz_per_cpu",
-            "load_avg",
-            "num_cpus",
-            "caches",
-            "executable",
-        ]
-        rest = {k: v for k, v in json.items() if k not in removed}
-        return BenchmarkContext(
-            date=datetime.fromisoformat(json["date"]),
-            mhz_per_cpu=json["mhz_per_cpu"],
-            load_avg=(
-                require_float(load_avg[0]),
-                require_float(load_avg[1]),
-                require_float(load_avg[2]),
-            ),
-            num_cpus=json["num_cpus"],
-            caches=tuple([BenchmarkCache.from_json(j) for j in json["caches"]]),
-            executable=json["executable"],
-            rest=rest,
-        )
-
-    def to_json(self) -> Json:
-        return {
-            "date": self.date.isoformat(),
-            "mhz_per_cpu": self.mhz_per_cpu,
-            "load_avg": list(self.load_avg),
-            "num_cpus": self.num_cpus,
-            "caches": [c.to_json() for c in self.caches],
-            "executable": self.executable,
-            **self.rest,
-        }
-
-
-@dataclass(frozen=True)
-class IndividualBenchmark:
-    name: str
-    real_time: float
-    cpu_time: float
-    iterations: int
-    time_unit: str
-    rest: Dict[str, Json]
-
-    @staticmethod
-    def from_json(j: Json) -> "IndividualBenchmark":
-        assert isinstance(j, dict)
-        assert isinstance(j["name"], str)
-        assert isinstance(j["real_time"], float)
-        assert isinstance(j["cpu_time"], float)
-        assert isinstance(j["iterations"], int)
-        assert isinstance(j["time_unit"], str)
-
-        removed = ["name", "real_time", "cpu_time", "iterations", "time_unit"]
-        rest = {k: v for k, v in j.items() if k not in removed}
-        return IndividualBenchmark(
-            name=j["name"],
-            real_time=j["real_time"],
-            cpu_time=j["cpu_time"],
-            iterations=j["iterations"],
-            time_unit=j["time_unit"],
-            rest=rest,
-        )
-
-    def to_json(self) -> Json:
-        return {
-            "name": self.name,
-            "real_time": self.real_time,
-            "cpu_time": self.cpu_time,
-            "iterations": self.iterations,
-            "time_unit": self.time_unit,
-            **self.rest,
-        }
-
-
-@dataclass(frozen=True)
-class BenchmarkResult:
-    context: BenchmarkContext
-    benchmarks: Tuple[IndividualBenchmark, ...]
-
-    @staticmethod
-    def from_json(json: Json) -> "BenchmarkResult":
-        assert isinstance(json, dict)
-        return BenchmarkResult(
-            context=BenchmarkContext.from_json(json["context"]),
-            benchmarks=tuple(
-                [IndividualBenchmark.from_json(ib) for ib in json["benchmarks"]]
-            ),
-        )
-
-    def to_json(self) -> Json:
-        return {
-            "context": self.context.to_json(),
-            "benchmarks": [b.to_json() for b in self.benchmarks],
-        }
-
-
-def render_table(
-    columns: Sequence[str],
-    data: Sequence[Sequence[str]],
-    sep: Optional[Union[int, Sequence[int]]] = None,
-) -> str:
-    num_columns = len(columns)
-
-    if sep is None:
-        sep = 1
-    assert sep is not None
-    if isinstance(sep, int):
-        sep = [sep for _ in range(num_columns - 1)]
-    assert isinstance(sep, list)
-    assert len(sep) == num_columns - 1
-
-    for d in data:
-        assert len(d) == num_columns
-
-    def column_entries(n: int) -> List[str]:
-        return [columns[n], *[d[n] for d in data]]
-
-    def column_width(n: int) -> int:
-        return max(map(len, column_entries(n)))
-
-    def render_column(d: Sequence[str], n: int) -> str:
-        if n == 0:
-            return d[n].ljust(column_width(n), " ")
-        else:
-            return d[n].rjust(column_width(n), " ")
-
-    def render_line(d: Sequence[str]) -> str:
-        column_contents = [render_column(d, i) for i in range(num_columns)]
-        column_seps = [s * " " for s in sep]
-        result = ""
-        for i in range(num_columns - 1):
-            result += column_contents[i]
-            result += column_seps[i]
-        result += column_contents[num_columns - 1]
-        return result
-
-    table_width = sum(column_width(i) for i in range(num_columns)) + sum(sep)
-
-    lines: List[str] = []
-    lines.append(table_width * "-")
-    lines.append(render_line(columns))
-    lines.append(table_width * "-")
-    for d in data:
-        lines.append(render_line(d))
-
-    return "\n".join(lines)
-
-
-def pretty_print_benchmark(benchmark: BenchmarkResult, f: IO[str]) -> None:
-    def line(s: str) -> None:
-        print(s, file=f)
-
-    line(benchmark.context.date.isoformat())
-    line(f"Running {benchmark.context.executable}")
-    line(
-        f"Run on ({benchmark.context.num_cpus} X {benchmark.context.mhz_per_cpu} MHz CPU s)"
-    )
-    line("CPU Caches:")
-    for cache in benchmark.context.caches:
-        line(
-            f"  L{cache.level} {cache.type_} {cache.size} B (x{benchmark.context.num_cpus // cache.num_sharing})"
-        )
-    assert len(benchmark.context.load_avg) == 3
-    (load0, load1, load2) = benchmark.context.load_avg
-    line(f"Load Average: {load0:.2f}, {load1:.2f}, {load2:.2f}")
-
-    columns = ["Benchmark", "Time", "CPU", "Iterations"]
-    sep = [1, 3, 3]
-    table_data = [
-        (
-            b.name,
-            f"{round(b.real_time)} {b.time_unit}",
-            f"{round(b.cpu_time)} {b.time_unit}",
-            str(b.iterations),
-        )
-        for b in benchmark.benchmarks
-    ]
-
-    line(render_table(columns=columns, data=table_data, sep=sep))
-
-
-def list_benchmarks(
-    benchmark_binaries: Sequence[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]],
+def list_benchmark_cases_in_suite(
+    suite: BenchmarkSuiteTarget,
     build_dir: Path,
-) -> List[BenchmarkCaseTarget]:
-    return sum(
-        (get_benchmark_list_for_binary(bin, build_dir) for bin in benchmark_binaries),
-        [],
-    )
-
-
-def get_benchmark_list_for_binary(
-    bin: Union[BenchmarkSuiteTarget, BenchmarkCaseTarget], build_dir: Path
-) -> List[BenchmarkCaseTarget]:
-    if isinstance(bin, BenchmarkCaseTarget):
-        return [bin]
-    stdout = subprocess.check_output(
+) -> Iterator[BenchmarkCaseTarget]:
+    output = subprocess.check_output(
         [
-            str(build_dir / bin.run_target.executable_path),
-            "--benchmark_list_tests=true",
+            str(suite.run_target.executable_path),
+            "--list",
         ],
+        stderr=sys.stdout,
+        cwd=build_dir,
+        env=os.environ,
         text=True,
-    )
-    return [bin.get_benchmark_case(line) for line in stdout.splitlines()]
+    ).splitlines()
 
+    for line in output:
+        yield suite.get_benchmark_case(line)
 
-def call_benchmarks(
-    benchmark_binaries: Sequence[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]],
+@dataclass(frozen=True, kw_only=True)
+class BenchmarkResult:
+    num_instructions_executed: int
+
+    @staticmethod
+    def from_json(j: Json) -> "BenchmarkResult":
+        assert isinstance(j, dict)
+
+        ALLOWED_KEYS = {'num_instructions_executed'}
+        assert set(j.keys()) == ALLOWED_KEYS
+
+        return BenchmarkResult(
+            num_instructions_executed=require_int(j['num_instructions_executed']),
+        )
+
+    def to_json(self) -> Json:
+        return {
+            'num_instructions_executed': self.num_instructions_executed,
+        }
+
+def benchmark_to_task(
+    config: ProjectConfig,
+    benchmark: BenchmarkCaseTarget,
     build_dir: Path,
-) -> BenchmarkResult:
-    _l.debug("Calling benchmark suites %s", benchmark_binaries)
-    benchmark_binaries = list(sorted(benchmark_binaries))
-    all_benchmarks = list_benchmarks(benchmark_binaries, build_dir)
-
-    manager = get_progress_manager()
-    with manager.counter(total=len(all_benchmarks), desc="Benchmarks") as pbar:
-        results = [call_benchmark(bin, pbar, build_dir) for bin in benchmark_binaries]
-    return merge_benchmark_results(results)
-
-
-def call_benchmark(
-    benchmark: Union[BenchmarkCaseTarget, BenchmarkSuiteTarget],
-    pbar: ProgressBar,
-    build_dir: Path,
-) -> BenchmarkResult:
-    if isinstance(benchmark, BenchmarkCaseTarget):
-        return call_benchmark_case(benchmark, pbar, build_dir)
-    else:
-        assert isinstance(benchmark, BenchmarkSuiteTarget)
-        return call_benchmark_suite(benchmark, pbar, build_dir)
-
-
-def call_benchmark_case(
-    benchmark: BenchmarkCaseTarget, pbar: ProgressBar, build_dir: Path
-) -> BenchmarkResult:
-    pbar.update(incr=0, force=True)
-    functions = [benchmark]
-
-    def hook(line: str) -> None:
-        match = NAME_RE.search(line)
-        if match is None:
-            return
-        testname = match.group("testname")
-        assert testname == benchmark.case_name, (testname, benchmark.case_name)
-        functions.pop(0)
-        if len(functions) > 0:
-            print(f"Running {functions[0]}")
-        pbar.update()
-
-    stdout = subprocess.hook_stdout(
-        [
-            str(build_dir / benchmark.run_target.executable_path),
-            "--benchmark_format=json",
+) -> Task:
+    return Task(
+        cmd=[
+            'valgrind',
+            '--tool=cachegrind',
+            f'./{benchmark.run_target.executable_path.name}',
             *benchmark.run_target.args,
         ],
-        stdout_hook=hook,
-    )
-    return BenchmarkResult.from_json(json.loads(stdout))
-
-
-NAME_RE = re.compile(r'"name": "(?P<testname>[^"]+)"')
-
-
-def call_benchmark_suite(
-    benchmark: BenchmarkSuiteTarget, pbar: ProgressBar, build_dir: Path
-) -> BenchmarkResult:
-    functions = get_benchmark_list_for_binary(benchmark, build_dir)
-    pbar.update(incr=0, force=True)
-
-    def hook(line: str) -> None:
-        match = NAME_RE.search(line)
-        if match is None:
-            return
-        testname = match.group("testname")
-        assert benchmark.get_benchmark_case(testname) == functions[0], (
-            testname,
-            functions[0],
-        )
-        functions.pop(0)
-        if len(functions) > 0:
-            print(f"Running {functions[0]}")
-        pbar.update()
-
-    print(f"Running {functions[0]}")
-    stdout = subprocess.hook_stdout(
-        [
-            str(build_dir / benchmark.run_target.executable_path),
-            "--benchmark_format=json",
-        ],
-        stdout_hook=hook,
-    )
-    return BenchmarkResult.from_json(json.loads(stdout))
-
-
-def upload_to_bencher(
-    config: ProjectConfig, result: BenchmarkResult, browser: bool
-) -> None:
-    with NamedTemporaryFile("r+") as f:
-        json.dump(result.to_json(), f)
-        f.flush()
-        try:
-            if browser:
-                format = "html"
-                stdout = subprocess.PIPE
-            else:
-                format = "human"
-                stdout = None
-            cmd_result = subprocess.run(
-                [
-                    "bencher",
-                    "run",
-                    "--project",
-                    "flexflow-train",
-                    "--adapter",
-                    "cpp_google",
-                    "--file",
-                    f.name,
-                    "--quiet",
-                    "--format",
-                    format,
-                ],
-                check=True,
-                stdout=stdout,
-            )
-        except subprocess.CalledProcessError:
-            _l.exception(
-                "Failed to upload to bencher. Are you sure you configured BENCHER_API_TOKEN correctly"
-            )
-        if browser:
-            config.benchmark_html_dir.mkdir(exist_ok=True, parents=True)
-            with (config.benchmark_html_dir / "index.html").open("wb") as f:  # type: ignore
-                f.write(cmd_result.stdout)
-            open_in_browser(config.benchmark_html_dir / "index.html")
-
-
-T = TypeVar("T")
-
-
-def require_all_same(x: Sequence[T]) -> T:
-    if len(x) == 0:
-        raise ValueError("unexpectedly received empty sequence")
-    result = x[0]
-    for v in x[1:]:
-        assert result == v
-    return result
-
-
-def all_same(x: Sequence[T]) -> bool:
-    if len(x) == 0:
-        return True
-    return all(v == x[0] for v in x)
-
-
-def merge_benchmark_contexts(contexts: Sequence[BenchmarkContext]) -> BenchmarkContext:
-    assert len(contexts) >= 1
-    rest = dict(contexts[0].rest)
-    num_cpus = require_all_same([c.num_cpus for c in contexts])
-    caches = require_all_same([c.caches for c in contexts])
-    if all_same([c.executable for c in contexts]):
-        executable = contexts[0].executable
-    else:
-        executable = "aggregated benchmarks"
-    return BenchmarkContext(
-        date=min(c.date for c in contexts),
-        mhz_per_cpu=round(statistics.mean(c.mhz_per_cpu for c in contexts)),
-        load_avg=(
-            statistics.mean(c.load_avg[0] for c in contexts),
-            statistics.mean(c.load_avg[1] for c in contexts),
-            statistics.mean(c.load_avg[2] for c in contexts),
-        ),
-        num_cpus=num_cpus,
-        caches=caches,
-        executable=executable,
-        rest=rest,
+        cwd=build_dir / benchmark.run_target.executable_path.parent,
+        env=dict(os.environ),
+        timeout_seconds=config.benchmark_timeout_seconds,
     )
 
+_NUM_INSTRUCTIONS_RE = re.compile(br'\bI refs:\s+([0-9,]+)')
 
-def merge_benchmark_results(results: Sequence[BenchmarkResult]) -> BenchmarkResult:
-    assert len(results) >= 1
+def parse_benchmark_output(output: bytes) -> BenchmarkResult:
+    m = _NUM_INSTRUCTIONS_RE.search(output)
+    assert m is not None, output
+
+    num_instructions = int(m.group(1).replace(b',', b''))
+
     return BenchmarkResult(
-        context=merge_benchmark_contexts([r.context for r in results]),
-        benchmarks=sum([r.benchmarks for r in results], tuple()),
+        num_instructions_executed=num_instructions,
+    )
+
+def pretty_name_for_benchmark_case(benchmark_case: BenchmarkCaseTarget) -> str:
+    return f'{benchmark_case.benchmark_suite.lib_name}:{benchmark_case.case_name}'
+
+def report_benchmark_timeout(
+    benchmark: BenchmarkCaseTarget,
+) -> None:
+    print("".join(
+        [
+            TermColor.YELLOW,
+            f"----TIMED OUT {pretty_name_for_benchmark_case(benchmark)}",
+            TermColor.END,
+        ]
+    ))
+
+def report_benchmark_success(
+    benchmark: BenchmarkCaseTarget,
+    result: BenchmarkResult,
+    instruction_budget: int,
+) -> None:
+    percentage_budget_used = math.ceil(100 * result.num_instructions_executed / instruction_budget)
+    print("".join(
+        [
+            TermColor.GREEN,
+            f"----PASSED {pretty_name_for_benchmark_case(benchmark)} ({percentage_budget_used}% = {result.num_instructions_executed:0>12} / {instruction_budget:0>12})",
+            TermColor.END,
+        ]
+    ))
+
+def report_benchmark_error(
+    benchmark: BenchmarkCaseTarget,
+    task_result: TaskResult,
+) -> None:
+    header_line = "".join(
+        [
+            TermColor.BLUE,
+            f"----ERROR IN {pretty_name_for_benchmark_case(benchmark)}".ljust(80, "-"),
+            TermColor.END,
+        ]
+    )
+
+    def msg(s: Union[str, bytes]) -> None:
+        if isinstance(s, str):
+            sys.stdout.write(s)
+        else:
+            assert isinstance(s, bytes)
+            sys.stdout.buffer.write(s)
+        sys.stdout.flush()
+
+    msg(header_line + "\n")
+    msg("STDOUT:\n")
+    msg(task_result.stdout)
+    msg("STDERR:\n")
+    msg(task_result.stderr)
+
+def report_benchmark_failure(
+    benchmark: BenchmarkCaseTarget,
+    result: BenchmarkResult,
+    instruction_budget: int,
+) -> None:
+    percentage_budget_used = math.ceil(100 * result.num_instructions_executed / instruction_budget)
+    print("".join(
+        [
+            TermColor.RED,
+            f"----FAILED {pretty_name_for_benchmark_case(benchmark)} ({percentage_budget_used}% = {result.num_instructions_executed:0>10} / {instruction_budget:0>10})",
+            TermColor.END,
+        ]
+    ))
+
+@dataclass(frozen=True, eq=True)
+class BenchmarkExecutionSummary:
+    passed: Tuple[BenchmarkCaseTarget, ...]
+    failed: Tuple[BenchmarkCaseTarget, ...]
+    timed_out: Tuple[BenchmarkCaseTarget, ...]
+    errored: Tuple[BenchmarkCaseTarget, ...]
+
+def call_benchmarks(
+    config: ProjectConfig,
+    benchmarks: Sequence[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]],
+    build_dir: Path,
+    num_jobs: int,
+) -> BenchmarkExecutionSummary:
+    _l.debug("Calling benchmarks %s", benchmarks)
+
+    def _list_benchmark_cases(b: Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]) -> Iterator[BenchmarkCaseTarget]:
+        if isinstance(b, BenchmarkCaseTarget):
+            yield b
+        else:
+            yield from list_benchmark_cases_in_suite(b, build_dir)
+
+    benchmark_case_targets = list(
+        itertools.chain.from_iterable(
+            _list_benchmark_cases(b) for b in benchmarks
+        )
+    )
+
+    instruction_budgets = {
+        b: config.lookup_instruction_budget_for_benchmark(b)
+        for b in benchmark_case_targets
+    }
+
+    passed = []
+    failed = []
+    timed_out = []
+    errored = []
+
+    def _benchmark_to_task(benchmark: BenchmarkCaseTarget) -> Task:
+        return benchmark_to_task(config, benchmark, build_dir)
+
+    for benchmark, task_result in execute_tasks(
+        'benchmarks',
+        _benchmark_to_task,
+        benchmark_case_targets,
+        num_jobs,
+    ):
+        if task_result.termination == TerminationType.TIMEOUT:
+            report_benchmark_timeout(benchmark)
+            timed_out.append(benchmark)
+            continue
+
+        if task_result.termination == TerminationType.FAILURE:
+            report_benchmark_error(benchmark, task_result)
+            errored.append(benchmark)
+            continue
+
+        assert task_result.termination == TerminationType.SUCCESS
+        benchmark_result = parse_benchmark_output(output=task_result.stderr)
+        instruction_budget = instruction_budgets[benchmark]
+        if benchmark_result.num_instructions_executed <= instruction_budget:
+            report_benchmark_success(benchmark, benchmark_result, instruction_budget)
+            passed.append(benchmark)
+        else:
+            report_benchmark_failure(benchmark, benchmark_result, instruction_budget)
+            failed.append(benchmark)
+
+    return BenchmarkExecutionSummary(
+        passed=tuple(passed),
+        failed=tuple(failed),
+        timed_out=tuple(timed_out),
+        errored=tuple(errored),
     )

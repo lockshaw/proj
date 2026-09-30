@@ -10,6 +10,7 @@ from typing import (
 )
 from .absolute_path import AbsolutePath
 from .repo import Repo
+from proj.utils import is_relative_to
 
 @dataclass(frozen=True)
 class RepoRelPath:
@@ -18,7 +19,7 @@ class RepoRelPath:
 
     def is_relative_to(self, other: 'RepoRelPath') -> bool:
         assert self.repo == other.repo and self.repo is not None
-        return self.path.is_relative_to(other.path)
+        return is_relative_to(self.path, other.path)
 
     def __truediv__(self, other: Union[str, PurePath]) -> 'RepoRelPath':
         return RepoRelPath(self.path / other, self.repo)
@@ -32,11 +33,11 @@ class RepoRelPath:
     @property
     def name(self) -> str:
         return self.path.name
-    
+
     @property
     def parents(self) -> Sequence['RepoRelPath']:
         return [RepoRelPath(p) for p in self.path.parents]
-    
+
     @property
     def suffixes(self) -> List[str]:
         return self.path.suffixes

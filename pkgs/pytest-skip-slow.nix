@@ -2,6 +2,7 @@
 , flit-core
 , flit
 , fetchPypi
+, pytest
 }:
 
 buildPythonPackage rec {
@@ -19,6 +20,10 @@ buildPythonPackage rec {
   ];
 
   build-system = [
-    flit 
+    flit
+  ];
+
+  nativeCheckInputs = [
+    pytest
   ];
 }

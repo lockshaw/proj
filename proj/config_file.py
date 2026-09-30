@@ -6,8 +6,8 @@ from typing import (
     Tuple,
     Union,
     FrozenSet,
+    Dict,
 )
-from immutables import Map
 import string
 import re
 import proj.toml as toml
@@ -17,9 +17,9 @@ from .targets import (
     CpuTestSuiteTarget,
     CudaTestCaseTarget,
     CudaTestSuiteTarget,
-    LibTarget,
     BenchmarkSuiteTarget,
     BenchmarkCaseTarget,
+    LibTarget,
     GenericTestCaseTarget,
     GenericTestSuiteTarget,
     ConfiguredNames,
@@ -42,16 +42,21 @@ from .json import (
     require_bool,
     require_list_of,
     require_dict_of,
+    require_int,
+    require_not_none,
 )
-from enum import (
-    StrEnum,
-)
+from proj.strenum import StrEnum
 from .paths import (
     Repo,
 )
 from .trees import FileTree
 
 _l = logging.getLogger(__name__)
+
+def load_str_tuple(x: object) -> Optional[Tuple[str, ...]]:
+    return map_optional(
+        map_optional(x, lambda l: require_list_of(l, require_str)), lambda ll: tuple(ll)
+    )
 
 @dataclass(frozen=True)
 class ExtensionConfig:
@@ -62,13 +67,38 @@ class ExtensionConfig:
         assert self.header_extension.startswith('.')
         assert self.src_extension.startswith('.')
 
-
 @dataclass(frozen=True, order=True)
 class LibConfig:
     has_cpu_only_test_suite: bool
     has_cuda_test_suite: bool
     has_cpu_only_benchmark_suite: bool
     has_cuda_benchmark_suite: bool
+
+class BenchmarkConfigKeys(StrEnum):
+    NAME = 'name'
+    INSTRUCTION_BUDGET = 'budget'
+
+def _load_benchmarks(m: object) -> Mapping[BenchmarkCaseTarget, int]:
+    assert isinstance(m, dict)
+
+    result = {}
+    for suite, benchmark_cases in m.items():
+        assert isinstance(benchmark_cases, list), repr(benchmark_cases)
+        for benchmark_case in benchmark_cases:
+            assert isinstance(benchmark_case, dict)
+
+            assert set(benchmark_case.keys()) == set(BenchmarkConfigKeys)
+
+            _benchmark_case = BenchmarkCaseTarget(
+                benchmark_suite=BenchmarkSuiteTarget(suite),
+                case_name=require_str(benchmark_case[BenchmarkConfigKeys.NAME]),
+            )
+
+            _budget = require_int(benchmark_case[BenchmarkConfigKeys.INSTRUCTION_BUDGET])
+
+            result[_benchmark_case] = _budget
+
+    return result
 
 
 def get_test_target(
@@ -86,12 +116,16 @@ def get_test_target(
 class BinConfig:
     requires_cuda: bool
 
+class BuildTool(StrEnum):
+    MAKE = 'make'
+    NINJA = 'ninja'
 
 @dataclass(frozen=True)
 class ProjectConfig:
     project_name: str
     base: Path
     _targets: Mapping[str, Union[LibConfig, BinConfig]]
+    _doxygen: Optional[bool] = None
     _default_build_targets: Optional[Tuple[str, ...]] = None
     _default_test_targets: Optional[Tuple[str, ...]] = None
     _default_benchmark_targets: Optional[Tuple[str, ...]] = None
@@ -107,10 +141,28 @@ class ProjectConfig:
     _test_header_path: Optional[Path] = None
     _cuda_launch_cmd: Optional[Tuple[str, ...]] = None
     _layout_ignore_paths: Optional[Tuple[Path, ...]] = None
+    _build_tool: Optional[BuildTool] = None
+    _test_case_timeout_seconds: Optional[int] = None
+    _benchmark_timeout_seconds: Optional[int] = None
+    _benchmark_instruction_budgets: Optional[Mapping[BenchmarkCaseTarget, int]] = None
 
     @property
     def repo(self) -> Repo:
         return Repo(self.base)
+
+    @property
+    def doxygen_enabled(self) -> bool:
+        if self._doxygen is None:
+            return False
+        else:
+            return self._doxygen
+
+    @property
+    def build_tool(self) -> BuildTool:
+        if self._build_tool is None:
+            return BuildTool.NINJA
+        else:
+            return self._build_tool
 
     @property
     def debug_build_dir(self) -> Path:
@@ -123,10 +175,6 @@ class ProjectConfig:
     @property
     def coverage_build_dir(self) -> Path:
         return self.base / "build/coverage"
-
-    @property
-    def benchmark_html_dir(self) -> Path:
-        return self.release_build_dir / "bencher"
 
     @property
     def doxygen_dir(self) -> Path:
@@ -170,12 +218,12 @@ class ProjectConfig:
 
     @property
     def all_build_targets(self) -> Tuple[BuildTarget, ...]:
-        return tuple(
-            [
-                *[lib.build_target for lib in sorted(self.lib_targets)],
-                *[bin.build_target for bin in sorted(self.bin_targets)],
-            ]
-        )
+        return tuple([
+            *[t.build_target for t in self.all_test_targets],
+            *[t.build_target for t in self.lib_targets],
+            *[t.build_target for t in self.bin_targets],
+            *[t.build_target for t in self.all_benchmark_targets],
+        ])
 
     @property
     def default_build_targets(self) -> Tuple[BuildTarget, ...]:
@@ -193,16 +241,14 @@ class ProjectConfig:
     ) -> FrozenSet[
         Union[MixedTestSuiteTarget, CpuTestSuiteTarget, CudaTestSuiteTarget]
     ]:
-        return frozenset(
-            [self.test_suite_for_lib(lib) for lib in sorted(self.lib_targets)]
-        )
+        return self.all_cpu_test_targets | self.all_cuda_test_targets
 
     @property
     def all_cpu_test_targets(self) -> FrozenSet[CpuTestSuiteTarget]:
         return frozenset(
             [
                 lib.cpu_test_target
-                for lib, conf in sorted(self.lib_targets.items())
+                for lib, conf in self.lib_targets.items()
                 if conf.has_cpu_only_test_suite
             ]
         )
@@ -261,15 +307,41 @@ class ProjectConfig:
             return lib.cuda_test_target
 
     @property
+    def benchmark_instruction_budgets(
+        self,
+    ) -> Mapping[BenchmarkCaseTarget, int]:
+        if self._benchmark_instruction_budgets is None:
+            return {}
+        else:
+            return self._benchmark_instruction_budgets
+
+    def lookup_instruction_budget_for_benchmark(
+        self,
+        benchmark: BenchmarkCaseTarget,
+    ) -> int:
+        return self.benchmark_instruction_budgets[benchmark]
+
+    @property
+    def all_benchmark_targets(
+        self,
+    ) -> FrozenSet[BenchmarkSuiteTarget]:
+        return frozenset([
+            lib.benchmark_target for lib, conf in self.lib_targets.items()
+            if conf.has_cpu_only_benchmark_suite
+        ])
+
+    @property
     def default_benchmark_targets(
         self,
-    ) -> Tuple[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget], ...]:
+    ) -> FrozenSet[Union[BenchmarkSuiteTarget, BenchmarkCaseTarget]]:
         if self._default_benchmark_targets is None:
-            return tuple([lib.benchmark_target for lib in sorted(self.lib_targets)])
+            return self.all_benchmark_targets
         else:
-            return tuple(
-                parse_generic_benchmark_target(s)
-                for s in self._default_benchmark_targets
+            return frozenset(
+                [
+                    parse_generic_benchmark_target(s)
+                    for s in self._default_benchmark_targets
+                ]
             )
 
     @property
@@ -375,6 +447,20 @@ class ProjectConfig:
             return self._test_header_path
 
     @property
+    def test_case_timeout_seconds(self) -> Optional[int]:
+        if self._test_case_timeout_seconds is None:
+            return 60 * 3
+        else:
+            return self._test_case_timeout_seconds
+
+    @property
+    def benchmark_timeout_seconds(self) -> Optional[int]:
+        if self._benchmark_timeout_seconds is None:
+            return 60 * 3
+        else:
+            return self._benchmark_timeout_seconds
+
+    @property
     def cuda_launch_cmd(self) -> Tuple[str, ...]:
         if self._cuda_launch_cmd is None:
             return tuple()
@@ -425,6 +511,7 @@ def _load_target_config(m: Mapping[str, object]) -> Union[LibConfig, BinConfig]:
         has_cuda_test_suite = require_bool(m["has-cuda-tests"])
         has_cpu_only_benchmark_suite = require_bool(m["has-cpu-only-benchmarks"])
         has_cuda_benchmark_suite = require_bool(m["has-cuda-benchmarks"])
+        assert not has_cuda_benchmark_suite
         return LibConfig(
             has_cpu_only_test_suite=has_cpu_only_test_suite,
             has_cuda_test_suite=has_cuda_test_suite,
@@ -500,22 +587,24 @@ def resolve_bin_target(
         return CudaBinTarget(t)
 
 
-def _load_targets(m: object) -> Map[str, Union[LibConfig, BinConfig]]:
+def _load_targets(m: object) -> Mapping[str, Union[LibConfig, BinConfig]]:
     assert isinstance(m, dict)
 
-    return Map(
-        {
-            target_name: _load_target_config(target_config)
-            for target_name, target_config in m.items()
-        }
-    )
+    return {
+        target_name: _load_target_config(target_config)
+        for target_name, target_config in m.items()
+    }
 
 
-def load_str_tuple(x: object) -> Optional[Tuple[str, ...]]:
-    return map_optional(
-        map_optional(x, lambda l: require_list_of(l, require_str)), lambda ll: tuple(ll)
-    )
+def load_int(x: object) -> Optional[int]:
+    return map_optional(x, require_int)
 
+def load_build_tool(x: object) -> Optional[BuildTool]:
+    return map_optional(map_optional(x, require_str), lambda s: BuildTool(s))
+
+
+def load_bool(x: object) -> Optional[bool]:
+    return map_optional(x, require_bool)
 
 def load_path(x: object) -> Optional[Path]:
     return map_optional(map_optional(x, require_str), lambda s: Path(s))
@@ -527,7 +616,7 @@ def load_path_tuple(x: object) -> Optional[Tuple[Path, ...]]:
     list_ = require_list_of(x, require_str)
     return tuple(Path(l) for l in list_)
 
-def load_cmake_flags(x: object) -> Optional[Map[str, str]]:
+def load_cmake_flags(x: object) -> Optional[Mapping[str, str]]:
     return map_optional(x, lambda y: require_dict_of(y, require_str, require_str))
 
 
@@ -554,6 +643,11 @@ class ConfigKey(StrEnum):
     TEST_HEADER_PATH = "test_header_path"
     CUDA_LAUNCH_CMD = "cuda_launch_cmd"
     LAYOUT_IGNORE_PATHS = "layout_ignore_paths"
+    DOXYGEN = "doxygen"
+    BUILD_TOOL = "build_tool"
+    TEST_CASE_TIMEOUT_SECONDS = "test_case_timeout_seconds"
+    BENCHMARK_TIMEOUT_SECONDS = "benchmark_timeout_seconds"
+    BENCHMARKS = "benchmarks"
 
 def load_parsed_config(repo: Repo, raw: object) -> ProjectConfig:
     _l.debug("Loading parsed config: %s", raw)
@@ -566,6 +660,7 @@ def load_parsed_config(repo: Repo, raw: object) -> ProjectConfig:
         project_name=require_str(raw[ConfigKey.PROJECT_NAME]),
         base=Path(repo.path),
         _targets=_load_targets(raw[ConfigKey.TARGETS]),
+        _doxygen=load_bool(raw.get(ConfigKey.DOXYGEN)),
         _default_build_targets=load_str_tuple(raw.get(ConfigKey.DEFAULT_BIN_TARGETS)),
         _default_test_targets=load_str_tuple(raw.get(ConfigKey.DEFAULT_TEST_TARGETS)),
         _default_benchmark_targets=load_str_tuple(
@@ -587,183 +682,11 @@ def load_parsed_config(repo: Repo, raw: object) -> ProjectConfig:
         _test_header_path=load_path(raw.get(ConfigKey.TEST_HEADER_PATH)),
         _cuda_launch_cmd=load_str_tuple(raw.get(ConfigKey.CUDA_LAUNCH_CMD)),
         _layout_ignore_paths=load_path_tuple(raw.get(ConfigKey.LAYOUT_IGNORE_PATHS)),
+        _build_tool=load_build_tool(raw.get(ConfigKey.BUILD_TOOL)),
+        _test_case_timeout_seconds=load_int(raw.get(ConfigKey.TEST_CASE_TIMEOUT_SECONDS)),
+        _benchmark_timeout_seconds=load_int(raw.get(ConfigKey.BENCHMARK_TIMEOUT_SECONDS)),
+        _benchmark_instruction_budgets=_load_benchmarks(raw.get(ConfigKey.BENCHMARKS, dict())),
     )
-
-
-# def try_get_config(p: Union[Path, str]) -> Optional[ProjectConfig]:
-#     try:
-#         return get_config(p)
-#     except FileNotFoundError:
-#         return None
-#
-
-# def get_possible_spec_paths(p: Path) -> Iterator[Path]:
-#     p = Path(p).absolute()
-#     config = get_config(p)
-#     assert p.name.endswith(".dtg.cc") or p.name.endswith(
-#         ".dtg" + config.header_extension
-#     )
-#     subrelpath = get_subrelpath(p)
-#     include_dir = get_include_dir(p)
-#     assert include_dir is not None
-#     src_dir = get_src_dir(p)
-#     assert src_dir is not None
-#     for d in [include_dir, src_dir]:
-#         for ext in [".struct.toml", ".enum.toml", ".variant.toml"]:
-#             yield d / with_suffix_appended(with_suffix_removed(subrelpath), ext)
-#
-
-
-
-# def get_nongenerated_public_header_info(p: Path) -> HeaderInfo:
-#     path = get_nongenerated_public_header_path(p)
-#     return HeaderInfo(
-#         path=path,
-#         ifndef=gen_ifndef_uid(path),
-#     )
-#
-# def get_private_header_path(p: Path) -> Path:
-#     config = get_config(p)
-#
-#     lib_info = get_lib_info(p)
-#
-#     subrelpath = get_subrelpath(p)
-#     subrelpath_with_extension = with_suffix_appended(
-#         subrelpath, config.header_extension
-#     )
-#
-#     return lib_info.src_dir / subrelpath_with_extension
-#
-
-# def get_private_header_info(p: Path) -> HeaderInfo:
-#     path = get_private_header_path(p)
-#     return HeaderInfo(
-#         path=path,
-#         ifndef=gen_ifndef_uid(path),
-#     )
-#
-
-# def try_get_nongenerated_header_path(p: Path) -> Optional[Path]:
-#     try:
-#         return get_nongenerated_header_path(p)
-#     except RuntimeError:
-#         return None
-#
-
-# def get_nongenerated_header_path(p: Path) -> Path:
-#     config = get_config(p)
-#
-#     lib_info = get_lib_info(p)
-#
-#     subrelpath = get_subrelpath(p)
-#     subrelpath_with_extension = with_suffix_appended(
-#         subrelpath, config.header_extension
-#     )
-#
-#     public_include = lib_info.include_dir / subrelpath_with_extension
-#     private_include = lib_info.src_dir / subrelpath_with_extension
-#     if public_include.exists():
-#         return public_include
-#     elif private_include.exists():
-#         return private_include
-#     else:
-#         raise RuntimeError([public_include, private_include])
-#
-
-# def try_get_generated_header_path(p: Path) -> Optional[Path]:
-#     try:
-#         return get_generated_header_path(p)
-#     except RuntimeError:
-#         return None
-#
-# def get_generated_header_path(p: Path) -> Path:
-#     config = get_config(p)
-#
-#     lib_info = get_lib_info(p)
-#
-#     subrelpath = get_subrelpath(p)
-#     subrelpath_with_extension = with_suffix_appended(
-#         subrelpath, '.dtg' + config.header_extension
-#     )
-#
-#     public_include = lib_info.include_dir / subrelpath_with_extension
-#     private_include = lib_info.src_dir / subrelpath_with_extension
-#     if public_include.exists():
-#         return public_include
-#     elif private_include.exists():
-#         return private_include
-#     else:
-#         raise RuntimeError([public_include, private_include])
-
-# def get_toml_path(p: Path) -> Optional[Path]:
-#     public_header_path = get_nongenerated_public_header_path(p)
-#
-#     struct_toml_path = with_suffixes(public_header_path, '.struct.toml')
-#     variant_toml_path = with_suffixes(public_header_path, '.variant.toml')
-#     enum_toml_path = with_suffixes(public_header_path, '.enum.toml')
-#
-#     struct_toml_exists = struct_toml_path.is_file()
-#     variant_toml_exists = variant_toml_path.is_file()
-#     enum_toml_exists = enum_toml_path.is_file()
-#
-#     assert num_true([struct_toml_exists, variant_toml_exists, enum_toml_exists]) <= 1
-#
-#     if struct_toml_exists:
-#         return struct_toml_path
-#     elif variant_toml_exists:
-#         return variant_toml_path
-#     elif enum_toml_exists:
-#         return enum_toml_path
-#     else:
-#         return None
-
-# def get_generated_include_path(p: Path) -> Path:
-#     lib_info = get_lib_info(p)
-#     header_path = get_generated_public_header_path(p)
-#     return header_path.relative_to(lib_info.include_dir)
-#
-# def get_nongenerated_include_path(p: Path) -> Path:
-#     lib_info = get_lib_info(p)
-#     header_path = get_nongenerated_public_header_path(p)
-#     return header_path.relative_to(lib_info.include_dir)
-#
-# def get_generated_source_path(p: Path) -> Path:
-#     p = Path(p).absolute()
-#     lib_info = get_lib_info(p)
-#     return lib_info.src_dir / with_suffix_appended(get_subrelpath(p), ".dtg.cc")
-#
-# def get_nongenerated_source_path(p: Path) -> Path:
-#     p = Path(p).absolute()
-#     lib_info = get_lib_info(p)
-#     return lib_info.src_dir / with_suffix_appended(get_subrelpath(p), ".cc")
-#
-# def get_test_source_path(p: Path) -> Optional[Path]:
-#     p = Path(p).absolute()
-#
-#     lib_info = get_lib_info(p)
-#
-#     if lib_info.test_dir is None:
-#         return None
-#     else:
-#         return (
-#             lib_info.test_dir / "src" / with_suffix_appended(get_subrelpath(p), ".cc")
-#         )
-#
-#
-# def get_benchmark_source_path(p: Path) -> Optional[Path]:
-#     p = Path(p).absolute()
-#
-#     lib_info = get_lib_info(p)
-#
-#     if lib_info.benchmark_dir is None:
-#         return None
-#     else:
-#         return (
-#             lib_info.benchmark_dir
-#             / "src"
-#             / with_suffix_appended(get_subrelpath(p), ".cc")
-#         )
-#
 
 def dump_config(cfg: ProjectConfig) -> Json:
     return {

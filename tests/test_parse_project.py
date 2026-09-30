@@ -81,11 +81,19 @@ def get_parse_repo_path_with_repo_arg(input_str: str, correct_str: str) -> None:
         ),
     ),
     (
-        RepoRelPath(PurePath('lib/example/benchmark/src/example/thing.cc')),
+        RepoRelPath(PurePath('lib/example/benchmark/src/benchmark/example/thing.cc')),
         EXTENSION_CONFIG,
         File(
             FileGroup(PurePath('thing'), Component.library('example')),
-            RoleInGroup.BENCHMARK,
+            RoleInGroup.BENCHMARK_SOURCE,
+        ),
+    ),
+    (
+        RepoRelPath(PurePath('lib/example/benchmark/include/benchmark/example/thing.h')),
+        EXTENSION_CONFIG,
+        File(
+            FileGroup(PurePath('thing'), Component.library('example')),
+            RoleInGroup.BENCHMARK_HEADER,
         ),
     ),
     (
@@ -118,8 +126,8 @@ def get_parse_repo_path_with_repo_arg(input_str: str, correct_str: str) -> None:
     ),
 ])
 def test_parse_file_path(
-    input: Union[ComponentRelPath, RepoRelPath], 
-    extension_config: ExtensionConfig, 
+    input: Union[ComponentRelPath, RepoRelPath],
+    extension_config: ExtensionConfig,
     correct: Optional[File],
 ) -> None:
     result = parse_file_path(input, extension_config)

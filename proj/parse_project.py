@@ -16,6 +16,7 @@ from .paths import (
     FileGroup,
 )
 from .utils import map_optional
+from proj.utils import is_relative_to
 
 if TYPE_CHECKING:
     from .config_file import ExtensionConfig
@@ -68,7 +69,7 @@ def find_executables_in_repo(repo: Repo, path_tree: PathTree) -> Iterator[Compon
 
 
 def parse_file_path(
-    rel: Union[ComponentRelPath, RepoRelPath], 
+    rel: Union[ComponentRelPath, RepoRelPath],
     extension_config: 'ExtensionConfig',
 ) -> Optional[File]:
     component_rel: ComponentRelPath
@@ -86,11 +87,12 @@ def parse_file_path(
     public_include_dir = PurePath('include') / component.name
     src_dir = PurePath('src') / component.name
     test_dir = PurePath('test/src') / component.name
-    benchmark_dir = PurePath('benchmark/src') / component.name
+    benchmark_include_dir = PurePath('benchmark/include/benchmark') / component.name
+    benchmark_src_dir = PurePath('benchmark/src/benchmark') / component.name
 
     file_type: RoleInGroup
     group: FileGroup
-    if p.is_relative_to(public_include_dir) and p.suffix == '.toml':
+    if is_relative_to(p, public_include_dir) and p.suffix == '.toml':
         pp = PurePath(p.stem)
         assert pp.suffix == '.dtg', pp
         file_type = RoleInGroup.DTGEN_TOML
@@ -98,7 +100,7 @@ def parse_file_path(
             p.parent.relative_to(public_include_dir) / pp.stem,
             component,
         )
-    elif p.is_relative_to(public_include_dir) and p.suffix == header_extension:
+    elif is_relative_to(p, public_include_dir) and p.suffix == header_extension:
         pp = p.parent / p.stem
         if pp.suffix == '.dtg':
             file_type = RoleInGroup.GENERATED_HEADER
@@ -113,7 +115,7 @@ def parse_file_path(
                 component,
             )
 
-    elif p.is_relative_to(src_dir) and p != src_dir:
+    elif is_relative_to(p, src_dir) and p != src_dir:
         pp = p.parent / p.stem
         if pp.suffix == '.dtg':
             file_type = RoleInGroup.GENERATED_SOURCE
@@ -127,20 +129,26 @@ def parse_file_path(
                 p.parent.relative_to(src_dir) / p.stem,
                 component,
             )
-        else: 
+        else:
             return None
-    elif p.is_relative_to(test_dir):
+    elif is_relative_to(p, test_dir):
         group=FileGroup(
             p.parent.relative_to(test_dir) / p.stem,
             component,
         )
         file_type=RoleInGroup.TEST
-    elif p.is_relative_to(benchmark_dir):
+    elif is_relative_to(p, benchmark_include_dir):
         group=FileGroup(
-            p.parent.relative_to(benchmark_dir) / p.stem,
+            p.parent.relative_to(benchmark_include_dir) / p.stem,
             component,
         )
-        file_type=RoleInGroup.BENCHMARK
+        file_type=RoleInGroup.BENCHMARK_HEADER
+    elif is_relative_to(p, benchmark_src_dir):
+        group=FileGroup(
+            p.parent.relative_to(benchmark_src_dir) / p.stem,
+            component,
+        )
+        file_type=RoleInGroup.BENCHMARK_SOURCE
     else:
         return None
 

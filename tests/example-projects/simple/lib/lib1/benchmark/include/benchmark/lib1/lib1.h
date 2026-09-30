@@ -1,0 +1,10 @@
+#ifndef _LIB_LIB1_BENCHMARK_INCLUDE_BENCHMARK_INCLUDE_BENCHMARK_LIB1_LIB1_H
+#define _LIB_LIB1_BENCHMARK_INCLUDE_BENCHMARK_INCLUDE_BENCHMARK_LIB1_LIB1_H
+
+namespace TestProject {
+
+void example_benchmark();
+
+}
+
+#endif

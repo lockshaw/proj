@@ -55,7 +55,7 @@ TEST_SUITE(TP_TEST_SUITE) {
 
     json j = x;
     wrapper_t<int> x2 = j.get<wrapper_t<int>>();
-    
+
     CHECK(x2 == x);
   }
 
@@ -84,13 +84,13 @@ TEST_SUITE(TP_TEST_SUITE) {
 
   TEST_CASE("fmt") {
     wrapper_t<int> p = wrapper_t{ value };
-    std::string correct = "<wrapper_t value=5>";
+    std::string correct = "{\"__type\":\"wrapper_t\",\"value\":5}";
     CHECK(fmt::to_string(p) == correct);
   }
 
   TEST_CASE("ostream") {
     wrapper_t<int> p = wrapper_t{ value };
-    std::string correct = "<wrapper_t value=5>";
+    std::string correct = "{\"__type\":\"wrapper_t\",\"value\":5}";
     std::ostringstream oss;
     oss << p;
     CHECK(oss.str() == correct);

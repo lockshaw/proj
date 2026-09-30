@@ -4,5 +4,5 @@ tp_add_benchmark_executable(
   SRC_PATTERNS
     src/*.cc
   PRIVATE_INCLUDE
-    src/
+    include/
 )

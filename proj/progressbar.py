@@ -9,6 +9,7 @@ from typing import (
 from types import (
     TracebackType,
 )
+from typing import TYPE_CHECKING
 
 _l = logging.getLogger(__name__)
 
@@ -24,10 +25,16 @@ except ImportError:
 EnlightenPB = Any
 
 
-class ProgressBar(contextlib.AbstractContextManager["ProgressBar"]):
-    @abstractmethod
-    def update(self, incr: int = 1, force: bool = False) -> None:
-        ...
+if TYPE_CHECKING:
+    class ProgressBar(contextlib.AbstractContextManager["ProgressBar"]):
+        @abstractmethod
+        def update(self, incr: int = 1, force: bool = False) -> None:
+            ...
+else:
+    class ProgressBar(contextlib.AbstractContextManager):
+        @abstractmethod
+        def update(self, incr: int = 1, force: bool = False) -> None:
+            ...
 
 
 class FakeProgressBar(ProgressBar):
@@ -71,14 +78,24 @@ class EnlightenProgressBar(ProgressBar):
         self._enlighten_bar.update(incr=incr, force=force)
 
 
-class ProgressBarManager(contextlib.AbstractContextManager["ProgressBarManager"]):
-    @abstractmethod
-    def counter(self, total: int, desc: str, unit: Optional[str] = None) -> ProgressBar:
-        ...
+if TYPE_CHECKING:
+    class ProgressBarManager(contextlib.AbstractContextManager["ProgressBarManager"]):
+        @abstractmethod
+        def counter(self, total: int, desc: str, unit: Optional[str] = None) -> ProgressBar:
+            ...
 
-    @abstractmethod
-    def __enter__(self) -> "ProgressBarManager":
-        ...
+        @abstractmethod
+        def __enter__(self) -> "ProgressBarManager":
+            ...
+else:
+    class ProgressBarManager(contextlib.AbstractContextManager):
+        @abstractmethod
+        def counter(self, total: int, desc: str, unit: Optional[str] = None) -> ProgressBar:
+            ...
+
+        @abstractmethod
+        def __enter__(self) -> "ProgressBarManager":
+            ...
 
 
 class FakeManager(ProgressBarManager):

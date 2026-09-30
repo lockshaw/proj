@@ -2,31 +2,32 @@
 , pytestCheckHook
 , typing-extensions
 , enlighten
-, immutables
 , setuptools
 , pytest-skip-slow
 , pytest
 , nclib
 , valgrind
-, kcachegrind
+, kdePackages
 , ff-clang-format
-, bencher-cli
 , hotspot
 , perf
 , ccache
 , compdb
 , cmake
+, ninja
 , mypy
 , doctest
 , gbenchmark
 , libassert
 , rapidcheckFull
 , nlohmann_json
-, fmt
+, fmt_10
 , tree
+, doxygen
 , lcov
 , gdb
 , pytest-xdist
+, universal-ctags
 # TODO use these if we ever update nixpkgs
 # , writableTmpDirAsHomeHook
 # , addBinAsPathHook
@@ -36,17 +37,19 @@
 let
   bins = [
     valgrind
-    kcachegrind
+    kdePackages.kcachegrind
     ff-clang-format
-    bencher-cli
     hotspot
     perf
     ccache
     compdb
     cmake
+    ninja
     lcov
+    doxygen
+    universal-ctags
   ];
-in 
+in
 buildPythonApplication {
   pname = "proj";
   version = "0.0.1";
@@ -57,9 +60,9 @@ buildPythonApplication {
   propagatedBuildInputs = [
     typing-extensions
     enlighten
-    immutables
   ] ++ bins;
 
+  pyproject = true;
   build-system = [
     setuptools
   ];
@@ -81,7 +84,7 @@ buildPythonApplication {
     rapidcheckFull
     libassert
     nlohmann_json
-    fmt
+    fmt_10
   ];
 
   nativeCheckInputs = [
@@ -92,4 +95,6 @@ buildPythonApplication {
     nclib
     gdb
   ] ++ bins;
+
+  dontWrapQtApps = true;
 }

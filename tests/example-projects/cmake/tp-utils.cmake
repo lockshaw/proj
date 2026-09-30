@@ -25,24 +25,24 @@ function(tp_set_cxx_properties target)
       CXX_EXTENSIONS NO
   )
   target_compile_options(${target}
-    PUBLIC 
-    $<$<COMPILE_LANGUAGE:CXX>:> 
-    "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=." 
-    "-fsanitize=undefined" 
+    PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:>
+    "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=."
+    "-fsanitize=undefined"
     "-fno-sanitize-recover=all"
     # add C++ compile flags here
   )
   target_link_options(${target}
-    PUBLIC 
-    $<$<COMPILE_LANGUAGE:CXX>:> 
-    "-fsanitize=undefined" 
+    PUBLIC
+    $<$<COMPILE_LANGUAGE:CXX>:>
+    "-fsanitize=undefined"
     "-fno-sanitize-recover=all"
   )
 endfunction()
 
 function(tp_add_library)
   tp_parse_args(
-    PREFIX 
+    PREFIX
       TP_LIBRARY
     ARGS
       NAME
@@ -57,10 +57,10 @@ function(tp_add_library)
   )
 
   set(FULL_TP_LIBRARY_NAME "${TP_LIBRARY_NAME}")
-  
+
   project(${FULL_TP_LIBRARY_NAME})
   file(GLOB_RECURSE SRC
-       CONFIGURE_DEPENDS 
+       CONFIGURE_DEPENDS
        LIST_DIRECTORIES False
        ${TP_LIBRARY_SRC_PATTERNS})
 
@@ -89,7 +89,7 @@ endfunction()
 
 function(tp_add_test_executable)
   tp_parse_args(
-    PREFIX 
+    PREFIX
       TP_TEST_EXEC
     ARGS
       NAME
@@ -137,7 +137,7 @@ endfunction()
 
 function(tp_add_benchmark_executable)
   tp_parse_args(
-    PREFIX 
+    PREFIX
       TP_BENCHMARK_EXEC
     ARGS
       NAME
@@ -164,9 +164,12 @@ function(tp_add_benchmark_executable)
   target_link_libraries(
     ${FULL_TP_BENCHMARK_EXEC_NAME}
     ${TP_BENCHMARK_EXEC_DEPS}
-    ${TP_BENCHMARK_EXEC_NAME}
-    gbenchmark
-    gbenchmark-main)
+    ${TP_BENCHMARK_EXEC_NAME})
+
+  target_include_directories(
+    ${FULL_TP_BENCHMARK_EXEC_NAME}
+    PRIVATE
+    ${TP_BENCHMARK_EXEC_PRIVATE_INCLUDE})
 
   define_tp_vars(${FULL_TP_BENCHMARK_EXEC_NAME})
   tp_set_cxx_properties(${FULL_TP_BENCHMARK_EXEC_NAME})
@@ -174,7 +177,7 @@ endfunction()
 
 function(tp_add_executable)
   tp_parse_args(
-    PREFIX 
+    PREFIX
       TP_EXEC
     ARGS
       NAME

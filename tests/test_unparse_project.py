@@ -60,8 +60,12 @@ EXTENSION_CONFIG = ExtensionConfig(
         RepoRelPath(PurePath('lib/c/test/src/c/a/b.cc'))
     ),
     (
-        File(FileGroup(PurePath('a/b'), Component.library('c')), RoleInGroup.BENCHMARK),
-        RepoRelPath(PurePath('lib/c/benchmark/src/c/a/b.cc'))
+        File(FileGroup(PurePath('a/b'), Component.library('c')), RoleInGroup.BENCHMARK_SOURCE),
+        RepoRelPath(PurePath('lib/c/benchmark/src/benchmark/c/a/b.cc'))
+    ),
+    (
+        File(FileGroup(PurePath('a/b'), Component.library('c')), RoleInGroup.BENCHMARK_HEADER),
+        RepoRelPath(PurePath('lib/c/benchmark/include/benchmark/c/a/b.h'))
     ),
     (
         ComponentRelPath(PurePath('include/c/a/b.h'), Component.library('c')),

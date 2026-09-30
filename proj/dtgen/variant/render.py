@@ -1,5 +1,6 @@
 from .spec import (
     VariantSpec,
+    ValueSpec,
     Feature,
 )
 from typing import (
@@ -29,6 +30,7 @@ from proj.dtgen.render_utils import (
     ifblock,
     elseblock,
     render_doxygen_docstring,
+    doxygen_ignore,
 )
 import proj.dtgen.render_utils as render_utils
 import io
@@ -40,7 +42,7 @@ from pathlib import PurePath
 def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     if feature == Feature.HASH:
         return [IncludeSpec(path=PurePath("functional"), system=True)]
-    elif feature == Feature.JSON:
+    elif feature in [Feature.JSON_SERIALIZE, Feature.JSON_DESERIALIZE]:
         return [
             IncludeSpec(path=PurePath("nlohmann/json.hpp"), system=True),
         ]
@@ -49,6 +51,7 @@ def header_includes_for_feature(feature: Feature) -> Sequence[IncludeSpec]:
     elif feature == Feature.FMT:
         return [
             IncludeSpec(path=PurePath("ostream"), system=True),
+            IncludeSpec(path=PurePath("iostream"), system=True),
             IncludeSpec(path=PurePath("fmt/format.h"), system=True),
         ]
     else:
@@ -76,21 +79,21 @@ def header_includes_for_features(spec: VariantSpec) -> Sequence[IncludeSpec]:
 
 
 def infer_header_includes(spec: VariantSpec) -> Sequence[IncludeSpec]:
-    return list(
-        set(
-            [
-                *spec.includes,
-                IncludeSpec(path=PurePath("variant"), system=True),
-                IncludeSpec(path=PurePath("type_traits"), system=True),
-                IncludeSpec(path=PurePath("cstddef"), system=True),
-                IncludeSpec(path=PurePath("stdexcept"), system=True),
-                IncludeSpec(path=PurePath("optional"), system=True),
-                IncludeSpec(path=PurePath("fmt/format.h"), system=True),
-                IncludeSpec(path=PurePath("libassert/assert.hpp"), system=True),
-                *header_includes_for_features(spec=spec),
-            ]
-        )
-    )
+    includes = set([
+        *spec.includes,
+        IncludeSpec(path=PurePath("variant"), system=True),
+        IncludeSpec(path=PurePath("type_traits"), system=True),
+        IncludeSpec(path=PurePath("cstddef"), system=True),
+        IncludeSpec(path=PurePath("stdexcept"), system=True),
+        IncludeSpec(path=PurePath("optional"), system=True),
+        IncludeSpec(path=PurePath("fmt/format.h"), system=True),
+        IncludeSpec(path=PurePath("libassert/assert.hpp"), system=True),
+        *header_includes_for_features(spec=spec),
+    ])
+    if any(value.indirect for value in spec.values):
+        includes.add(IncludeSpec(path=PurePath("memory"), system=True))
+
+    return list(includes)
 
 
 def source_includes_for_features(spec: VariantSpec) -> Sequence[IncludeSpec]:
@@ -176,6 +179,8 @@ def render_is_method_impls(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=False)
 
     for value in spec.values:
+        storage_type = get_storage_type_for_value_spec(value)
+
         if value.method_key is not None:
             with render_function_definition(
                 template_params=spec.template_params,
@@ -187,20 +192,24 @@ def render_is_method_impls(spec: VariantSpec, f: TextIO) -> None:
             ):
                 with sline(f=f):
                     f.write(
-                        f"return std::holds_alternative<{value.type_}>(this->raw_variant)"
+                        f"return std::holds_alternative<{storage_type}>(this->raw_variant)"
                     )
 
 
 def render_require_method_decls(spec: VariantSpec, f: TextIO) -> None:
     for value in spec.values:
         if value.method_key is not None:
-            render_function_declaration(
-                name=f"require_{value.method_key}",
-                return_type=f"{value.type_} const &",
-                args=[],
-                is_const=True,
-                f=f,
-            )
+            for (is_const, return_type) in [
+                (True, f'{value.type_} const &'),
+                (False, f'{value.type_} &'),
+            ]:
+                render_function_declaration(
+                    name=f"require_{value.method_key}",
+                    return_type=return_type,
+                    args=[],
+                    is_const=is_const,
+                    f=f,
+                )
 
 
 def render_require_method_impls(spec: VariantSpec, f: TextIO) -> None:
@@ -208,20 +217,30 @@ def render_require_method_impls(spec: VariantSpec, f: TextIO) -> None:
 
     for value in spec.values:
         if value.method_key is not None:
-            with render_function_definition(
-                template_params=spec.template_params,
-                return_type=f"{value.type_} const &",
-                name=f"{typename}::require_{value.method_key}",
-                args=[],
-                is_const=True,
-                f=f,
-            ):
-                with sline(f):
-                    f.write(f"bool holds_expected = std::holds_alternative<{value.type_}>(this->raw_variant)")
-                with sline(f):
-                    f.write(f"ASSERT(holds_expected, \"Expected {value.type_}\")")
-                with sline(f=f):
-                    f.write(f"return std::get<{value.type_}>(this->raw_variant)")
+            for (is_const, return_type) in [
+                (True, f'{value.type_} const &'),
+                (False, f'{value.type_} &'),
+            ]:
+                with render_function_definition(
+                    template_params=spec.template_params,
+                    return_type=return_type,
+                    name=f"{typename}::require_{value.method_key}",
+                    args=[],
+                    is_const=is_const,
+                    f=f,
+                ):
+                    storage_type = get_storage_type_for_value_spec(value)
+                    with sline(f):
+                        f.write(f"bool holds_expected = std::holds_alternative<{storage_type}>(this->raw_variant)")
+                    with sline(f):
+                        f.write(f"ASSERT(holds_expected, \"Expected {value.type_}\")")
+
+                    if value.indirect:
+                        with sline(f=f):
+                            f.write(f"return *std::get<{storage_type}>(this->raw_variant)")
+                    else:
+                        with sline(f=f):
+                            f.write(f"return std::get<{storage_type}>(this->raw_variant)")
 
 
 def render_try_require_method_decls(spec: VariantSpec, f: TextIO) -> None:
@@ -276,6 +295,36 @@ def render_has_method(spec: VariantSpec, f: TextIO) -> None:
         )
         f.write(f"return std::holds_alternative<{typevar}>(this->raw_variant);")
 
+def render_has_method_specializations_decl(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
+    for value_spec in spec.values:
+        if value_spec.indirect:
+            render_function_declaration(
+                template_params=[],
+                name=f"{typename}::has<{value_spec.type_}>",
+                return_type="bool",
+                args=[],
+                is_const=True,
+                is_template_specialization=True,
+                f=f,
+            )
+
+def render_has_method_specializations_impl(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
+    for value_spec in spec.values:
+        if value_spec.indirect:
+            with render_function_definition(
+                template_params=[],
+                name=f"{typename}::has<{value_spec.type_}>",
+                return_type="bool",
+                args=[],
+                is_const=True,
+                is_template_specialization=True,
+                f=f,
+            ):
+                f.write(f"return std::holds_alternative<std::shared_ptr<{value_spec.type_}>>(this->raw_variant);")
 
 def render_get_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
     typevar = get_fresh_typevar(spec)
@@ -301,6 +350,44 @@ def render_get_method(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
             f.write(f"ASSERT(holds_expected)")
         with sline(f):
             f.write(f"return std::get<{typevar}>(this->raw_variant)")
+
+def render_get_method_specializations_decl(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
+    const_modifier = "const" if is_const else ""
+    for value_spec in spec.values:
+        if value_spec.indirect:
+            render_function_declaration(
+                template_params=[],
+                name=f"{typename}::get<{value_spec.type_}>",
+                return_type=f"{value_spec.type_} {const_modifier} &",
+                args=[],
+                is_const=is_const,
+                is_template_specialization=True,
+                f=f,
+            )
+
+def render_get_method_specializations_impl(spec: VariantSpec, is_const: bool, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=False)
+
+    const_modifier = "const" if is_const else ""
+    for value_spec in spec.values:
+        if value_spec.indirect:
+            with render_function_definition(
+                template_params=[],
+                name=f"{typename}::get<{value_spec.type_}>",
+                return_type=f"{value_spec.type_} {const_modifier} &",
+                args=[],
+                is_const=is_const,
+                is_template_specialization=True,
+                f=f,
+            ):
+                with sline(f):
+                    f.write(f"bool holds_expected = std::holds_alternative<std::shared_ptr<{value_spec.type_}>>(this->raw_variant)")
+                with sline(f):
+                    f.write(f"ASSERT(holds_expected)")
+                with sline(f):
+                    f.write(f"return *std::get<std::shared_ptr<{value_spec.type_}>>(this->raw_variant)")
 
 
 def render_binop_decl(spec: VariantSpec, op: str, f: TextIO) -> None:
@@ -339,42 +426,44 @@ def get_typename(*, spec: VariantSpec, qualified: bool) -> str:
 def render_hash_decl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
 
-    with render_namespace_block("std", f):
-        with render_struct_block(
-            name=f"hash<{typename}>",
-            template_params=spec.template_params,
-            specialization=True,
-            f=f,
-        ):
-            render_function_declaration(
-                name="operator()",
-                return_type="size_t",
-                args=[f"{typename} const &"],
-                is_const=True,
+    with doxygen_ignore(f):
+        with render_namespace_block("std", f):
+            with render_struct_block(
+                name=f"hash<{typename}>",
+                template_params=spec.template_params,
+                is_template_specialization=True,
                 f=f,
-            )
+            ):
+                render_function_declaration(
+                    name="operator()",
+                    return_type="size_t",
+                    args=[f"{typename} const &"],
+                    is_const=True,
+                    f=f,
+                )
 
 
 def render_hash_impl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
 
-    with render_namespace_block("std", f):
-        with render_function_definition(
-            template_params=spec.template_params,
-            name=f"hash<{typename}>::operator()",
-            return_type="size_t",
-            args=[f"{typename} const &x"],
-            is_const=True,
-            f=f,
-        ):
-            with semicolon(f):
-                f.write("return ")
-                render_template_app(
-                    func="std::hash",
-                    params=[get_variant_type(spec=spec)],
-                    f=f,
-                )
-                f.write("{}(x.raw_variant)")
+    with doxygen_ignore(f):
+        with render_namespace_block("std", f):
+            with render_function_definition(
+                template_params=spec.template_params,
+                name=f"hash<{typename}>::operator()",
+                return_type="size_t",
+                args=[f"{typename} const &x"],
+                is_const=True,
+                f=f,
+            ):
+                with semicolon(f):
+                    f.write("return ")
+                    render_template_app(
+                        func="std::hash",
+                        params=[get_variant_type(spec=spec)],
+                        f=f,
+                    )
+                    f.write("{}(x.raw_variant)")
 
 
 def render_json_decl(spec: VariantSpec, f: TextIO) -> None:
@@ -384,26 +473,57 @@ def render_json_decl(spec: VariantSpec, f: TextIO) -> None:
         with render_struct_block(
             name=f"adl_serializer<{typename}>",
             template_params=spec.template_params,
-            specialization=True,
+            is_template_specialization=True,
             f=f,
         ):
-            render_function_declaration(
-                is_static=True,
-                return_type=typename,
-                name="from_json",
-                args=["json const &"],
-                f=f,
-            )
-            render_function_declaration(
-                is_static=True,
-                return_type="void",
-                name="to_json",
-                args=["json &", f"{typename} const &"],
-                f=f,
-            )
+            if Feature.JSON_DESERIALIZE in spec.features:
+                render_function_declaration(
+                    is_static=True,
+                    return_type=typename,
+                    name="from_json",
+                    args=["json const &"],
+                    f=f,
+                )
+            if Feature.JSON_SERIALIZE in spec.features:
+                render_function_declaration(
+                    is_static=True,
+                    return_type="void",
+                    name="to_json",
+                    args=["json &", f"{typename} const &"],
+                    f=f,
+                )
 
+def render_json_serialize_impl(spec: VariantSpec, f: TextIO) -> None:
+    typename = get_typename(spec=spec, qualified=True)
 
-def render_json_impl(spec: VariantSpec, f: TextIO) -> None:
+    with render_namespace_block("nlohmann", f):
+        with render_function_definition(
+            template_params=spec.template_params,
+            return_type="void",
+            name=f"adl_serializer<{typename}>::to_json",
+            args=["json &j", f"{typename} const &x"],
+            f=f,
+        ):
+            with sline(f):
+                f.write(f'j["__type"] = "{spec.name}"')
+            with render_switch_block(cond="x.index()", f=f):
+                for idx, value in enumerate(spec.values):
+                    f.write(f"case {idx}:")
+                    with braces(f):
+                        with sline(f):
+                            f.write(f'j["type"] = "{value.json_key}"')
+                        with sline(f):
+                            f.write(f'j["value"] = x.template get<{value.type_}>()')
+                        with sline(f):
+                            f.write("break")
+                f.write("default:")
+                with braces(f):
+                    with sline(f):
+                        f.write(
+                            f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))'
+                        )
+
+def render_json_deserialize_impl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
 
     with render_namespace_block("nlohmann", f):
@@ -432,32 +552,6 @@ def render_json_impl(spec: VariantSpec, f: TextIO) -> None:
                         'throw std::runtime_error(fmt::format("Unknown type key {}", key))'
                     )
 
-        with render_function_definition(
-            template_params=spec.template_params,
-            return_type="void",
-            name=f"adl_serializer<{typename}>::to_json",
-            args=["json &j", f"{typename} const &x"],
-            f=f,
-        ):
-            with sline(f):
-                f.write(f'j["__type"] = "{spec.name}"')
-            with render_switch_block(cond="x.index()", f=f):
-                for idx, value in enumerate(spec.values):
-                    f.write(f"case {idx}:")
-                    with braces(f):
-                        with sline(f):
-                            f.write(f'j["type"] = "{value.json_key}"')
-                        with sline(f):
-                            f.write(f'j["value"] = x.template get<{value.type_}>()')
-                        with sline(f):
-                            f.write("break")
-                f.write("default:")
-                with braces(f):
-                    with sline(f):
-                        f.write(
-                            f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))'
-                        )
-
 
 def render_fmt_decl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
@@ -478,6 +572,9 @@ def render_fmt_decl(spec: VariantSpec, f: TextIO) -> None:
             f=f,
         )
 
+def render_debug_to_string_decl(spec: VariantSpec, f: TextIO) -> None:
+    f.write("std::string debug_to_string() const;")
+    f.write("void debug_print() const;")
 
 def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
     typename = get_typename(spec=spec, qualified=True)
@@ -486,26 +583,52 @@ def render_fmt_impl(spec: VariantSpec, f: TextIO) -> None:
         with render_function_definition(
             template_params=spec.template_params,
             return_type="std::string",
+            name=f"{get_typename(spec=spec, qualified=False)}::debug_to_string",
+            args=[],
+            is_const=True,
+            f=f,
+        ):
+            f.write("return fmt::to_string(*this);")
+
+        with render_function_definition(
+            template_params=spec.template_params,
+            return_type="void",
+            name=f"{get_typename(spec=spec, qualified=False)}::debug_print",
+            args=[],
+            is_const=True,
+            f=f,
+        ):
+            f.write("std::cout << this->debug_to_string() << std::endl;");
+
+        with render_function_definition(
+            template_params=spec.template_params,
+            return_type="std::string",
             name="format_as",
             args=[f"{typename} const &x"],
             f=f,
         ):
-            with sline(f):
-                f.write("std::ostringstream oss")
-            with render_switch_block(cond="x.index()", f=f):
-                for idx, value in enumerate(spec.values):
-                    with render_case(cond=str(idx), f=f):
+            if Feature.JSON_SERIALIZE in spec.features:
+                with sline(f):
+                    f.write("::nlohmann::json j = x")
+                with sline(f):
+                    f.write("return j.dump()")
+            else:
+                with sline(f):
+                    f.write("std::ostringstream oss")
+                with render_switch_block(cond="x.index()", f=f):
+                    for idx, value in enumerate(spec.values):
+                        with render_case(cond=str(idx), f=f):
+                            with sline(f):
+                                f.write(
+                                    f'oss << "<{spec.name} {value.key}=" << x.template get<{value.type_}>() << ">"'
+                                )
+                    with render_default_case(f=f):
                         with sline(f):
                             f.write(
-                                f'oss << "<{spec.name} {value.key}=" << x.template get<{value.type_}>() << ">"'
+                                f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))'
                             )
-                with render_default_case(f=f):
-                    with sline(f):
-                        f.write(
-                            f'throw std::runtime_error(fmt::format("Unknown index {{}} for type {spec.name}", x.index()))'
-                        )
-            with sline(f):
-                f.write("return oss.str()")
+                with sline(f):
+                    f.write("return oss.str()")
 
         with render_function_definition(
             template_params=spec.template_params,
@@ -525,7 +648,7 @@ def render_rapidcheck_decl(spec: VariantSpec, f: TextIO) -> None:
         with render_struct_block(
             name=f"Arbitrary<{typename}>",
             template_params=spec.template_params,
-            specialization=True,
+            is_template_specialization=True,
             f=f,
         ):
             render_function_declaration(
@@ -557,8 +680,17 @@ def render_rapidcheck_impl(spec: VariantSpec, f: TextIO) -> None:
                             f.write(f"gen::arbitrary<{value.type_}>()")
 
 
+def get_storage_type_for_value_spec(value_spec: ValueSpec) -> str:
+    if value_spec.indirect:
+        return f'std::shared_ptr<{value_spec.type_}>'
+    else:
+        return value_spec.type_
+
 def render_variant_type(spec: VariantSpec, f: TextIO) -> None:
-    render_template_app("std::variant", [v.type_ for v in spec.values], f=f)
+    render_template_app(
+        "std::variant",
+        [get_storage_type_for_value_spec(v) for v in spec.values],
+        f=f)
 
 
 def get_variant_type(spec: VariantSpec) -> str:
@@ -570,9 +702,17 @@ def get_variant_type(spec: VariantSpec) -> str:
 EQ_OPS = ("==", "!=")
 ORD_OPS = ("<", ">", "<=", ">=")
 
+def render_fwd_decls(spec: VariantSpec, f: TextIO) -> None:
+    for fwd_decl in spec.fwd_decls:
+        with render_utils.sline(f):
+            f.write(fwd_decl)
+
 
 def render_decls(spec: VariantSpec, f: TextIO) -> None:
     with render_namespace_block(spec.namespace, f):
+        if len(spec.fwd_decls) > 0:
+            render_fwd_decls(spec, f)
+
         if spec.docstring is not None:
             f.write("\n\n" + render_doxygen_docstring(spec.docstring))
         with render_struct_block(
@@ -609,14 +749,22 @@ def render_decls(spec: VariantSpec, f: TextIO) -> None:
             render_try_require_method_decls(spec=spec, f=f)
             render_is_method_decls(spec=spec, f=f)
 
+            if Feature.FMT in spec.features:
+                render_debug_to_string_decl(spec=spec, f=f)
+
             with semicolon(f):
                 render_variant_type(spec=spec, f=f)
                 f.write(" raw_variant")
 
+        render_has_method_specializations_decl(spec=spec, f=f)
+        render_get_method_specializations_decl(spec=spec, is_const=True, f=f)
+        render_get_method_specializations_decl(spec=spec, is_const=False, f=f)
+
+
     if Feature.HASH in spec.features:
         render_hash_decl(spec=spec, f=f)
 
-    if Feature.JSON in spec.features:
+    if Feature.JSON_SERIALIZE in spec.features or Feature.JSON_DESERIALIZE in spec.features:
         render_json_decl(spec=spec, f=f)
 
     if Feature.RAPIDCHECK in spec.features:
@@ -634,7 +782,10 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
             f.write(
                 f"{get_typename(spec=spec, qualified=False)}::{spec.name}({value.type_} const &v)"
             )
-            f.write(" : raw_variant(v) { }")
+            if value.indirect:
+                f.write(f" : raw_variant(std::make_shared<{value.type_}>(v)) {{ }}")
+            else:
+                f.write(" : raw_variant(v) { }")
 
         if Feature.EQ in spec.features:
             for op in EQ_OPS:
@@ -648,11 +799,18 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
         render_try_require_method_impls(spec=spec, f=f)
         render_is_method_impls(spec=spec, f=f)
 
+        render_has_method_specializations_impl(spec=spec, f=f)
+        render_get_method_specializations_impl(spec=spec, is_const=True, f=f)
+        render_get_method_specializations_impl(spec=spec, is_const=False, f=f)
+
     if Feature.HASH in spec.features:
         render_hash_impl(spec=spec, f=f)
 
-    if Feature.JSON in spec.features:
-        render_json_impl(spec=spec, f=f)
+    if Feature.JSON_SERIALIZE in spec.features:
+        render_json_serialize_impl(spec=spec, f=f)
+
+    if Feature.JSON_DESERIALIZE in spec.features:
+        render_json_deserialize_impl(spec=spec, f=f)
 
     if Feature.RAPIDCHECK in spec.features:
         render_rapidcheck_impl(spec=spec, f=f)
@@ -662,7 +820,7 @@ def render_impls(spec: VariantSpec, f: TextIO) -> None:
 
 
 def render_header(spec: VariantSpec, f: TextIO) -> None:
-    render_includes(infer_header_includes(spec), f)
+    render_includes(list(sorted(infer_header_includes(spec))), f)
     if len(spec.template_params) > 0:
         render_includes(infer_source_includes(spec), f)
 
@@ -673,6 +831,8 @@ def render_header(spec: VariantSpec, f: TextIO) -> None:
     if len(spec.template_params) > 0:
         f.write("\n")
         render_impls(spec, f)
+
+    render_includes(spec.post_includes, f)
 
 
 def render_source(spec: VariantSpec, f: TextIO) -> None:

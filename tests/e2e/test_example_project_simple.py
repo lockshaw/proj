@@ -1,13 +1,14 @@
 import pytest
 import os
 from contextlib import contextmanager
-import nclib
-from pathlib import Path
 from typing import (
     Iterator,
     Iterable,
     Mapping,
+    List,
+    TYPE_CHECKING,
 )
+from pathlib import Path
 from proj.targets import (
     BuildTarget,
     LibTarget,
@@ -44,10 +45,19 @@ import json
 from contextlib import AbstractContextManager
 from proj.trees import load_filesystem_for_repo
 
-def project_instance() -> AbstractContextManager[Path]:
+if TYPE_CHECKING:
+    import nclib
+else:
+    try:
+        import nclib
+    except ImportError:
+        nclib = None
+
+
+def project_instance() -> 'AbstractContextManager[Path]':
     return _project_instance('simple')
 
-def cmade_project_instance() -> AbstractContextManager[Path]:
+def cmade_project_instance() -> 'AbstractContextManager[Path]':
     return _cmade_project_instance('simple')
 
 @pytest.mark.e2e
@@ -183,6 +193,7 @@ def built_project_instance(targets: Iterable[BuildTarget], build_mode: BuildMode
             jobs=1,
             verbosity=MAX_VERBOSITY,
             build_dir=get_build_dir(config, build_mode),
+            redirect_build_stdout_to_stderr=False,
         )
         yield d
 
@@ -289,6 +300,10 @@ def test_test_test_case() -> None:
 
 @pytest.mark.e2e
 @pytest.mark.slow
+@pytest.mark.skipif(
+    nclib is None,
+    reason="requires nclib",
+)
 def test_test_test_case_debug() -> None:
     with cmade_project_instance() as d:
         def cmd_succeeds(env: Mapping[str, str]) -> bool:
@@ -355,7 +370,7 @@ def test_run_test_case() -> None:
 @pytest.mark.slow
 def test_run_benchmark_suite() -> None:
     with cmade_project_instance() as d:
-        check_cmd_succeeds(d, [
+        check_cmd_fails(d, [
             'run',
             '-j1',
             'lib1:benchmarks',
@@ -368,7 +383,7 @@ def test_run_benchmark_case() -> None:
         check_cmd_succeeds(d, [
             'run',
             '-j1',
-            'lib1:benchmarks:example_benchmark/75/16'
+            'lib1:benchmarks:example_benchmark'
         ])
 
 @pytest.mark.e2e
@@ -380,6 +395,13 @@ def test_benchmark_suite() -> None:
             '-j1',
             'lib1',
         ])
+        check_cmd_fails(d, [
+            'benchmark',
+            '-j1',
+            'lib1',
+        ], env={
+            'PROJ_TESTS_FAIL_LIB1_BENCHMARK_BUDGET': 'y',
+        })
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -388,8 +410,15 @@ def test_benchmark_case() -> None:
         check_cmd_succeeds(d, [
             'benchmark',
             '-j1',
-            'lib1:example_benchmark/75/16',
+            'lib1:example_benchmark',
         ])
+        check_cmd_fails(d, [
+            'benchmark',
+            '-j1',
+            'lib1:example_benchmark',
+        ], env={
+            'PROJ_TESTS_FAIL_LIB1_BENCHMARK_BUDGET': 'y',
+        })
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -419,13 +448,11 @@ def test_profile_test_case_callgrind() -> None:
 @pytest.mark.slow
 def test_profile_benchmark_suite_callgrind() -> None:
     with cmade_project_instance() as d:
-        result = require_successful(run(d, [
+        check_cmd_fails(d, [
             'profile',
             '-j1',
             'lib1:benchmarks'
-        ]))
-
-        assert Path(result.stdout.splitlines()[-1]).is_file()
+        ])
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -434,10 +461,9 @@ def test_profile_benchmark_case_callgrind() -> None:
         result = require_successful(run(d, [
             'profile',
             '-j1',
-            'lib1:benchmarks:example_benchmark/75/32'
+            'lib1:benchmarks:example_benchmark'
         ]))
 
-        assert 'example_benchmark/25/16' not in result.stdout
         assert Path(result.stdout.splitlines()[-1]).is_file()
 
 @pytest.mark.e2e
@@ -477,14 +503,13 @@ def test_profile_test_case_perf() -> None:
 @pytest.mark.xdist_group(name="perf")
 def test_profile_benchmark_suite_perf() -> None:
     with cmade_project_instance() as d:
-        result = require_successful(run(d, [
+        check_cmd_fails(d, [
             'profile',
             '-j1',
             '--tool',
             'perf',
             'lib1:benchmarks'
-        ]))
-        assert Path(result.stdout.splitlines()[-1]).is_file()
+        ])
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -497,7 +522,7 @@ def test_profile_benchmark_case_perf() -> None:
             '-j1',
             '--tool',
             'perf',
-            'lib1:benchmarks:example_benchmark/75/32'
+            'lib1:benchmarks:example_benchmark'
         ]))
         assert Path(result.stdout.splitlines()[-1]).is_file()
 
@@ -531,7 +556,7 @@ def test_profile_test_case_perf_dry_run() -> None:
 @pytest.mark.slow
 def test_profile_benchmark_suite_perf_dry_run() -> None:
     with cmade_project_instance() as d:
-        check_cmd_succeeds(d, [
+        check_cmd_fails(d, [
             'profile',
             '-j1',
             '--tool',
@@ -550,7 +575,7 @@ def test_profile_benchmark_case_perf_dry_run() -> None:
             '--tool',
             'perf',
             '--dry-run',
-            'lib1:benchmarks:example_benchmark/75/32'
+            'lib1:benchmarks:example_benchmark'
         ])
 
 @pytest.mark.e2e
@@ -571,7 +596,7 @@ def test_check_format() -> None:
 
 @pytest.mark.e2e
 @pytest.mark.slow
-def test_check_cpu_ci() -> None:
+def test_check_cpu_ci_requires_formatting_to_pass() -> None:
     with cmade_project_instance() as d:
         check_cmd_fails(d, [
             'check',
@@ -580,6 +605,78 @@ def test_check_cpu_ci() -> None:
         check_cmd_succeeds(d, [
             'format',
         ])
+        check_cmd_succeeds(d, [
+            'check',
+            'cpu-ci',
+        ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_check_cpu_ci_requires_binaries_to_build() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_succeeds(d, [
+            'format',
+        ])
+        check_cmd_fails(d, [
+            'check',
+            'cpu-ci',
+        ], {
+            'CXXFLAGS': '-DBIN1_FAIL_BUILD',
+        })
+        check_cmd_succeeds(d, [
+            'check',
+            'cpu-ci',
+        ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_check_cpu_ci_requires_libraries_to_build() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_succeeds(d, [
+            'format',
+        ])
+        check_cmd_fails(d, [
+            'check',
+            'cpu-ci',
+        ], {
+            'CXXFLAGS': '-DLIB1_FAIL_BUILD',
+        })
+        check_cmd_succeeds(d, [
+            'check',
+            'cpu-ci',
+        ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_check_cpu_ci_requires_library_tests_to_build() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_succeeds(d, [
+            'format',
+        ])
+        check_cmd_fails(d, [
+            'check',
+            'cpu-ci',
+        ], {
+            'CXXFLAGS': '-DLIB1_TESTS_FAIL_BUILD',
+        })
+        check_cmd_succeeds(d, [
+            'check',
+            'cpu-ci',
+        ])
+
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_check_cpu_ci_requires_library_benchmarks_to_build() -> None:
+    with cmade_project_instance() as d:
+        check_cmd_succeeds(d, [
+            'format',
+        ])
+        check_cmd_fails(d, [
+            'check',
+            'cpu-ci',
+        ], {
+            'CXXFLAGS': '-DLIB1_BENCHMARKS_FAIL_BUILD',
+        })
         check_cmd_succeeds(d, [
             'check',
             'cpu-ci',
@@ -607,7 +704,8 @@ LIB1_QUERY_JSON_OUTPUT = {
     'source': 'lib/lib1/src/lib1/lib1.cc',
     'generated_source': 'lib/lib1/src/lib1/lib1.dtg.cc',
     'test_source': 'lib/lib1/test/src/lib1/lib1.cc',
-    'benchmark_source': 'lib/lib1/benchmark/src/lib1/lib1.cc',
+    'benchmark_header': 'lib/lib1/benchmark/include/benchmark/lib1/lib1.h',
+    'benchmark_source': 'lib/lib1/benchmark/src/benchmark/lib1/lib1.cc',
     'toml_path': 'lib/lib1/include/lib1/lib1.dtg.toml',
     'ifndef': '_TEST_PROJECT_1_LIB_LIB1_INCLUDE_LIB1_LIB1_H',
     'generated_include': 'lib1/lib1.dtg.h',
@@ -624,7 +722,11 @@ def test_query_path_for_header() -> None:
         ]))
 
         out = json.loads(result.stdout)
-        assert out == LIB1_QUERY_JSON_OUTPUT
+        correct = {
+            'role': 'hdr',
+            **LIB1_QUERY_JSON_OUTPUT,
+        }
+        assert out == correct
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -636,7 +738,11 @@ def test_query_path_for_src() -> None:
         ]))
 
         out = json.loads(result.stdout)
-        assert out == LIB1_QUERY_JSON_OUTPUT
+        correct = {
+            'role': 'src',
+            **LIB1_QUERY_JSON_OUTPUT,
+        }
+        assert out == correct
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -648,15 +754,20 @@ def test_query_path_for_test_src() -> None:
         ]))
 
         out = json.loads(result.stdout)
-        assert out == LIB1_QUERY_JSON_OUTPUT
-    
+        correct = {
+            'role': 'tst',
+            **LIB1_QUERY_JSON_OUTPUT,
+        }
+        assert out == correct
+
 LIB1_TOML_QUERY_JSON_OUTPUT = {
     'public_header': 'lib/lib1/include/lib1/example_struct.h',
     'generated_header': 'lib/lib1/include/lib1/example_struct.dtg.h',
     'source': 'lib/lib1/src/lib1/example_struct.cc',
     'generated_source': 'lib/lib1/src/lib1/example_struct.dtg.cc',
     'test_source': 'lib/lib1/test/src/lib1/example_struct.cc',
-    'benchmark_source': 'lib/lib1/benchmark/src/lib1/example_struct.cc',
+    'benchmark_header': 'lib/lib1/benchmark/include/benchmark/lib1/example_struct.h',
+    'benchmark_source': 'lib/lib1/benchmark/src/benchmark/lib1/example_struct.cc',
     'toml_path': 'lib/lib1/include/lib1/example_struct.dtg.toml',
     'ifndef': '_TEST_PROJECT_1_LIB_LIB1_INCLUDE_LIB1_EXAMPLE_STRUCT_H',
     'generated_include': 'lib1/example_struct.dtg.h',
@@ -673,8 +784,12 @@ def test_query_path_for_test_toml() -> None:
         ]))
 
         out = json.loads(result.stdout)
+        correct = {
+            'role': 'toml',
+            **LIB1_TOML_QUERY_JSON_OUTPUT,
+        }
 
-        assert out == LIB1_TOML_QUERY_JSON_OUTPUT
+        assert out == correct
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -686,8 +801,12 @@ def test_query_path_for_test_toml_generated_header() -> None:
         ]))
 
         out = json.loads(result.stdout)
+        correct = {
+            'role': 'genhdr',
+            **LIB1_TOML_QUERY_JSON_OUTPUT,
+        }
 
-        assert out == LIB1_TOML_QUERY_JSON_OUTPUT
+        assert out == correct
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -699,8 +818,12 @@ def test_query_path_for_test_toml_generated_source() -> None:
         ]))
 
         out = json.loads(result.stdout)
+        correct = {
+            'role': 'gensrc',
+            **LIB1_TOML_QUERY_JSON_OUTPUT,
+        }
 
-        assert out == LIB1_TOML_QUERY_JSON_OUTPUT
+        assert out == correct
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -719,11 +842,13 @@ def test_query_path_for_test_toml_variant() -> None:
             'source': 'lib/lib1/src/lib1/example_variant.cc',
             'generated_source': 'lib/lib1/src/lib1/example_variant.dtg.cc',
             'test_source': 'lib/lib1/test/src/lib1/example_variant.cc',
-            'benchmark_source': 'lib/lib1/benchmark/src/lib1/example_variant.cc',
+            'benchmark_header': 'lib/lib1/benchmark/include/benchmark/lib1/example_variant.h',
+            'benchmark_source': 'lib/lib1/benchmark/src/benchmark/lib1/example_variant.cc',
             'toml_path': 'lib/lib1/include/lib1/example_variant.dtg.toml',
             'ifndef': '_TEST_PROJECT_1_LIB_LIB1_INCLUDE_LIB1_EXAMPLE_VARIANT_H',
             'generated_include': 'lib1/example_variant.dtg.h',
             'include': 'lib1/example_variant.h',
+            'role': 'hdr',
         }
 
 @pytest.mark.e2e
@@ -743,11 +868,13 @@ def test_query_path_for_test_toml_enum() -> None:
             'source': 'lib/lib1/src/lib1/example_enum.cc',
             'generated_source': 'lib/lib1/src/lib1/example_enum.dtg.cc',
             'test_source': 'lib/lib1/test/src/lib1/example_enum.cc',
-            'benchmark_source': 'lib/lib1/benchmark/src/lib1/example_enum.cc',
+            'benchmark_header': 'lib/lib1/benchmark/include/benchmark/lib1/example_enum.h',
+            'benchmark_source': 'lib/lib1/benchmark/src/benchmark/lib1/example_enum.cc',
             'toml_path': 'lib/lib1/include/lib1/example_enum.dtg.toml',
             'ifndef': '_TEST_PROJECT_1_LIB_LIB1_INCLUDE_LIB1_EXAMPLE_ENUM_H',
             'generated_include': 'lib1/example_enum.dtg.h',
             'include': 'lib1/example_enum.h',
+            'role': 'hdr',
         }
 
 @pytest.mark.e2e
@@ -972,6 +1099,24 @@ def test_move_dry_run() -> None:
         check_not_moved(src_test_path, dst_test_path)
         check_not_moved(src_toml_path, dst_toml_path)
 
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_move_dry_run_does_not_fail_if_tree_contains_nontext_files() -> None:
+    with project_instance() as d:
+        src_path = Path('./lib/lib1/include/lib1/example_enum.h')
+        dst_path = Path('./lib/lib1/include/lib1/example_enum_moved.h')
+
+        (d / 'lib/lib1/include/lib1/.something_bad.cc.swp').write_bytes(
+            b'\xff\xff\x00\x05',
+        )
+
+        require_successful(run(d, [
+            'mv',
+            '-n',
+            str(src_path),
+            str(dst_path),
+        ]))
+
 
 @pytest.mark.e2e
 @pytest.mark.slow
@@ -1054,7 +1199,7 @@ def test_check_include() -> None:
             'check',
             'include',
         ])
-        
+
         lib2_src_path = d / 'lib/lib2/src/lib2/lib2.cc'
         lib2_src_contents = lib2_src_path.read_text()
         modified = lib2_src_contents.replace('#include "lib2/lib2.h"', '#include "lib2/lib3.h"')
@@ -1121,7 +1266,27 @@ def test_find_include() -> None:
             'lib1/something_that_does_not_exist.h',
         ])
 
+@pytest.mark.e2e
+@pytest.mark.slow
+def test_tag_cmd() -> None:
+    with project_instance() as d:
+        TAG_FILE_PATH = d / 'tags'
+        assert not TAG_FILE_PATH.exists()
 
+        check_cmd_succeeds(d, [
+            'tag',
+        ])
+
+        assert TAG_FILE_PATH.is_file()
+        contents = TAG_FILE_PATH.read_text()
+        assert 'ExampleEnum' in contents
+        assert 'lib/lib1/include/lib1/example_enum.dtg.toml' in contents
+
+        def is_sorted(l: List[str]) -> bool:
+            return all(a <= b for a, b in zip(l, l[1:]))
+
+        lines = contents.splitlines()
+        assert is_sorted(lines)
 
 @pytest.mark.e2e
 @pytest.mark.slow

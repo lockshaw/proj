@@ -2,13 +2,12 @@ cmake_minimum_required(VERSION 3.10)
 project(test-env-project)
 
 set(
-  CMAKE_MODULE_PATH 
-  ${CMAKE_MODULE_PATH} 
-  ${CMAKE_CURRENT_LIST_DIR}/cmake 
+  CMAKE_MODULE_PATH
+  ${CMAKE_MODULE_PATH}
+  ${CMAKE_CURRENT_LIST_DIR}/cmake
 )
 
 include(doctestlib) # named doctestlib to avoid a name collision with doctest.cmake in rapidcheck
-include(gbenchmark)
 include(CTest)
 include(tp-utils)
 include(libassert)

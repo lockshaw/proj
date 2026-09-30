@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 3.10)
 project(example-project-dtgen)
 
 set(
-  CMAKE_MODULE_PATH 
-  ${CMAKE_MODULE_PATH} 
-  ${CMAKE_CURRENT_LIST_DIR}/cmake 
+  CMAKE_MODULE_PATH
+  ${CMAKE_MODULE_PATH}
+  ${CMAKE_CURRENT_LIST_DIR}/cmake
 )
 
 include(doctestlib) # named doctestlib to avoid a name collision with doctest.cmake in rapidcheck
-include(gbenchmark)
-include(rapidcheck)
+find_package(rapidcheck REQUIRED)
+# include(rapidcheck)
 include(fmt)
 include(CTest)
 include(tp-utils)

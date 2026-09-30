@@ -2,7 +2,6 @@ from pathlib import PurePath, Path
 from dataclasses import dataclass
 from typing import (
     Iterator,
-    Self,
     TYPE_CHECKING,
 )
 from ..path_tree import MutablePathTree
@@ -10,6 +9,7 @@ import os
 import copy
 
 if TYPE_CHECKING:
+    from typing import Self
     from proj.paths import AbsolutePath
 
 @dataclass(eq=True)
@@ -26,9 +26,9 @@ class FilesystemPathTree(MutablePathTree):
         return (self._root / p) .raw.is_file()
 
     def mkdir(
-        self, 
-        p: PurePath, 
-        exist_ok: bool = False, 
+        self,
+        p: PurePath,
+        exist_ok: bool = False,
         parents: bool = False,
     ) -> None:
         Path(self._root.raw / p).mkdir(exist_ok=exist_ok, parents=parents)
@@ -45,7 +45,7 @@ class FilesystemPathTree(MutablePathTree):
 
         yield from filter(has_extension, self.files())
 
-    def ls_dir(self, p: PurePath) -> Iterator[PurePath]: 
+    def ls_dir(self, p: PurePath) -> Iterator[PurePath]:
         yield from [
             _p.relative_to(self._root.raw) for _p in Path(self._root.raw / p).iterdir()
         ]
@@ -56,7 +56,7 @@ class FilesystemPathTree(MutablePathTree):
         assert not self.has_path(dst)
         Path(self._root.raw / src).rename(self._root.raw / dst)
 
-    def restrict_to_subdir(self, p: PurePath) -> Self:
+    def restrict_to_subdir(self, p: PurePath) -> 'Self':
         assert self.has_dir(p)
         result = copy.deepcopy(self)
         result._root = self._root / p
